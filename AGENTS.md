@@ -13,9 +13,10 @@ Multi-company web app for construction **timesheets and payroll** ("puantaj" in 
   - **Exact hours are paid.** A 4-hour day pays 4 hours. There are no half-day or "counts as a day" thresholds.
   - Hour kinds, each with its own multiplier set in Settings: **normal** (up to the normal hours on a working day), **overtime** (above normal hours on a working day), **rest day** (any hours on a rest weekday, e.g. Sunday), **holiday** (any hours on a public holiday).
   - **Normal hours per day** is a Settings value (e.g. 9).
-  - **Absence pay** is set per type (leave, sick, travel/transfer): paid or unpaid. (To confirm: a paid absence day pays normal hours.)
+  - **Absence pay** is set per type (leave, sick, travel/transfer) in Settings: paid or unpaid, plus **hours paid per absence day** (pay = those hours × hourly rate). Default for **sick: 8 hours**. Default for leave and travel/transfer: the normal hours per day (assumed; the user hasn't confirmed these two).
   - **Travel pay** is configured in Settings: fixed amount per day worked per route, or a monthly amount entered by the accountant.
-  - Open: how working days per month are determined (proposed: automatic from rest weekdays and the holiday list, with a per-month admin override; awaiting the user's choice), whether settings can differ per site, rounding, and mid-month hire/exit (the hour model already prorates).
+  - **Working days per month (decided: option D):** calculated automatically from the rest weekdays and the holiday list, with a per-month admin override. The app shows the calculated and overridden values side by side and records who changed them (audit trail). The app ships Uzbekistan's fixed-date public holidays per year. Moving holidays (Ramazon Hayit, Qurbon Hayit) and company days off are entered by an admin, and the app warns when a year's holidays are missing.
+  - Open: whether rest weekdays and pay settings can differ per site, rounding of final pay, and mid-month hire/exit (the hour model already prorates).
   - Uzbek legal minimums (overtime, holiday pay) are deliberately out of scope for now. Don't enforce or assume them until the user raises it.
 - UI languages: `uz` (default), `ru`, `tr`, `en`. Every user-facing string goes through i18n in all four files.
 
