@@ -1,0 +1,43 @@
+# Production stack, deployed to /opt/puantaj on the server.
+# Only the web container is published, on localhost; host nginx proxies the domain to it.
+name: puantaj
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: puantaj
+      POSTGRES_USER: puantaj
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U puantaj -d puantaj"]
+      interval: 10s
+      retries: 5
+    mem_limit: 768m
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://puantaj:${DB_PASSWORD}@db:5432/puantaj
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/api/health || exit 1"]
+      interval: 30s
+      retries: 3
+    mem_limit: 512m
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8090:80"
+    depends_on: [api]
+    mem_limit: 128m
+
+volumes:
+  db-data:

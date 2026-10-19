@@ -1,0 +1,266 @@
+// Multi-tenant schema: every business row belongs to a Company.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Tenancy & access ----------
+
+model Company {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  /// ISO 4217, e.g. "UZS"
+  currency  String   @default("UZS")
+  /// IANA zone used to interpret timesheet dates
+  timezone  String   @default("Asia/Tashkent")
+  createdAt DateTime @default(now())
+
+  memberships Membership[]
+  sites       Site[]
+  teams       Team[]
+  workers     Worker[]
+  holidays    Holiday[]
+  ruleSets    PayrollRuleSet[]
+  periods     PayrollPeriod[]
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  /// uz | ru | tr | en
+  locale       String   @default("uz")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  memberships Membership[]
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  ACCOUNTANT
+  TIMEKEEPER
+  FOREMAN
+}
+
+model Membership {
+  userId    String  @db.Uuid
+  companyId String  @db.Uuid
+  role      Role
+  /// Limits TIMEKEEPER/FOREMAN to one site; null = all sites
+  siteId    String? @db.Uuid
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site?   @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  @@id([userId, companyId])
+}
+
+// ---------- Organisation ----------
+
+model Site {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @db.Uuid
+  name      String
+  code      String?
+  address   String?
+  isActive  Boolean @default(true)
+
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  teams       Team[]
+  assignments Assignment[]
+  memberships Membership[]
+  ruleSets    PayrollRuleSet[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model Team {
+  id          String  @id @default(uuid()) @db.Uuid
+  companyId   String  @db.Uuid
+  siteId      String  @db.Uuid
+  name        String
+  /// e.g. ELECTRICAL, MECHANICAL, ADMIN
+  department  String?
+  foremanName String?
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site        Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+
+  @@unique([siteId, name])
+  @@index([companyId])
+}
+
+// ---------- People ----------
+
+enum EmploymentType {
+  DIRECT
+  INDIRECT
+}
+
+model Worker {
+  id             String         @id @default(uuid()) @db.Uuid
+  companyId      String         @db.Uuid
+  /// Uzbek personal ID (14 digits); null for some expats
+  pinfl          String?
+  lastName       String
+  firstName      String
+  patronymic     String?
+  birthDate      DateTime?      @db.Date
+  nationality    String?
+  passportSeries String?
+  passportNumber String?
+  phone          String?
+  position       String?
+  employmentType EmploymentType @default(DIRECT)
+  createdAt      DateTime       @default(now())
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+
+  @@unique([companyId, pinfl])
+  @@index([companyId, lastName])
+}
+
+enum Shift {
+  DAY
+  NIGHT
+}
+
+/// A worker's employment on a site for a span of time, with its salary.
+model Assignment {
+  id            String    @id @default(uuid()) @db.Uuid
+  workerId      String    @db.Uuid
+  siteId        String    @db.Uuid
+  teamId        String?   @db.Uuid
+  hiredOn       DateTime  @db.Date
+  leftOn        DateTime? @db.Date
+  monthlySalary Decimal   @db.Decimal(14, 2)
+  shift         Shift     @default(DAY)
+
+  worker      Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  site        Site             @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  team        Team?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  entries     TimesheetEntry[]
+  adjustments Adjustment[]
+
+  @@index([siteId, hiredOn])
+  @@index([workerId])
+}
+
+// ---------- Calendar & rules ----------
+
+model Holiday {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  date      DateTime @db.Date
+  name      String
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date])
+}
+
+/// Pay policy. A site-level rule set overrides the company default (siteId = null).
+/// Policy fields are still being defined; `options` holds the not-yet-modelled ones.
+model PayrollRuleSet {
+  id                 String  @id @default(uuid()) @db.Uuid
+  companyId          String  @db.Uuid
+  siteId             String? @db.Uuid
+  name               String
+  standardDayHours   Decimal @default(9) @db.Decimal(4, 2)
+  overtimeMultiplier Decimal @default(1) @db.Decimal(4, 2)
+  restDayMultiplier  Decimal @default(1) @db.Decimal(4, 2)
+  /// ISO weekdays that are rest days (7 = Sunday)
+  restWeekdays       Int[]   @default([7])
+  options            Json    @default("{}")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site?   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, siteId])
+}
+
+// ---------- Timesheets & payroll ----------
+
+enum PeriodStatus {
+  OPEN
+  LOCKED
+}
+
+model PayrollPeriod {
+  id        String       @id @default(uuid()) @db.Uuid
+  companyId String       @db.Uuid
+  year      Int
+  month     Int
+  status    PeriodStatus @default(OPEN)
+  lockedAt  DateTime?
+
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entries     TimesheetEntry[]
+  adjustments Adjustment[]
+
+  @@unique([companyId, year, month])
+}
+
+/// Mirrors DayStatus in @puantaj/payroll.
+enum DayStatus {
+  WORKED
+  ABSENT
+  LEAVE
+  SICK
+  TRAVEL
+  OFF
+  NOT_EMPLOYED
+}
+
+model TimesheetEntry {
+  id           String    @id @default(uuid()) @db.Uuid
+  periodId     String    @db.Uuid
+  assignmentId String    @db.Uuid
+  date         DateTime  @db.Date
+  status       DayStatus
+  hours        Decimal   @default(0) @db.Decimal(4, 2)
+  note         String?
+  updatedAt    DateTime  @updatedAt
+
+  period     PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  assignment Assignment    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, date])
+  @@index([periodId])
+}
+
+enum AdjustmentType {
+  TRAVEL
+  BONUS
+  ADVANCE
+  DEDUCTION
+}
+
+/// Money added to or taken from a worker's pay for one period.
+model Adjustment {
+  id           String         @id @default(uuid()) @db.Uuid
+  periodId     String         @db.Uuid
+  assignmentId String         @db.Uuid
+  type         AdjustmentType
+  amount       Decimal        @db.Decimal(14, 2)
+  note         String?
+  createdAt    DateTime       @default(now())
+
+  period     PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  assignment Assignment    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([periodId, assignmentId])
+}

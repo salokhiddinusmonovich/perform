@@ -1,0 +1,25 @@
+{
+  "name": "puantaj",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "db:dev": "node scripts/dev-db.mjs",
+    "dev:api": "npm run start:dev -w @puantaj/api",
+    "dev:web": "npm run dev -w @puantaj/web",
+    "build": "npm run build -w @puantaj/payroll && npm run build -w @puantaj/api && npm run build -w @puantaj/web",
+    "test": "npm test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.16",
+    "@electric-sql/pglite-socket": "^0.0.22",
+    "typescript": "5.9",
+    "vitest": "^4.1.12"
+  }
+}

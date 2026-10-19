@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.pgdata/
+# Real puantaj files contain personal data (PINFL, passports) - never commit
+samples/
+*.xlsx
+*.xls
+.npm-cache/
