@@ -31,7 +31,8 @@ Multi-company web app for construction **timesheets and payroll** ("puantaj" in 
 ## Layout
 
 - `packages/payroll`: payroll engine, pure TypeScript with no framework or I/O. All pay logic lives here and is unit-tested.
-- `apps/api`: NestJS + Prisma 6 + PostgreSQL 16. Routes are under `/api`.
+- `packages/schemas`: zod validation schemas shared by the web app and the API (ESM + CommonJS build, `sideEffects: false`).
+- `apps/api`: NestJS + Prisma 6 + PostgreSQL 16. Routes are under `/api`. API tests live in `apps/api/test`.
 - `apps/web`: React 19 + Vite. In dev, `/api` is proxied to the API on port 4100.
 - `compose.yaml`, `deploy/`: production Docker stack and nginx configs.
 - `samples/`: real customer Excel files (git-ignored).
@@ -42,13 +43,19 @@ Run from the repo root (npm workspaces, Node 22+):
 
 ```bash
 npm install
-npm run db:dev          # local Postgres (PGlite) on 127.0.0.1:5432, keep running
-npm run dev:api         # API on 127.0.0.1:4100 (needs apps/api/.env, copy from .env.example)
-npm run dev:web         # UI on localhost:5173
-npm test                # unit tests (vitest)
+npm run build:packages                      # build shared packages (others import their dist)
+npx -w @puantaj/api prisma generate
+npm run db:dev                              # local Postgres (PGlite) on 127.0.0.1:5432, keep running
+npx -w @puantaj/api prisma migrate deploy
+npm run build -w @puantaj/api && npm run seed:dev -w @puantaj/api   # demo accounts, see below
+npm run dev:api                             # API on 127.0.0.1:4100 (needs apps/api/.env, copy from .env.example)
+npm run dev:web                             # UI on localhost:5173
+npm test                                    # all tests; API tests start their own in-memory DB
 npm run typecheck
 npm run build
 ```
+
+Demo accounts from `seed:dev` (local only, refuses to run in production): `platform@`, `owner@`, `admin@`, `accountant@`, `timekeeper@`, `foreman@` and `other-owner@demo.puantaj.test`, all with `DEV_SEED_PASSWORD` from `apps/api/.env`. Re-running resets them.
 
 Before finishing a change, run `npm test`, `npm run typecheck` and `npm run build`.
 
@@ -57,20 +64,37 @@ Before finishing a change, run `npm test`, `npm run typecheck` and `npm run buil
 ## Local development quirks
 
 - **No Docker or system PostgreSQL on the dev machine.** The dev DB is PGlite behind a socket server (`scripts/dev-db.mjs`):
-  - It accepts **one client at a time.** Stop the API before running Prisma CLI commands. Never keep a second client connected.
-  - If a client is killed, the server can keep that connection reserved, and everything then fails with `P1001 Can't reach database server` even though the port is open. Fix: stop `npm run db:dev` and start it again. Data in `.pgdata/` is kept.
-  - It has a single database, so `prisma migrate dev` (which needs a shadow DB) fails. To add a migration (from `apps/api`, with the dev DB up to date):
+  - All clients share **one PGlite session**. That's why the dev `DATABASE_URL` has `pgbouncer=true`: Prisma then uses unnamed prepared statements. Without it, clients collide ("prepared statement \"s0\" already exists"), and a killed client's statements break every later client. Keep that flag in dev and never use it in production.
+  - Several clients may connect at once (API, Prisma CLI, tests): `maxConnections` is raised in the script. Session-level state (e.g. `SET`) is shared between clients, so don't rely on it in code.
+  - It has a single database, so `prisma migrate dev` (which needs a shadow DB) fails. Create a migration by diffing the committed schema against the edited one (from `apps/api`):
     ```bash
-    npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script > prisma/migrations/<YYYYMMDDHHMMSS>_<name>/migration.sql
+    git show HEAD:apps/api/prisma/schema.prisma > /tmp/schema.before.prisma
+    npx prisma migrate diff --from-schema-datamodel /tmp/schema.before.prisma --to-schema-datamodel prisma/schema.prisma --script > prisma/migrations/<YYYYMMDDHHMMSS>_<name>/migration.sql
     npx prisma migrate deploy
     ```
-    Read the generated SQL before applying it.
+    Read the generated SQL before applying it, and add anything Prisma can't express (e.g. CHECK constraints) by hand.
+  - Windows locks Prisma's engine file while any process uses it. Stop the dev API before `prisma generate`.
 - The dev machine runs Windows (Git Bash + PowerShell). Its **C: drive is small**, so the npm cache is set to D: in the user-level npm config (not in the repo). Don't put large files on C:.
+- Windows on this machine sometimes briefly locks files (writes fail with `UNKNOWN`, Node reports `.env: not found`). Retry the step; if a scripted write keeps failing, use a direct file edit.
+- Vite's dev and preview proxies must keep the browser's Host header (`changeOrigin: false`, in `vite.config.ts`), like nginx in production. Otherwise the API's same-site check rejects every login.
 - Turkish text: `İ`/`ı` break naive case-folding. In `packages/payroll`, cell codes are folded with `toUpperCase()` + `İ → I`. Don't use `toLocaleUpperCase('tr-TR')` for code matching.
 
 ## Conventions
 
 - **Tenancy:** every business table has `companyId` (directly or through its parent). Every query must be scoped to the caller's company. Never trust a `companyId` sent by the client.
+- **Auth (API):**
+  - Server-side sessions: the httpOnly cookie holds a random token, and the DB stores only its hash. Passwords use Argon2id.
+  - Every route needs a login unless marked `@Public()` (never reads the session) or `@OptionalAuth()` (runs either way).
+  - Access is declared with `@Roles(...)` and `@PlatformAdminOnly()`.
+  - Company routes take `@CompanyAuth() auth` and scope every query by `auth.company.id`.
+  - Roles: OWNER, ADMIN, ACCOUNTANT, TIMEKEEPER, FOREMAN. Platform admin is a separate user flag for the product operator, who creates companies.
+  - Temporary passwords are returned once to the admin and never stored or logged in readable form. `mustChangePassword` locks the account to me/logout/change-password.
+  - A company admin can reset only passwords of accounts that belong to their company alone.
+  - Data-changing requests are checked for same-site Origin (`SameOriginGuard`).
+- **Errors:** throw the helpers in `apps/api/src/common/api-error.ts` with a stable `code` (e.g. `forbidden('member.lastOwner')`). Never send user-facing text from the API. The web shows `errors.<code>`. Validation errors carry per-field translation keys (`validation.*`) from the shared schemas. A web test fails if any code or key used in the API, schemas or web is missing from the translations.
+- **Validation:** request bodies go through `new ZodPipe(schema)` with a schema from `@puantaj/schemas`, and forms use the same schema via `zodResolver`. Schemas export `…Input` (form) and plain (validated) types.
+- **Audit:** every change to company data records an `AuditLog` row through `AuditService.record(entry, tx)`, inside the same transaction as the change. Never put passwords or tokens in audit data.
+- **Tests:** API tests run the real app (`startApp()` in `test/helpers.ts`) against a real database. Every new company-scoped endpoint needs a tenant-isolation test (company A can't read or change company B's data). When a test passes on the first try, break the code on purpose once to prove the test can fail.
 - **Money:** `Decimal` in the DB (`@db.Decimal(14,2)`). Never use floats for money in payroll code.
 - **Dates:** timesheet days are `@db.Date` (no time). Months are 1-based. Weekdays are ISO (1 = Monday, 7 = Sunday).
 - Day statuses form a fixed set (`DayStatus` in both `packages/payroll/src/entry.ts` and `schema.prisma`, kept in sync). Customer Excel codes map onto it at import time.
@@ -107,7 +131,13 @@ Before finishing a change, run `npm test`, `npm run typecheck` and `npm run buil
 - `hooks/`: `useFormat()` and friends.
 - `i18n/`: translations. A test fails if any language is missing a key.
 
-**Shared components that already exist (use them, don't rebuild):** `PageHeader`, `DataTable`, `ConfirmDialog`, `EmptyState`, `ErrorState`, `LoadingState`, `StatusBadge`, `LanguageSwitcher`, `ThemeSwitcher`. Use `useFormat()` for money, numbers and dates.
+**Shared components that already exist (use them, don't rebuild):** `PageHeader`, `DataTable` (with `searchText` for extra searchable fields), `ConfirmDialog`, `EmptyState`, `ErrorState`, `LoadingState`, `StatusBadge`, `RequireAccess`, `Field`/`FormActions`/`FormError` (`components/form.tsx`), `RoleSelect`, `TemporaryPasswordDialog`, `UserMenu`, `LanguageSwitcher`, `ThemeSwitcher`. Use `useFormat()` for money, numbers and dates.
+
+**Page patterns:**
+- A page starts with `PageHeader`. Role-restricted content goes inside `<RequireAccess allowed={…}>{(me) => …}</RequireAccess>`, and the API enforces the same rule.
+- Forms use `useForm` + `zodResolver(sharedSchema)` + `Field`. On a failed mutation, call `applyFieldErrors(error, form.setError)` and fall back to `errorMessage(t, error)` in `FormError` or a toast.
+- `useMe()` is the logged-in user (null when logged out). After login, logout or a company switch, call `useResetSession()`, and on logout navigate away *before* resetting.
+- **Formatting:** Uzbek is formatted by hand in `lib/format.ts` (`19.10.2026`, `7 500 000 soʻm`, `sentabr, 2026`) because many browsers ship without Uzbek locale data. Never format Uzbek with Intl directly. Calendar days ("YYYY-MM-DD") are shown as that day; timestamps in the viewer's time zone.
 
 **Adding shadcn components:** run `npx shadcn@4.22.1 add <name>` in `apps/web`, then check `git diff`. The CLI has written `from "cn"` and installed a stray `cn` npm package before. Imports must be `@/lib/utils`. Primitives here use a 40 px default height (`h-10`), raised from shadcn's 36 px for touch targets; keep that when adding new ones.
 
@@ -164,4 +194,5 @@ The sample files and future production data contain passport numbers, PINFLs (pe
 - Rollback restores code, not data: database migrations are not undone. Check before rolling back across a migration.
 - nginx: our site file is `/etc/nginx/sites-available/tahakkuk.en-ersi.uz`. Always run `nginx -t` before `systemctl reload nginx`, because one bad file takes down every site on the server.
 - Secrets live only in `/opt/puantaj/.env` on the server. Never print or commit them.
+- First platform admin (once per server; prints a temporary password, so the user should run it in their own terminal, not through an agent): `ssh enersi-contabo "cd /opt/puantaj && docker compose exec api node dist/cli/create-platform-admin.js --name 'Full Name' --phone '+998…'"`.
 - Production changes (deploys, nginx, certificates, DB operations) need the user's go-ahead.

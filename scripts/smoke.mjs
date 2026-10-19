@@ -26,14 +26,15 @@ try {
     problems.push(`Health check failed: HTTP ${health.status()} ${JSON.stringify(body)}`);
   }
 
-  // 2. The app renders: shell navigation and the dashboard heading appear.
+  // 2. The app renders: a logged-out visitor lands on the login form.
   await page.goto(`${base}/`, { waitUntil: 'networkidle' });
-  await page.getByRole('navigation').first().waitFor({ timeout: 15_000 });
   await page.getByRole('heading', { level: 1 }).waitFor({ timeout: 15_000 });
+  await page.locator('input[autocomplete="current-password"]').waitFor({ timeout: 15_000 });
 
-  // 3. Client-side routing works for deep links (nginx falls back to index.html).
-  await page.goto(`${base}/smoke-test-missing-page`, { waitUntil: 'networkidle' });
-  await page.getByRole('heading', { level: 1 }).waitFor({ timeout: 15_000 });
+  // 3. Deep links work (nginx falls back to index.html) and keep the target for after login.
+  await page.goto(`${base}/settings/users`, { waitUntil: 'networkidle' });
+  await page.locator('input[autocomplete="current-password"]').waitFor({ timeout: 15_000 });
+  if (!page.url().includes('next=%2Fsettings%2Fusers')) problems.push(`Deep link lost its target: ${page.url()}`);
 } catch (err) {
   problems.push(`Check failed: ${err.message}`);
 } finally {

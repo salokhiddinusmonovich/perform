@@ -1,24 +1,42 @@
 import { HardHat, Menu } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NavLink, Outlet } from 'react-router';
+import { Navigate, NavLink, Outlet, useLocation } from 'react-router';
+import { ErrorState } from '@/components/error-state';
 import { LanguageSwitcher } from '@/components/language-switcher';
+import { LoadingState } from '@/components/loading-state';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { UserMenu } from '@/components/user-menu';
+import { useMe, type Me } from '@/lib/auth';
 import { cn } from '@/lib/utils';
-import { NAV_ITEMS } from './nav';
+import { NAV_SECTIONS } from './nav';
 
-/** Layout shared by every page: sidebar (desktop), slide-out menu (phones), header. */
+/**
+ * Layout shared by every page inside the app: sidebar (desktop), slide-out menu
+ * (phones), header. Only logged-in users get here; a pending temporary password
+ * sends them to change it first.
+ */
 export function AppShell() {
   const { t } = useTranslation();
+  const location = useLocation();
+  const me = useMe();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  if (me.isPending) return <LoadingState />;
+  if (me.isError) return <ErrorState onRetry={() => me.refetch()} />;
+  if (!me.data) {
+    const next = location.pathname + location.search;
+    return <Navigate to={next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`} replace />;
+  }
+  if (me.data.user.mustChangePassword) return <Navigate to="/change-password" replace />;
 
   return (
     <div className="flex min-h-svh">
       <aside className="hidden w-60 shrink-0 border-r bg-sidebar text-sidebar-foreground lg:flex lg:flex-col">
         <Brand />
-        <Navigation />
+        <Navigation me={me.data} />
       </aside>
 
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
@@ -28,7 +46,7 @@ export function AppShell() {
             <SheetDescription>{t('app.tagline')}</SheetDescription>
           </SheetHeader>
           <Brand />
-          <Navigation onNavigate={() => setMenuOpen(false)} />
+          <Navigation me={me.data} onNavigate={() => setMenuOpen(false)} />
         </SheetContent>
       </Sheet>
 
@@ -47,6 +65,7 @@ export function AppShell() {
           <div className="ml-auto flex items-center gap-1">
             <LanguageSwitcher />
             <ThemeSwitcher />
+            <UserMenu me={me.data} />
           </div>
         </header>
 
@@ -73,28 +92,41 @@ function Brand() {
   );
 }
 
-function Navigation({ onNavigate }: { onNavigate?: () => void }) {
+function Navigation({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
   const { t } = useTranslation();
   return (
-    <nav aria-label={t('nav.label')} className="flex flex-1 flex-col gap-1 p-3">
-      {NAV_ITEMS.map(({ path, labelKey, icon: Icon }) => (
-        <NavLink
-          key={path}
-          to={path}
-          end={path === '/'}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            cn(
-              'flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors',
-              'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-              isActive && 'bg-sidebar-accent text-sidebar-accent-foreground',
-            )
-          }
-        >
-          <Icon className="size-4" aria-hidden />
-          {t(labelKey)}
-        </NavLink>
-      ))}
+    <nav aria-label={t('nav.label')} className="flex flex-1 flex-col gap-4 p-3">
+      {NAV_SECTIONS.map((section, i) => {
+        const items = section.items.filter((item) => !item.visible || item.visible(me));
+        if (items.length === 0) return null;
+        return (
+          <div key={section.titleKey ?? i} className="flex flex-col gap-1">
+            {section.titleKey && (
+              <div className="px-3 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                {t(section.titleKey)}
+              </div>
+            )}
+            {items.map(({ path, labelKey, icon: Icon }) => (
+              <NavLink
+                key={path}
+                to={path}
+                end={path === '/'}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  cn(
+                    'flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors',
+                    'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                    isActive && 'bg-sidebar-accent text-sidebar-accent-foreground',
+                  )
+                }
+              >
+                <Icon className="size-4" aria-hidden />
+                {t(labelKey)}
+              </NavLink>
+            ))}
+          </div>
+        );
+      })}
     </nav>
   );
 }

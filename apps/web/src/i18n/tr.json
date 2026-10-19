@@ -6,7 +6,16 @@
   "nav": {
     "label": "Ana menü",
     "openMenu": "Menüyü aç",
-    "dashboard": "Ana sayfa"
+    "dashboard": "Ana sayfa",
+    "settings": "Ayarlar",
+    "company": "Şirket",
+    "users": "Kullanıcılar",
+    "platform": "Platform",
+    "companies": "Şirketler",
+    "userMenu": "Hesap menüsü",
+    "switchCompany": "Şirket değiştir",
+    "changePassword": "Şifre değiştir",
+    "logout": "Çıkış yap"
   },
   "settings": {
     "language": "Dil",
@@ -31,21 +40,191 @@
     "retry": "Tekrar dene",
     "search": "Ara…",
     "loading": "Yükleniyor…",
+    "save": "Kaydet",
+    "saving": "Kaydediliyor…",
+    "saved": "Değişiklikler kaydedildi",
+    "actions": "İşlemler",
+    "actionsFor": "{{name}} için işlemler",
     "rowsTotal": "{{count}} satır",
     "page": "Sayfa {{page}} / {{total}}",
     "previous": "Önceki",
-    "next": "Sonraki"
+    "next": "Sonraki",
+    "close": "Kapat"
   },
   "states": {
     "emptyTitle": "Henüz bir şey yok",
     "noResults": "Aramanızla eşleşen sonuç yok",
     "errorTitle": "Bir sorun oluştu",
-    "errorDescription": "Veriler yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.",
-    "actionFailed": "İşlem tamamlanamadı. Lütfen tekrar deneyin."
+    "errorDescription": "Veriler yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin."
   },
   "notFound": {
     "title": "Sayfa bulunamadı",
     "description": "Açtığınız sayfa mevcut değil veya taşınmış.",
     "goHome": "Ana sayfaya git"
+  },
+  "access": {
+    "deniedTitle": "Erişim yok",
+    "deniedDescription": "Rolünüz bu sayfayı açmaya izin vermiyor. Gerekirse şirket sahibine veya yöneticisine başvurun."
+  },
+  "login": {
+    "title": "Giriş",
+    "identifier": "Telefon veya e-posta",
+    "identifierHint": "Örn. +998 90 123 45 67",
+    "password": "Şifre",
+    "submit": "Giriş yap",
+    "forgotHint": "Şifrenizi mi unuttunuz? Şirket yöneticinizden sıfırlamasını isteyin."
+  },
+  "changePassword": {
+    "title": "Şifre değiştir",
+    "hint": "Yeni bir şifre seçin. Bu cihazda oturumunuz açık kalır, diğer cihazlarda kapanır.",
+    "forcedHint": "Geçici şifreyle giriş yaptınız. Devam etmek için kendi şifrenizi belirleyin.",
+    "temporary": "Geçici şifre",
+    "current": "Mevcut şifre",
+    "new": "Yeni şifre",
+    "confirm": "Yeni şifreyi tekrarlayın",
+    "rules": "En az 10 karakter. Kısa bir cümleyi hatırlamak kolay, tahmin etmek zordur.",
+    "submit": "Şifreyi kaydet",
+    "done": "Şifre değiştirildi"
+  },
+  "company": {
+    "title": "Şirket ayarları",
+    "description": "Şirketinizin adı ve genel ayarları",
+    "name": "Şirket adı",
+    "currency": "Para birimi",
+    "currencyHint": "Maaşlar ve bordro için",
+    "timezone": "Saat dilimi",
+    "timezoneHint": "Bir puantaj kaydının hangi güne ait olduğunu belirler"
+  },
+  "users": {
+    "title": "Kullanıcılar",
+    "description": "Şirketinize giriş yapabilen kişiler ve yetkileri",
+    "add": "Kullanıcı ekle",
+    "addDescription": "Kişinin henüz hesabı yoksa geçici şifreyle yeni bir hesap oluşturulur.",
+    "name": "Ad soyad",
+    "phone": "Telefon",
+    "phoneHint": "Telefon veya e-posta zorunlu; kişi bununla giriş yapar",
+    "email": "E-posta",
+    "role": "Rol",
+    "status": "Durum",
+    "active": "Aktif",
+    "inactive": "Pasif",
+    "awaitingFirstLogin": "Henüz giriş yapmadı",
+    "lastLogin": "Son giriş",
+    "changeRole": "Rolü değiştir",
+    "resetPassword": "Şifreyi sıfırla",
+    "deactivate": "Pasifleştir",
+    "activate": "Aktifleştir",
+    "addedExisting": "Bu kişinin zaten bir hesabı vardı; şirketinize eklendi ve mevcut şifresiyle giriş yapabilir.",
+    "confirm": {
+      "deactivate": {
+        "title": "Kullanıcı pasifleştirilsin mi?",
+        "description": "{{name}} bu şirkete erişimini hemen kaybedecek. Kayıtları korunur. Daha sonra tekrar aktifleştirebilirsiniz.",
+        "button": "Pasifleştir"
+      },
+      "activate": {
+        "title": "Kullanıcı aktifleştirilsin mi?",
+        "description": "{{name}} bu şirkete yeniden giriş yapabilecek.",
+        "button": "Aktifleştir"
+      },
+      "reset": {
+        "title": "Şifre sıfırlansın mı?",
+        "description": "{{name}} tüm cihazlarda oturumu kapatılacak ve yeni bir geçici şifre alacak; bu şifreyi yalnızca bir kez göreceksiniz.",
+        "button": "Şifreyi sıfırla"
+      }
+    }
+  },
+  "roles": {
+    "choose": "Rol seçin",
+    "OWNER": "Sahip",
+    "ADMIN": "Yönetici",
+    "ACCOUNTANT": "Muhasebeci",
+    "TIMEKEEPER": "Puantör",
+    "FOREMAN": "Ekip başı",
+    "hint": {
+      "OWNER": "Diğer sahipler dahil tam yetki",
+      "ADMIN": "Şirket ayarlarını ve kullanıcıları yönetir (sahipler hariç)",
+      "ACCOUNTANT": "Bordro ve ödemelerle çalışır",
+      "TIMEKEEPER": "Puantajı girer ve kontrol eder",
+      "FOREMAN": "Kendi ekibinin puantajını girer"
+    }
+  },
+  "tempPassword": {
+    "title": "Geçici şifre",
+    "description": "Bu şifreyi {{name}} kişisine iletin. İlk girişte kendi şifresini belirlemesi gerekecek.",
+    "copy": "Şifreyi kopyala",
+    "warning": "Bu şifre yalnızca bir kez gösterilir ve tekrar görüntülenemez. Kaybolursa şifreyi yeniden sıfırlayın.",
+    "done": "Tamam"
+  },
+  "platform": {
+    "title": "Şirketler",
+    "description": "Sistemi kullanan müşteri şirketler",
+    "create": "Yeni şirket",
+    "createDescription": "Şirket ve sahibi oluşturulur. Yeni sahibe geçici bir şifre verilir.",
+    "company": "Şirket",
+    "owner": "Sahip",
+    "members": "Kullanıcılar",
+    "created": "Oluşturulma",
+    "deactivate": "Şirketi pasifleştir",
+    "activate": "Şirketi aktifleştir",
+    "empty": "Henüz şirket yok",
+    "createdExistingOwner": "Şirket oluşturuldu. Sahibin zaten bir hesabı vardı, mevcut şifresiyle giriş yapabilir.",
+    "ownerSection": "Sahip",
+    "currencyLater": "Para birimi (UZS) ve saat dilimi (Taşkent) daha sonra şirket ayarlarından değiştirilebilir.",
+    "confirm": {
+      "deactivate": {
+        "title": "Şirket pasifleştirilsin mi?",
+        "description": "{{name}} tekrar aktifleştirilene kadar kimse bu şirkette çalışamaz. Hiçbir veri silinmez.",
+        "button": "Pasifleştir"
+      },
+      "activate": {
+        "title": "Şirket aktifleştirilsin mi?",
+        "description": "{{name}} kullanıcıları şirkette yeniden çalışabilecek.",
+        "button": "Aktifleştir"
+      }
+    }
+  },
+  "validation": {
+    "required": "Zorunlu alan",
+    "invalid": "Geçersiz değer",
+    "emailInvalid": "Geçerli bir e-posta adresi girin",
+    "phoneInvalid": "Geçerli bir telefon numarası girin, örn. +998 90 123 45 67",
+    "nameTooShort": "Çok kısa",
+    "tooLong": "Çok uzun",
+    "phoneOrEmailRequired": "Telefon numarası veya e-posta girin",
+    "passwordTooShort": "En az 10 karakter",
+    "passwordMustDiffer": "Mevcut şifreden farklı olmalı",
+    "passwordsDontMatch": "Şifreler eşleşmiyor",
+    "currentPasswordWrong": "Şifre yanlış",
+    "currencyInvalid": "Para birimi seçin",
+    "timezoneInvalid": "Saat dilimi seçin",
+    "nothingToUpdate": "Değiştirilecek bir şey yok"
+  },
+  "errors": {
+    "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
+    "notFound": "Bulunamadı. Silinmiş olabilir.",
+    "auth": {
+      "required": "Lütfen tekrar giriş yapın.",
+      "forbidden": "Bu işlem için yetkiniz yok.",
+      "invalidCredentials": "Telefon/e-posta veya şifre yanlış.",
+      "tooManyAttempts": "Çok fazla deneme. {{minutes}} dk sonra tekrar deneyin.",
+      "passwordChangeRequired": "Lütfen önce yeni bir şifre belirleyin.",
+      "crossSite": "Bu istek güvenlik nedeniyle engellendi. Sayfayı yenileyip tekrar deneyin."
+    },
+    "company": {
+      "required": "Şu anda hiçbir şirkete erişiminiz yok.",
+      "notMember": "Bu şirketin üyesi değilsiniz.",
+      "notFound": "Şirket bulunamadı."
+    },
+    "member": {
+      "alreadyExists": "Bu kişi zaten şirketinizin kullanıcısı.",
+      "notFound": "Bu kullanıcı şirketinizde değil.",
+      "lastOwner": "Şirkette en az bir sahip kalmalı.",
+      "cannotChangeSelf": "Kendi rolünüzü veya durumunuzu değiştiremezsiniz.",
+      "onlyOwnerManagesOwners": "Sahipleri yalnızca bir sahip yönetebilir.",
+      "sharedAccount": "Bu kişi başka şirketlerde de çalışıyor; şifresini yalnızca kendisi değiştirebilir."
+    },
+    "user": {
+      "contactsBelongToDifferentPeople": "Bu telefon ve bu e-posta iki farklı kişiye ait. Yalnızca birini girin."
+    }
   }
 }

@@ -33,6 +33,8 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://puantaj:puantaj@127.0.0.1:5432/puantaj
+      # API tests use the real PostgreSQL service (locally they start an in-memory one).
+      TEST_DATABASE_URL: postgresql://puantaj:puantaj@127.0.0.1:5432/puantaj
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,7 +42,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx -w @puantaj/api prisma generate
+      - name: Build shared packages and Prisma client (other workspaces import them)
+        run: npm run build:packages && npx -w @puantaj/api prisma generate
       - run: npm test
       - run: npm run typecheck
       - run: npm run build

@@ -6,6 +6,7 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type FilterFn,
   type SortingState,
 } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react';
@@ -33,6 +34,11 @@ interface DataTableProps<TData> {
   onRetry?: () => void;
   /** Shows the search box; filters across all columns. */
   searchable?: boolean;
+  /**
+   * Text the search box matches against for each row, when it should cover more than
+   * the visible column values (e.g. a person's phone and email under their name).
+   */
+  searchText?: (row: TData) => string;
   /** Filters and actions shown next to the search box. */
   toolbar?: ReactNode;
   emptyTitle?: string;
@@ -51,6 +57,7 @@ export function DataTable<TData>({
   isError = false,
   onRetry,
   searchable = false,
+  searchText,
   toolbar,
   emptyTitle,
   emptyDescription,
@@ -61,12 +68,18 @@ export function DataTable<TData>({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
 
-  const table = useReactTable({
+  const searchFilter: FilterFn<TData> | undefined = searchText
+    ? (row, _columnId, filter: string) =>
+        searchText(row.original).toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase())
+    : undefined;
+
+  const table = useReactTable<TData>({
     data: data ?? [],
     columns,
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    ...(searchFilter && { globalFilterFn: searchFilter }),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

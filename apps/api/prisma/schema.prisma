@@ -19,6 +19,8 @@ model Company {
   currency  String   @default("UZS")
   /// IANA zone used to interpret timesheet dates
   timezone  String   @default("Asia/Tashkent")
+  /// Deactivated companies can't be used by their members
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   memberships Membership[]
@@ -28,19 +30,75 @@ model Company {
   holidays    Holiday[]
   ruleSets    PayrollRuleSet[]
   periods     PayrollPeriod[]
+  auditLogs   AuditLog[]
 }
 
+/// A person who can log in. Logs in with email or phone (at least one is set,
+/// enforced by a CHECK constraint in the migration).
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  passwordHash String
-  fullName     String
+  id                 String    @id @default(uuid()) @db.Uuid
+  /// Lowercase
+  email              String?   @unique
+  /// E.164, e.g. +998901234567
+  phone              String?   @unique
+  passwordHash       String
+  fullName           String
   /// uz | ru | tr | en
-  locale       String   @default("uz")
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  locale             String    @default("uz")
+  isActive           Boolean   @default(true)
+  /// Can create and manage companies (the product operator, not a customer role)
+  isPlatformAdmin    Boolean   @default(false)
+  /// Set for temporary passwords; the user must choose a new one before doing anything else
+  mustChangePassword Boolean   @default(true)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
 
   memberships Membership[]
+  sessions    Session[]
+  auditLogs   AuditLog[]
+}
+
+/// Server-side login session. The browser holds a random token in an httpOnly
+/// cookie; only its SHA-256 hash is stored here.
+model Session {
+  id              String   @id @default(uuid()) @db.Uuid
+  tokenHash       String   @unique
+  userId          String   @db.Uuid
+  /// Company the user is currently working in (one of their memberships)
+  activeCompanyId String?  @db.Uuid
+  ip              String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+  expiresAt       DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Who changed what, when. Never updated or deleted by the app.
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// null for platform-level actions (e.g. creating a company)
+  companyId   String?  @db.Uuid
+  /// null for actions not done by a logged-in user (e.g. CLI bootstrap)
+  actorUserId String?  @db.Uuid
+  /// e.g. "auth.login", "member.create", "company.update"
+  action      String
+  entityType  String?
+  entityId    String?
+  /// Changed fields (before/after) or other details. Never contains passwords.
+  data        Json     @default("{}")
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  actor   User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([entityType, entityId])
 }
 
 enum Role {
@@ -52,11 +110,14 @@ enum Role {
 }
 
 model Membership {
-  userId    String  @db.Uuid
-  companyId String  @db.Uuid
+  userId    String   @db.Uuid
+  companyId String   @db.Uuid
   role      Role
   /// Limits TIMEKEEPER/FOREMAN to one site; null = all sites
-  siteId    String? @db.Uuid
+  siteId    String?  @db.Uuid
+  /// Deactivated members lose access to this company; their history stays
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)

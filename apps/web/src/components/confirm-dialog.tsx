@@ -11,6 +11,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { errorMessage } from '@/lib/errors';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -23,7 +24,7 @@ interface ConfirmDialogProps {
   destructive?: boolean;
   /**
    * May be async; the dialog stays disabled until it settles. On success it closes.
-   * On failure it stays open and shows the standard error toast.
+   * On failure it stays open and shows the translated reason in the standard error toast.
    */
   onConfirm: () => unknown;
 }
@@ -47,7 +48,7 @@ export function ConfirmDialog({
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      toast.error(t('states.actionFailed'));
+      toast.error(errorMessage(t, error));
     } finally {
       setPending(false);
     }

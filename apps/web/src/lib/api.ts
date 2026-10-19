@@ -2,6 +2,11 @@
  * The only HTTP client for our API. Pages call these through TanStack Query
  * (`useQuery` / `useMutation`), never `fetch` directly.
  */
+export interface ApiIssue {
+  path: string;
+  message: string;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly body: unknown;
@@ -12,19 +17,46 @@ export class ApiError extends Error {
     this.status = status;
     this.body = body;
   }
+
+  /** Stable error code from the API (translated as `errors.<code>`), if any. */
+  get code(): string | undefined {
+    const code = (this.body as { code?: unknown } | null)?.code;
+    return typeof code === 'string' ? code : undefined;
+  }
+
+  /** Per-field validation problems (`code === 'validation'`). */
+  get issues(): ApiIssue[] {
+    const issues = (this.body as { issues?: unknown } | null)?.issues;
+    return Array.isArray(issues) ? (issues as ApiIssue[]) : [];
+  }
+
+  get retryAfterSeconds(): number | undefined {
+    const value = (this.body as { retryAfterSeconds?: unknown } | null)?.retryAfterSeconds;
+    return typeof value === 'number' ? value : undefined;
+  }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api${path}`, {
-    ...init,
-    headers: { Accept: 'application/json', ...init?.headers },
+    method,
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  if (response.status === 204) return undefined as T;
+  const text = await response.text();
   const isJson = response.headers.get('content-type')?.includes('application/json');
-  const body: unknown = isJson ? await response.json() : await response.text();
-  if (!response.ok) throw new ApiError(response.status, body);
-  return body as T;
+  // An empty successful body means "nothing" (the API returned null, e.g. /auth/me logged out).
+  const data: unknown = text === '' ? null : isJson ? JSON.parse(text) : text;
+  if (!response.ok) throw new ApiError(response.status, data);
+  return data as T;
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
+  get: <T>(path: string) => request<T>('GET', path),
+  post: <T = void>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
+  patch: <T = void>(path: string, body: unknown) => request<T>('PATCH', path, body),
 };

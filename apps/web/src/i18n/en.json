@@ -6,7 +6,16 @@
   "nav": {
     "label": "Main navigation",
     "openMenu": "Open menu",
-    "dashboard": "Dashboard"
+    "dashboard": "Dashboard",
+    "settings": "Settings",
+    "company": "Company",
+    "users": "Users",
+    "platform": "Platform",
+    "companies": "Companies",
+    "userMenu": "Account menu",
+    "switchCompany": "Switch company",
+    "changePassword": "Change password",
+    "logout": "Log out"
   },
   "settings": {
     "language": "Language",
@@ -31,21 +40,191 @@
     "retry": "Try again",
     "search": "Search…",
     "loading": "Loading…",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Changes saved",
+    "actions": "Actions",
+    "actionsFor": "Actions for {{name}}",
     "rowsTotal": "{{count}} rows",
     "page": "Page {{page}} of {{total}}",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "close": "Close"
   },
   "states": {
     "emptyTitle": "Nothing here yet",
     "noResults": "No results match your search",
     "errorTitle": "Something went wrong",
-    "errorDescription": "The data could not be loaded. Check your connection and try again.",
-    "actionFailed": "The action could not be completed. Please try again."
+    "errorDescription": "The data could not be loaded. Check your connection and try again."
   },
   "notFound": {
     "title": "Page not found",
     "description": "The page you opened does not exist or was moved.",
     "goHome": "Go to dashboard"
+  },
+  "access": {
+    "deniedTitle": "No access",
+    "deniedDescription": "Your role doesn't allow you to open this page. Ask your company's owner or administrator if you need it."
+  },
+  "login": {
+    "title": "Log in",
+    "identifier": "Phone or email",
+    "identifierHint": "e.g. +998 90 123 45 67",
+    "password": "Password",
+    "submit": "Log in",
+    "forgotHint": "Forgot your password? Ask your company's administrator to reset it."
+  },
+  "changePassword": {
+    "title": "Change password",
+    "hint": "Choose a new password. You will stay logged in here and be logged out on other devices.",
+    "forcedHint": "You logged in with a temporary password. Choose your own password to continue.",
+    "temporary": "Temporary password",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Repeat new password",
+    "rules": "At least 10 characters. A short sentence is easy to remember and hard to guess.",
+    "submit": "Save password",
+    "done": "Password changed"
+  },
+  "company": {
+    "title": "Company settings",
+    "description": "Name and general settings of your company",
+    "name": "Company name",
+    "currency": "Currency",
+    "currencyHint": "Used for salaries and payroll",
+    "timezone": "Time zone",
+    "timezoneHint": "Used to decide which day a timesheet entry belongs to"
+  },
+  "users": {
+    "title": "Users",
+    "description": "People who can log in to your company and what they may do",
+    "add": "Add user",
+    "addDescription": "If the person has no account yet, one is created with a temporary password.",
+    "name": "Full name",
+    "phone": "Phone",
+    "phoneHint": "Phone or email is required; the person logs in with it",
+    "email": "Email",
+    "role": "Role",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Deactivated",
+    "awaitingFirstLogin": "First login pending",
+    "lastLogin": "Last login",
+    "changeRole": "Change role",
+    "resetPassword": "Reset password",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "addedExisting": "This person already had an account; they were added to your company and can log in with their existing password.",
+    "confirm": {
+      "deactivate": {
+        "title": "Deactivate user?",
+        "description": "{{name}} will immediately lose access to this company. Their records stay. You can activate them again later.",
+        "button": "Deactivate"
+      },
+      "activate": {
+        "title": "Activate user?",
+        "description": "{{name}} will be able to log in to this company again.",
+        "button": "Activate"
+      },
+      "reset": {
+        "title": "Reset password?",
+        "description": "{{name}} will be logged out everywhere and get a new temporary password, which you will see once.",
+        "button": "Reset password"
+      }
+    }
+  },
+  "roles": {
+    "choose": "Choose a role",
+    "OWNER": "Owner",
+    "ADMIN": "Administrator",
+    "ACCOUNTANT": "Accountant",
+    "TIMEKEEPER": "Timekeeper",
+    "FOREMAN": "Foreman",
+    "hint": {
+      "OWNER": "Full control, including other owners",
+      "ADMIN": "Manages company settings and users (except owners)",
+      "ACCOUNTANT": "Works with payroll and payments",
+      "TIMEKEEPER": "Enters and checks timesheets",
+      "FOREMAN": "Enters timesheets for their team"
+    }
+  },
+  "tempPassword": {
+    "title": "Temporary password",
+    "description": "Give this password to {{name}}. They will have to choose their own password when they first log in.",
+    "copy": "Copy password",
+    "warning": "This password is shown only once and can't be viewed again. If it gets lost, reset the password.",
+    "done": "Done"
+  },
+  "platform": {
+    "title": "Companies",
+    "description": "Customer companies using the system",
+    "create": "New company",
+    "createDescription": "Creates the company and its owner. A new owner gets a temporary password.",
+    "company": "Company",
+    "owner": "Owner",
+    "members": "Users",
+    "created": "Created",
+    "deactivate": "Deactivate company",
+    "activate": "Activate company",
+    "empty": "No companies yet",
+    "createdExistingOwner": "Company created. The owner already had an account and can log in with their existing password.",
+    "ownerSection": "Owner",
+    "currencyLater": "Currency (UZS) and time zone (Tashkent) can be changed later in company settings.",
+    "confirm": {
+      "deactivate": {
+        "title": "Deactivate company?",
+        "description": "Nobody in {{name}} will be able to work in it until it is activated again. No data is deleted.",
+        "button": "Deactivate"
+      },
+      "activate": {
+        "title": "Activate company?",
+        "description": "Users of {{name}} will be able to work in it again.",
+        "button": "Activate"
+      }
+    }
+  },
+  "validation": {
+    "required": "Required",
+    "invalid": "Invalid value",
+    "emailInvalid": "Enter a valid email address",
+    "phoneInvalid": "Enter a valid phone number, e.g. +998 90 123 45 67",
+    "nameTooShort": "Too short",
+    "tooLong": "Too long",
+    "phoneOrEmailRequired": "Enter a phone number or an email",
+    "passwordTooShort": "At least 10 characters",
+    "passwordMustDiffer": "Must be different from the current password",
+    "passwordsDontMatch": "The passwords don't match",
+    "currentPasswordWrong": "The password is wrong",
+    "currencyInvalid": "Choose a currency",
+    "timezoneInvalid": "Choose a time zone",
+    "nothingToUpdate": "Nothing to change"
+  },
+  "errors": {
+    "unknown": "Something went wrong. Please try again.",
+    "notFound": "Not found. It may have been removed.",
+    "auth": {
+      "required": "Please log in again.",
+      "forbidden": "You don't have permission to do this.",
+      "invalidCredentials": "Wrong phone/email or password.",
+      "tooManyAttempts": "Too many attempts. Try again in {{minutes}} min.",
+      "passwordChangeRequired": "Please choose a new password first.",
+      "crossSite": "This request was blocked for security reasons. Reload the page and try again."
+    },
+    "company": {
+      "required": "You don't have access to a company right now.",
+      "notMember": "You are not a member of that company.",
+      "notFound": "Company not found."
+    },
+    "member": {
+      "alreadyExists": "This person is already a user of your company.",
+      "notFound": "This user is not in your company.",
+      "lastOwner": "The company must keep at least one owner.",
+      "cannotChangeSelf": "You can't change your own role or status.",
+      "onlyOwnerManagesOwners": "Only an owner can manage owners.",
+      "sharedAccount": "This person also uses other companies, so only they can change their password."
+    },
+    "user": {
+      "contactsBelongToDifferentPeople": "This phone and this email belong to two different people. Enter only one of them."
+    }
   }
 }

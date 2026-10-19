@@ -6,7 +6,16 @@
   "nav": {
     "label": "Asosiy menyu",
     "openMenu": "Menyuni ochish",
-    "dashboard": "Bosh sahifa"
+    "dashboard": "Bosh sahifa",
+    "settings": "Sozlamalar",
+    "company": "Kompaniya",
+    "users": "Foydalanuvchilar",
+    "platform": "Platforma",
+    "companies": "Kompaniyalar",
+    "userMenu": "Hisob menyusi",
+    "switchCompany": "Kompaniyani almashtirish",
+    "changePassword": "Parolni oʻzgartirish",
+    "logout": "Chiqish"
   },
   "settings": {
     "language": "Til",
@@ -31,21 +40,191 @@
     "retry": "Qayta urinish",
     "search": "Qidirish…",
     "loading": "Yuklanmoqda…",
+    "save": "Saqlash",
+    "saving": "Saqlanmoqda…",
+    "saved": "Oʻzgarishlar saqlandi",
+    "actions": "Amallar",
+    "actionsFor": "{{name}} uchun amallar",
     "rowsTotal": "{{count}} ta qator",
     "page": "{{page}} / {{total}} sahifa",
     "previous": "Oldingi",
-    "next": "Keyingi"
+    "next": "Keyingi",
+    "close": "Yopish"
   },
   "states": {
     "emptyTitle": "Hozircha hech narsa yoʻq",
     "noResults": "Qidiruv boʻyicha hech narsa topilmadi",
     "errorTitle": "Xatolik yuz berdi",
-    "errorDescription": "Maʼlumotlarni yuklab boʻlmadi. Internet aloqasini tekshirib, qayta urinib koʻring.",
-    "actionFailed": "Amalni bajarib boʻlmadi. Qayta urinib koʻring."
+    "errorDescription": "Maʼlumotlarni yuklab boʻlmadi. Internet aloqasini tekshirib, qayta urinib koʻring."
   },
   "notFound": {
     "title": "Sahifa topilmadi",
     "description": "Siz ochgan sahifa mavjud emas yoki boshqa joyga koʻchirilgan.",
     "goHome": "Bosh sahifaga oʻtish"
+  },
+  "access": {
+    "deniedTitle": "Ruxsat yoʻq",
+    "deniedDescription": "Rolingiz bu sahifani ochishga ruxsat bermaydi. Kerak boʻlsa, kompaniya egasi yoki administratoriga murojaat qiling."
+  },
+  "login": {
+    "title": "Kirish",
+    "identifier": "Telefon yoki email",
+    "identifierHint": "Masalan: +998 90 123 45 67",
+    "password": "Parol",
+    "submit": "Kirish",
+    "forgotHint": "Parolni unutdingizmi? Kompaniya administratoridan uni tiklab berishni soʻrang."
+  },
+  "changePassword": {
+    "title": "Parolni oʻzgartirish",
+    "hint": "Yangi parol tanlang. Bu qurilmada tizimda qolasiz, boshqa qurilmalardan esa chiqasiz.",
+    "forcedHint": "Siz vaqtinchalik parol bilan kirdingiz. Davom etish uchun oʻzingizning parolingizni tanlang.",
+    "temporary": "Vaqtinchalik parol",
+    "current": "Joriy parol",
+    "new": "Yangi parol",
+    "confirm": "Yangi parolni takrorlang",
+    "rules": "Kamida 10 ta belgi. Qisqa jumlani eslab qolish oson, topish esa qiyin.",
+    "submit": "Parolni saqlash",
+    "done": "Parol oʻzgartirildi"
+  },
+  "company": {
+    "title": "Kompaniya sozlamalari",
+    "description": "Kompaniyangiz nomi va umumiy sozlamalari",
+    "name": "Kompaniya nomi",
+    "currency": "Valyuta",
+    "currencyHint": "Ish haqi va hisob-kitoblar uchun",
+    "timezone": "Vaqt mintaqasi",
+    "timezoneHint": "Tabel yozuvi qaysi kunga tegishli ekanini aniqlash uchun"
+  },
+  "users": {
+    "title": "Foydalanuvchilar",
+    "description": "Kompaniyangizga kira oladigan odamlar va ularning huquqlari",
+    "add": "Foydalanuvchi qoʻshish",
+    "addDescription": "Agar bu odamning hisobi boʻlmasa, vaqtinchalik parol bilan yangi hisob yaratiladi.",
+    "name": "F.I.Sh.",
+    "phone": "Telefon",
+    "phoneHint": "Telefon yoki email shart — odam shu bilan tizimga kiradi",
+    "email": "Email",
+    "role": "Rol",
+    "status": "Holat",
+    "active": "Faol",
+    "inactive": "Oʻchirilgan",
+    "awaitingFirstLogin": "Hali kirmagan",
+    "lastLogin": "Oxirgi kirish",
+    "changeRole": "Rolni oʻzgartirish",
+    "resetPassword": "Parolni tiklash",
+    "deactivate": "Oʻchirish",
+    "activate": "Faollashtirish",
+    "addedExisting": "Bu odamning hisobi allaqachon bor edi; u kompaniyangizga qoʻshildi va eski paroli bilan kira oladi.",
+    "confirm": {
+      "deactivate": {
+        "title": "Foydalanuvchini oʻchirasizmi?",
+        "description": "{{name}} bu kompaniyaga kirish huquqini darhol yoʻqotadi. Uning yozuvlari saqlanib qoladi. Keyinroq qayta faollashtirish mumkin.",
+        "button": "Oʻchirish"
+      },
+      "activate": {
+        "title": "Foydalanuvchini faollashtirasizmi?",
+        "description": "{{name}} bu kompaniyaga yana kira oladi.",
+        "button": "Faollashtirish"
+      },
+      "reset": {
+        "title": "Parolni tiklaysizmi?",
+        "description": "{{name}} barcha qurilmalardan chiqariladi va yangi vaqtinchalik parol oladi. Uni faqat bir marta koʻrasiz.",
+        "button": "Parolni tiklash"
+      }
+    }
+  },
+  "roles": {
+    "choose": "Rolni tanlang",
+    "OWNER": "Egasi",
+    "ADMIN": "Administrator",
+    "ACCOUNTANT": "Buxgalter",
+    "TIMEKEEPER": "Tabelchi",
+    "FOREMAN": "Brigadir",
+    "hint": {
+      "OWNER": "Toʻliq boshqaruv, boshqa egalar ham",
+      "ADMIN": "Kompaniya sozlamalari va foydalanuvchilarni boshqaradi (egalardan tashqari)",
+      "ACCOUNTANT": "Ish haqi va toʻlovlar bilan ishlaydi",
+      "TIMEKEEPER": "Tabelni kiritadi va tekshiradi",
+      "FOREMAN": "Oʻz brigadasi tabelini kiritadi"
+    }
+  },
+  "tempPassword": {
+    "title": "Vaqtinchalik parol",
+    "description": "Bu parolni {{name}}ga bering. Birinchi kirishda u oʻz parolini tanlashi kerak boʻladi.",
+    "copy": "Parolni nusxalash",
+    "warning": "Bu parol faqat bir marta koʻrsatiladi va uni qayta koʻrib boʻlmaydi. Yoʻqolsa, parolni qayta tiklang.",
+    "done": "Tayyor"
+  },
+  "platform": {
+    "title": "Kompaniyalar",
+    "description": "Tizimdan foydalanayotgan mijoz kompaniyalar",
+    "create": "Yangi kompaniya",
+    "createDescription": "Kompaniya va uning egasi yaratiladi. Yangi egaga vaqtinchalik parol beriladi.",
+    "company": "Kompaniya",
+    "owner": "Egasi",
+    "members": "Foydalanuvchilar",
+    "created": "Yaratilgan",
+    "deactivate": "Kompaniyani oʻchirish",
+    "activate": "Kompaniyani faollashtirish",
+    "empty": "Hozircha kompaniyalar yoʻq",
+    "createdExistingOwner": "Kompaniya yaratildi. Egasining hisobi allaqachon bor edi, u eski paroli bilan kira oladi.",
+    "ownerSection": "Egasi",
+    "currencyLater": "Valyuta (UZS) va vaqt mintaqasini (Toshkent) keyinroq kompaniya sozlamalarida oʻzgartirish mumkin.",
+    "confirm": {
+      "deactivate": {
+        "title": "Kompaniyani oʻchirasizmi?",
+        "description": "{{name}} qayta faollashtirilmaguncha unda hech kim ishlay olmaydi. Hech qanday maʼlumot oʻchirilmaydi.",
+        "button": "Oʻchirish"
+      },
+      "activate": {
+        "title": "Kompaniyani faollashtirasizmi?",
+        "description": "{{name}} foydalanuvchilari unda yana ishlay oladi.",
+        "button": "Faollashtirish"
+      }
+    }
+  },
+  "validation": {
+    "required": "Majburiy maydon",
+    "invalid": "Notoʻgʻri qiymat",
+    "emailInvalid": "Toʻgʻri email manzilini kiriting",
+    "phoneInvalid": "Toʻgʻri telefon raqamini kiriting, masalan +998 90 123 45 67",
+    "nameTooShort": "Juda qisqa",
+    "tooLong": "Juda uzun",
+    "phoneOrEmailRequired": "Telefon raqami yoki email kiriting",
+    "passwordTooShort": "Kamida 10 ta belgi",
+    "passwordMustDiffer": "Joriy paroldan farq qilishi kerak",
+    "passwordsDontMatch": "Parollar mos kelmadi",
+    "currentPasswordWrong": "Parol notoʻgʻri",
+    "currencyInvalid": "Valyutani tanlang",
+    "timezoneInvalid": "Vaqt mintaqasini tanlang",
+    "nothingToUpdate": "Oʻzgartiradigan narsa yoʻq"
+  },
+  "errors": {
+    "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
+    "notFound": "Topilmadi. Ehtimol, oʻchirilgan.",
+    "auth": {
+      "required": "Iltimos, qaytadan kiring.",
+      "forbidden": "Bunga ruxsatingiz yoʻq.",
+      "invalidCredentials": "Telefon/email yoki parol notoʻgʻri.",
+      "tooManyAttempts": "Urinishlar juda koʻp. {{minutes}} daqiqadan keyin qayta urinib koʻring.",
+      "passwordChangeRequired": "Avval yangi parol tanlang.",
+      "crossSite": "Xavfsizlik sababli soʻrov bloklandi. Sahifani yangilab, qayta urinib koʻring."
+    },
+    "company": {
+      "required": "Hozir sizda biror kompaniyaga kirish huquqi yoʻq.",
+      "notMember": "Siz bu kompaniya aʼzosi emassiz.",
+      "notFound": "Kompaniya topilmadi."
+    },
+    "member": {
+      "alreadyExists": "Bu odam allaqachon kompaniyangiz foydalanuvchisi.",
+      "notFound": "Bu foydalanuvchi kompaniyangizda yoʻq.",
+      "lastOwner": "Kompaniyada kamida bitta egasi qolishi kerak.",
+      "cannotChangeSelf": "Oʻz rolingiz yoki holatingizni oʻzgartira olmaysiz.",
+      "onlyOwnerManagesOwners": "Egalarni faqat ega boshqara oladi.",
+      "sharedAccount": "Bu odam boshqa kompaniyalarda ham ishlaydi, shuning uchun parolini faqat oʻzi oʻzgartira oladi."
+    },
+    "user": {
+      "contactsBelongToDifferentPeople": "Bu telefon va bu email ikki xil odamga tegishli. Ulardan faqat bittasini kiriting."
+    }
   }
 }

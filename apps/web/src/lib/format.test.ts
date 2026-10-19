@@ -21,7 +21,31 @@ describe('formatMoney', () => {
 describe('formatNumber', () => {
   it('groups digits per language', () => {
     expect(plain(formatNumber(1234.5, 'ru'))).toBe('1 234,5');
+    expect(plain(formatNumber(1234.5, 'uz'))).toBe('1 234,5');
     expect(formatNumber(1234.5, 'en')).toBe('1,234.5');
+  });
+});
+
+describe('Uzbek formatting does not depend on browser locale data', () => {
+  it('formats money, dates and months by hand', () => {
+    expect(plain(formatMoney('12345678.5', 'UZS', 'uz'))).toBe('12 345 678,5 soʻm');
+    expect(plain(formatMoney(100, 'USD', 'uz'))).toBe('100 USD');
+    expect(formatDate('2026-10-19', 'uz')).toBe('19.10.2026');
+    expect(formatMonth(2026, 1, 'uz')).toBe('yanvar, 2026');
+  });
+
+  it('shows API timestamps as the day in the viewer’s time zone', () => {
+    // 20:30 UTC is already the next day in Tashkent (UTC+5).
+    const original = process.env.TZ;
+    process.env.TZ = 'Asia/Tashkent';
+    try {
+      expect(formatDate('2026-10-19T20:30:00.000Z', 'uz')).toBe('20.10.2026');
+      expect(formatDate('2026-10-19T20:30:00.000Z', 'en')).toBe('Oct 20, 2026');
+      // A calendar day stays the same day regardless.
+      expect(formatDate('2026-10-19', 'en')).toBe('Oct 19, 2026');
+    } finally {
+      process.env.TZ = original;
+    }
   });
 });
 
