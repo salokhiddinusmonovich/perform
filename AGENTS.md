@@ -55,7 +55,7 @@ Before finishing a change, run `npm test`, `npm run typecheck` and `npm run buil
     npx prisma migrate deploy
     ```
     Read the generated SQL before applying it.
-- The dev machine runs Windows (Git Bash + PowerShell). Its **C: drive is nearly full**, so the npm cache is pinned to D: via `.npmrc`. Don't put large files on C:.
+- The dev machine runs Windows (Git Bash + PowerShell). Its **C: drive is small**, so the npm cache is set to D: in the user-level npm config (not in the repo). Don't put large files on C:.
 - Turkish text: `İ`/`ı` break naive case-folding. In `packages/payroll`, cell codes are folded with `toUpperCase()` + `İ → I`. Don't use `toLocaleUpperCase('tr-TR')` for code matching.
 
 ## Conventions
@@ -142,11 +142,16 @@ The sample files and future production data contain passport numbers, PINFLs (pe
 
 - SSH alias `enersi-contabo` (key auth, root). The app lives in `/opt/puantaj`, served at https://tahakkuk.en-ersi.uz.
 - The server **also runs other live projects** (enersi on :3000 with host Postgres :5432, ixasales in Docker on :8080). Don't modify, restart or reuse their containers, databases, ports or nginx files. This app uses only its own compose project `puantaj`, its own Postgres container, and `127.0.0.1:8090`.
-- Deploy (only committed code; the API container runs `prisma migrate deploy` on start):
-  1. Unpack into a clean folder and build there while the old version keeps running: `git archive HEAD | ssh enersi-contabo 'rm -rf /opt/puantaj.new && mkdir /opt/puantaj.new && tar -x -C /opt/puantaj.new && cp -p /opt/puantaj/.env /opt/puantaj.new/ && cd /opt/puantaj.new && docker compose build'`. Never unpack over `/opt/puantaj`: files deleted from the repo would stay behind.
-  2. Only if the build succeeded, swap and restart: `rm -rf /opt/puantaj.prev && mv /opt/puantaj /opt/puantaj.prev && mv /opt/puantaj.new /opt/puantaj && cd /opt/puantaj && docker compose up -d`.
-  3. Verify https://tahakkuk.en-ersi.uz in a browser (page renders, console clean) and `/api/health`.
-  4. Rollback if it's broken: `mv /opt/puantaj /opt/puantaj.broken && mv /opt/puantaj.prev /opt/puantaj && cd /opt/puantaj && docker compose up -d --build`. Database migrations are not rolled back automatically, so check before rolling back across a migration.
+- **Deploys are automatic:** every push to `main` runs `.github/workflows/ci-deploy.yml`:
+  1. Tests, typecheck and build, then a browser smoke test (`scripts/smoke.mjs`) of the production build against a real Postgres.
+  2. If all pass, the release goes over SSH to `/usr/local/bin/puantaj-deploy` (source: `deploy/puantaj-deploy.sh`). The script builds in a clean folder while the old version keeps running, swaps only if the build succeeds, health-checks, and rolls back by itself if the new version is unhealthy.
+  3. The smoke test runs against the live site. If it fails, CI runs `rollback`.
+  - Pull requests run step 1 only.
+  - Pushing to `main` therefore deploys to production. Push only when the user has agreed to the change going live.
+- The GitHub deploy key (secret `DEPLOY_SSH_KEY`; private key also at `~/.ssh/puantaj_github_actions` on the dev machine) is locked in `/root/.ssh/authorized_keys` with `restrict,command="/usr/local/bin/puantaj-deploy"`. It can only run `deploy <sha>`, `rollback` or `status`, with no shell or forwarding. Never loosen this.
+- Manual operations, from the dev machine (normal `enersi-contabo` alias): `ssh enersi-contabo puantaj-deploy status`, `ssh enersi-contabo puantaj-deploy rollback`, and a manual deploy with `git archive HEAD | ssh enersi-contabo puantaj-deploy deploy $(git rev-parse HEAD)`. Never unpack over `/opt/puantaj` by hand: files deleted from the repo would stay behind.
+- After changing `deploy/puantaj-deploy.sh`, install it on the server yourself (it isn't deployed automatically): `scp deploy/puantaj-deploy.sh enersi-contabo:/tmp/ && ssh enersi-contabo 'bash -n /tmp/puantaj-deploy.sh && install -m 0755 /tmp/puantaj-deploy.sh /usr/local/bin/puantaj-deploy'`.
+- Rollback restores code, not data: database migrations are not undone. Check before rolling back across a migration.
 - nginx: our site file is `/etc/nginx/sites-available/tahakkuk.en-ersi.uz`. Always run `nginx -t` before `systemctl reload nginx`, because one bad file takes down every site on the server.
 - Secrets live only in `/opt/puantaj/.env` on the server. Never print or commit them.
 - Production changes (deploys, nginx, certificates, DB operations) need the user's go-ahead.

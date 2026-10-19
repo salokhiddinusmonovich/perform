@@ -12,3 +12,4 @@ samples/
 *.xlsx
 *.xls
 .npm-cache/
+.playwright/

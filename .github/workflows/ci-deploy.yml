@@ -1,0 +1,98 @@
+# Checks every push and pull request. Pushes to main that pass are deployed to
+# https://tahakkuk.en-ersi.uz and smoke-tested live; a failing live check rolls back.
+name: CI & Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  DEPLOY_HOST: 169.58.130.233
+  # Server host key, read from the server over an already-trusted SSH connection.
+  DEPLOY_HOST_KEY: 169.58.130.233 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMbgeAHqj1v/VhAu+eP8oQx1WugJ+FNijmjdGAHECHeV
+
+jobs:
+  check:
+    name: Test, build, smoke-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: puantaj
+          POSTGRES_PASSWORD: puantaj
+          POSTGRES_DB: puantaj
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U puantaj -d puantaj"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://puantaj:puantaj@127.0.0.1:5432/puantaj
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx -w @puantaj/api prisma generate
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Apply migrations to a fresh database
+        run: npx -w @puantaj/api prisma migrate deploy
+      - name: Start API and production web build
+        run: |
+          (cd apps/api && PORT=4100 node dist/main.js > ../../api.log 2>&1 &)
+          (npm run preview -w @puantaj/web > preview.log 2>&1 &)
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null http://127.0.0.1:4100/api/health && curl -fsS -o /dev/null http://localhost:4173/ && exit 0
+            sleep 1
+          done
+          echo "Servers did not start"; cat api.log preview.log; exit 1
+      - run: npx playwright install --with-deps chromium
+      - name: Browser smoke test (production build)
+        run: node scripts/smoke.mjs http://localhost:4173
+
+  deploy:
+    name: Deploy to production
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ]; then echo "Secret DEPLOY_SSH_KEY is not set"; exit 1; fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_HOST_KEY" > ~/.ssh/known_hosts
+      - name: Deploy (server builds, swaps, health-checks, rolls back on failure)
+        run: |
+          git archive --format=tar HEAD |
+            ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              root@"$DEPLOY_HOST" "deploy $GITHUB_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Browser smoke test (live site)
+        id: live_smoke
+        run: node scripts/smoke.mjs https://tahakkuk.en-ersi.uz
+      - name: Roll back if the live site is broken
+        if: failure() && steps.live_smoke.outcome == 'failure'
+        run: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes root@"$DEPLOY_HOST" rollback
