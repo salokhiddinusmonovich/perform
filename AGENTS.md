@@ -42,6 +42,8 @@ npm run build
 
 Before finishing a change, run `npm test`, `npm run typecheck` and `npm run build`.
 
+**Before any deploy, check the production build in a browser**, not only the dev server: `npm run build -w @puantaj/web && npm run preview -w @puantaj/web` (http://localhost:4173, proxies `/api` to the local API). Load the pages, open a menu, and confirm the console has no errors. The dev server doesn't bundle code, so bundling bugs (e.g. chunk cycles) only show up here. One already took production down.
+
 ## Local development quirks
 
 - **No Docker or system PostgreSQL on the dev machine.** The dev DB is PGlite behind a socket server (`scripts/dev-db.mjs`):
@@ -140,7 +142,11 @@ The sample files and future production data contain passport numbers, PINFLs (pe
 
 - SSH alias `enersi-contabo` (key auth, root). The app lives in `/opt/puantaj`, served at https://tahakkuk.en-ersi.uz.
 - The server **also runs other live projects** (enersi on :3000 with host Postgres :5432, ixasales in Docker on :8080). Don't modify, restart or reuse their containers, databases, ports or nginx files. This app uses only its own compose project `puantaj`, its own Postgres container, and `127.0.0.1:8090`.
-- Deploy: `git archive HEAD | ssh enersi-contabo 'tar -x -C /opt/puantaj'`, then `cd /opt/puantaj && docker compose up -d --build`. The API container runs `prisma migrate deploy` on start. Only committed code gets deployed.
+- Deploy (only committed code; the API container runs `prisma migrate deploy` on start):
+  1. Unpack into a clean folder and build there while the old version keeps running: `git archive HEAD | ssh enersi-contabo 'rm -rf /opt/puantaj.new && mkdir /opt/puantaj.new && tar -x -C /opt/puantaj.new && cp -p /opt/puantaj/.env /opt/puantaj.new/ && cd /opt/puantaj.new && docker compose build'`. Never unpack over `/opt/puantaj`: files deleted from the repo would stay behind.
+  2. Only if the build succeeded, swap and restart: `rm -rf /opt/puantaj.prev && mv /opt/puantaj /opt/puantaj.prev && mv /opt/puantaj.new /opt/puantaj && cd /opt/puantaj && docker compose up -d`.
+  3. Verify https://tahakkuk.en-ersi.uz in a browser (page renders, console clean) and `/api/health`.
+  4. Rollback if it's broken: `mv /opt/puantaj /opt/puantaj.broken && mv /opt/puantaj.prev /opt/puantaj && cd /opt/puantaj && docker compose up -d --build`. Database migrations are not rolled back automatically, so check before rolling back across a migration.
 - nginx: our site file is `/etc/nginx/sites-available/tahakkuk.en-ersi.uz`. Always run `nginx -t` before `systemctl reload nginx`, because one bad file takes down every site on the server.
 - Secrets live only in `/opt/puantaj/.env` on the server. Never print or commit them.
 - Production changes (deploys, nginx, certificates, DB operations) need the user's go-ahead.

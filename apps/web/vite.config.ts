@@ -9,20 +9,25 @@ export default defineConfig({
     alias: { '@': path.resolve(__dirname, './src') },
   },
   build: {
+    // The single vendor chunk below is ~580 kB (~180 kB gzipped) by design.
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
-        // Libraries change rarely; separate chunks stay cached across app deploys.
-        manualChunks: {
-          react: ['react', 'react-dom', 'react-dom/client', 'react-router'],
-          ui: ['radix-ui', 'sonner'],
-          data: ['@tanstack/react-query', '@tanstack/react-table'],
-          i18n: ['i18next', 'react-i18next'],
-        },
+        // All libraries go into ONE vendor chunk, cached across app deploys.
+        // Don't split libraries into several chunks: React and the libraries built on it
+        // ended up importing each other across chunks, and the production app crashed
+        // at startup ("Cannot set properties of undefined (setting 'Activity')").
+        manualChunks: (id) => (id.includes('node_modules') ? 'vendor' : undefined),
       },
     },
   },
   server: {
     port: 5173,
+    proxy: { '/api': 'http://127.0.0.1:4100' },
+  },
+  // `vite preview` serves the production build; same API proxy as dev.
+  preview: {
+    port: 4173,
     proxy: { '/api': 'http://127.0.0.1:4100' },
   },
 });
