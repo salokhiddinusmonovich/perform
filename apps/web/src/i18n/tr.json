@@ -1,1 +1,51 @@
-{ "appName": "Puantaj", "tagline": "İnşaat için puantaj ve bordro", "serverStatus": "Sunucu durumu", "ok": "Çalışıyor", "down": "Çalışmıyor", "checking": "Kontrol ediliyor…", "database": "Veritabanı" }
+{
+  "app": {
+    "name": "Puantaj",
+    "tagline": "İnşaat için puantaj ve bordro"
+  },
+  "nav": {
+    "label": "Ana menü",
+    "openMenu": "Menüyü aç",
+    "dashboard": "Ana sayfa"
+  },
+  "settings": {
+    "language": "Dil",
+    "theme": "Tema",
+    "themeLight": "Açık",
+    "themeDark": "Koyu",
+    "themeSystem": "Sistem"
+  },
+  "dashboard": {
+    "description": "Sisteme genel bakış",
+    "systemStatus": "Sistem durumu",
+    "api": "Sunucu",
+    "database": "Veritabanı"
+  },
+  "status": {
+    "ok": "Çalışıyor",
+    "down": "Çalışmıyor",
+    "checking": "Kontrol ediliyor…"
+  },
+  "common": {
+    "cancel": "İptal",
+    "retry": "Tekrar dene",
+    "search": "Ara…",
+    "loading": "Yükleniyor…",
+    "rowsTotal": "{{count}} satır",
+    "page": "Sayfa {{page}} / {{total}}",
+    "previous": "Önceki",
+    "next": "Sonraki"
+  },
+  "states": {
+    "emptyTitle": "Henüz bir şey yok",
+    "noResults": "Aramanızla eşleşen sonuç yok",
+    "errorTitle": "Bir sorun oluştu",
+    "errorDescription": "Veriler yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.",
+    "actionFailed": "İşlem tamamlanamadı. Lütfen tekrar deneyin."
+  },
+  "notFound": {
+    "title": "Sayfa bulunamadı",
+    "description": "Açtığınız sayfa mevcut değil veya taşınmış.",
+    "goHome": "Ana sayfaya git"
+  }
+}

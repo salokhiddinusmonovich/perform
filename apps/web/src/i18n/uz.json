@@ -1,1 +1,51 @@
-{ "appName": "Puantaj", "tagline": "Qurilish uchun tabel va ish haqi", "serverStatus": "Server holati", "ok": "Ishlayapti", "down": "Ishlamayapti", "checking": "Tekshirilmoqda…", "database": "Ma'lumotlar bazasi" }
+{
+  "app": {
+    "name": "Puantaj",
+    "tagline": "Qurilish uchun tabel va ish haqi"
+  },
+  "nav": {
+    "label": "Asosiy menyu",
+    "openMenu": "Menyuni ochish",
+    "dashboard": "Bosh sahifa"
+  },
+  "settings": {
+    "language": "Til",
+    "theme": "Mavzu",
+    "themeLight": "Yorugʻ",
+    "themeDark": "Qorongʻi",
+    "themeSystem": "Tizim boʻyicha"
+  },
+  "dashboard": {
+    "description": "Tizim holati haqida umumiy maʼlumot",
+    "systemStatus": "Tizim holati",
+    "api": "Server",
+    "database": "Maʼlumotlar bazasi"
+  },
+  "status": {
+    "ok": "Ishlayapti",
+    "down": "Ishlamayapti",
+    "checking": "Tekshirilmoqda…"
+  },
+  "common": {
+    "cancel": "Bekor qilish",
+    "retry": "Qayta urinish",
+    "search": "Qidirish…",
+    "loading": "Yuklanmoqda…",
+    "rowsTotal": "{{count}} ta qator",
+    "page": "{{page}} / {{total}} sahifa",
+    "previous": "Oldingi",
+    "next": "Keyingi"
+  },
+  "states": {
+    "emptyTitle": "Hozircha hech narsa yoʻq",
+    "noResults": "Qidiruv boʻyicha hech narsa topilmadi",
+    "errorTitle": "Xatolik yuz berdi",
+    "errorDescription": "Maʼlumotlarni yuklab boʻlmadi. Internet aloqasini tekshirib, qayta urinib koʻring.",
+    "actionFailed": "Amalni bajarib boʻlmadi. Qayta urinib koʻring."
+  },
+  "notFound": {
+    "title": "Sahifa topilmadi",
+    "description": "Siz ochgan sahifa mavjud emas yoki boshqa joyga koʻchirilgan.",
+    "goHome": "Bosh sahifaga oʻtish"
+  }
+}

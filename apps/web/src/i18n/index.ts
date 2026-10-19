@@ -5,31 +5,43 @@ import ru from './ru.json';
 import tr from './tr.json';
 import uz from './uz.json';
 
-export const LANGUAGES = { uz: "O'zbekcha", ru: 'Русский', tr: 'Türkçe', en: 'English' } as const;
+export const LANGUAGES = { uz: 'Oʻzbekcha', ru: 'Русский', tr: 'Türkçe', en: 'English' } as const;
 export type Language = keyof typeof LANGUAGES;
 
-const saved = (() => {
+const STORAGE_KEY = 'lang';
+
+export function isLanguage(value: unknown): value is Language {
+  return typeof value === 'string' && value in LANGUAGES;
+}
+
+function savedLanguage(): Language | null {
   try {
-    return localStorage.getItem('lang');
+    const value = localStorage.getItem(STORAGE_KEY);
+    return isLanguage(value) ? value : null;
   } catch {
     return null;
   }
-})();
+}
 
 i18n.use(initReactI18next).init({
   resources: { uz: { t: uz }, ru: { t: ru }, tr: { t: tr }, en: { t: en } },
   defaultNS: 't',
-  lng: saved && saved in LANGUAGES ? saved : 'uz',
+  lng: savedLanguage() ?? 'uz',
   fallbackLng: 'en',
   interpolation: { escapeValue: false },
+  showSupportNotice: false,
 });
+
+const syncHtmlLang = (lang: string) => document.documentElement.setAttribute('lang', lang);
+syncHtmlLang(i18n.language);
+i18n.on('languageChanged', syncHtmlLang);
 
 export function setLanguage(lang: Language) {
   i18n.changeLanguage(lang);
   try {
-    localStorage.setItem('lang', lang);
+    localStorage.setItem(STORAGE_KEY, lang);
   } catch {
-    // storage unavailable; language still changes for this session
+    // Storage unavailable: the language still changes for this session.
   }
 }
 

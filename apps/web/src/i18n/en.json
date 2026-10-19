@@ -1,1 +1,51 @@
-{ "appName": "Puantaj", "tagline": "Timesheets and payroll for construction", "serverStatus": "Server status", "ok": "Running", "down": "Down", "checking": "Checking…", "database": "Database" }
+{
+  "app": {
+    "name": "Puantaj",
+    "tagline": "Timesheets and payroll for construction"
+  },
+  "nav": {
+    "label": "Main navigation",
+    "openMenu": "Open menu",
+    "dashboard": "Dashboard"
+  },
+  "settings": {
+    "language": "Language",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System"
+  },
+  "dashboard": {
+    "description": "Overview of the system",
+    "systemStatus": "System status",
+    "api": "Server",
+    "database": "Database"
+  },
+  "status": {
+    "ok": "Running",
+    "down": "Not working",
+    "checking": "Checking…"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "retry": "Try again",
+    "search": "Search…",
+    "loading": "Loading…",
+    "rowsTotal": "{{count}} rows",
+    "page": "Page {{page}} of {{total}}",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "states": {
+    "emptyTitle": "Nothing here yet",
+    "noResults": "No results match your search",
+    "errorTitle": "Something went wrong",
+    "errorDescription": "The data could not be loaded. Check your connection and try again.",
+    "actionFailed": "The action could not be completed. Please try again."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The page you opened does not exist or was moved.",
+    "goHome": "Go to dashboard"
+  }
+}

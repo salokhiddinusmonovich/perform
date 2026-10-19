@@ -81,6 +81,23 @@ Before finishing a change, run `npm test`, `npm run typecheck` and `npm run buil
 | Icons | **lucide-react** |
 | Toasts | **sonner** (the shadcn toast) |
 | Date pickers | shadcn Calendar (react-day-picker) with date-fns locales `uz`, `ru`, `tr`, `en` |
+| Server data | **TanStack Query** (`useQuery`/`useMutation`) over `lib/api.ts`. Never call `fetch` in a page |
+| Routing | **React Router** (`app/router.tsx`). Every page is lazy-loaded and has an entry in `app/nav.ts` |
+| Theme | Our own `components/theme-provider.tsx` plus the pre-paint script in `index.html`. Don't add `next-themes` (it breaks under React 19 without SSR) |
+| Component tests | Vitest + Testing Library + jsdom (`// @vitest-environment jsdom` per file) |
+
+**Where things live in `apps/web/src`:**
+- `app/`: the shell, router, navigation and providers.
+- `pages/`: one file per page.
+- `components/ui/`: shadcn primitives.
+- `components/`: app-level components.
+- `lib/`: `api.ts`, `format.ts`, `utils.ts`.
+- `hooks/`: `useFormat()` and friends.
+- `i18n/`: translations. A test fails if any language is missing a key.
+
+**Shared components that already exist (use them, don't rebuild):** `PageHeader`, `DataTable`, `ConfirmDialog`, `EmptyState`, `ErrorState`, `LoadingState`, `StatusBadge`, `LanguageSwitcher`, `ThemeSwitcher`. Use `useFormat()` for money, numbers and dates.
+
+**Adding shadcn components:** run `npx shadcn@4.22.1 add <name>` in `apps/web`, then check `git diff`. The CLI has written `from "cn"` and installed a stray `cn` npm package before. Imports must be `@/lib/utils`. Primitives here use a 40 px default height (`h-10`), raised from shadcn's 36 px for touch targets; keep that when adding new ones.
 
 shadcn does **not** keep the UI consistent by itself. These rules do:
 
@@ -98,7 +115,7 @@ shadcn does **not** keep the UI consistent by itself. These rules do:
   - Every data view has the same loading, empty and error states.
   - Success and failure feedback uses the same toast.
 - **Status colours mean the same thing on every page:** green = ok/worked, red = absent/error, amber = warning/pending, blue = info/leave. Colour is never the only signal. Always add a label or icon.
-- **Formatting is centralised.** Dates, numbers and money go through shared formatters that follow the user's language. Money shows the currency with grouped digits (e.g. `7 500 000 so'm`). Never format by hand inside a page.
+- **Formatting is centralised.** Dates, numbers and money go through shared formatters that follow the user's language. Money shows the currency with grouped digits (e.g. `7 500 000 soʻm`), with decimals only when present. Never format by hand inside a page.
 - **Works on phones.** Foremen enter timesheets on site. Every page must be usable at 360 px wide, with touch targets of at least 40 px. Wide tables scroll inside their container, never the whole page.
 - **Accessible:** real `<button>`/`<label>` elements, keyboard navigation (especially in the timesheet grid), visible focus, and contrast of at least WCAG AA.
 - **Language-safe layouts:** Russian and Turkish strings are often 30–50% longer than English. Never size UI elements to fit one language's text.
