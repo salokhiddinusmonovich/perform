@@ -27,11 +27,7 @@ npm run dev:web       # terminal 3: UI on http://localhost:5173 (proxies /api)
 
 Notes on the dev database (PGlite):
 - It serves **one client at a time**. Stop the API before running Prisma CLI commands.
-- It has a single database, so `prisma migrate dev` (which needs a shadow database) does not work. Create migrations with:
-  ```bash
-  npx -w @puantaj/api prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url <real postgres url> --script
-  ```
-  or ask for a scratch Postgres. Production uses a real PostgreSQL 16 container.
+- It has a single database, so `prisma migrate dev` (which needs a shadow database) does not work. See "Local development quirks" in [AGENTS.md](AGENTS.md) for how to create migrations and how to recover a stuck connection. Production uses a real PostgreSQL 16 container.
 
 Checks:
 
