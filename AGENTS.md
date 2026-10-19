@@ -7,7 +7,16 @@ Guidance for AI coding agents working in this repository. Human-oriented setup i
 Multi-company web app for construction **timesheets and payroll** ("puantaj" in Turkish). Each company (tenant) has its own sites, teams, workers, timesheets and pay rules. First customer data comes from Uzbekistan: salaries in UZS, labels in Uzbek, Russian and Turkish.
 
 - **It is a product, not one company's tool.** Pay rules are configurable, but the app implements the *correct* method, not a customer's spreadsheet mistakes. Example: if a company divides salary by 30 days but /25 working days is correct, the app uses /25.
-- **Pay policy is still open.** Not decided yet: daily divisor, overtime threshold, multipliers and eligibility, pay for Sunday/holiday work, paid leave/sick days, travel pay, half days. Don't invent defaults for these. Leave them configurable or ask.
+- **Pay model (decided 2026-10-19): hour-based.**
+  - `hourly rate = monthly salary ÷ (working days in that month × normal hours per day)`.
+  - Pay = hours × hourly rate × the rate multiplier for that kind of hour. Someone who works every working day at normal hours earns exactly their monthly salary.
+  - **Exact hours are paid.** A 4-hour day pays 4 hours. There are no half-day or "counts as a day" thresholds.
+  - Hour kinds, each with its own multiplier set in Settings: **normal** (up to the normal hours on a working day), **overtime** (above normal hours on a working day), **rest day** (any hours on a rest weekday, e.g. Sunday), **holiday** (any hours on a public holiday).
+  - **Normal hours per day** is a Settings value (e.g. 9).
+  - **Absence pay** is set per type (leave, sick, travel/transfer): paid or unpaid. (To confirm: a paid absence day pays normal hours.)
+  - **Travel pay** is configured in Settings: fixed amount per day worked per route, or a monthly amount entered by the accountant.
+  - Open: how working days per month are determined (proposed: automatic from rest weekdays and the holiday list, with a per-month admin override; awaiting the user's choice), whether settings can differ per site, rounding, and mid-month hire/exit (the hour model already prorates).
+  - Uzbek legal minimums (overtime, holiday pay) are deliberately out of scope for now. Don't enforce or assume them until the user raises it.
 - UI languages: `uz` (default), `ru`, `tr`, `en`. Every user-facing string goes through i18n in all four files.
 
 ## Principles
