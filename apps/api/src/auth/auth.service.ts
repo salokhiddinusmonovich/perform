@@ -5,6 +5,7 @@ import { badRequest, forbidden, tooManyRequests, unauthorized } from '../common/
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthContext } from './auth.context';
 import { LoginRateLimiter } from './login-rate-limiter';
+import { USABLE_MEMBERSHIP } from './memberships';
 import { hashPassword, verifyDummyPassword, verifyPassword } from './passwords';
 import { SessionService } from './session.service';
 
@@ -48,7 +49,7 @@ export class AuthService {
     this.limiter.recordSuccess(key);
 
     const firstCompany = await this.prisma.membership.findFirst({
-      where: { userId: user.id, isActive: true, company: { isActive: true } },
+      where: { userId: user.id, ...USABLE_MEMBERSHIP },
       orderBy: { createdAt: 'asc' },
     });
     const token = await this.sessions.create({
@@ -68,7 +69,7 @@ export class AuthService {
 
   async me(auth: AuthContext): Promise<Me> {
     const memberships = await this.prisma.membership.findMany({
-      where: { userId: auth.user.id, isActive: true, company: { isActive: true } },
+      where: { userId: auth.user.id, ...USABLE_MEMBERSHIP },
       include: { company: { select: { id: true, name: true } } },
       orderBy: { company: { name: 'asc' } },
     });
@@ -102,7 +103,7 @@ export class AuthService {
 
   async switchCompany(auth: AuthContext, companyId: string) {
     const membership = await this.prisma.membership.findFirst({
-      where: { userId: auth.user.id, companyId, isActive: true, company: { isActive: true } },
+      where: { userId: auth.user.id, companyId, ...USABLE_MEMBERSHIP },
     });
     if (!membership) throw forbidden('company.notMember');
     await this.sessions.setActiveCompany(auth.sessionId, companyId);

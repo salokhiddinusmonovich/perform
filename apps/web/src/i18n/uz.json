@@ -99,7 +99,7 @@
     "title": "Foydalanuvchilar",
     "description": "Kompaniyangizga kira oladigan odamlar va ularning huquqlari",
     "add": "Foydalanuvchi qoʻshish",
-    "addDescription": "Agar bu odamning hisobi boʻlmasa, vaqtinchalik parol bilan yangi hisob yaratiladi.",
+    "addDescription": "Agar bu odamning hisobi boʻlmasa, vaqtinchalik parol bilan yangi hisob yaratiladi. Agar hisobi boʻlsa (boshqa kompaniyadan), unga taklif yuboriladi va u qabul qilgach qoʻshiladi.",
     "name": "F.I.Sh.",
     "phone": "Telefon",
     "phoneHint": "Telefon yoki email shart — odam shu bilan tizimga kiradi",
@@ -114,7 +114,6 @@
     "resetPassword": "Parolni tiklash",
     "deactivate": "Oʻchirish",
     "activate": "Faollashtirish",
-    "addedExisting": "Bu odamning hisobi allaqachon bor edi; u kompaniyangizga qoʻshildi va eski paroli bilan kira oladi.",
     "confirm": {
       "deactivate": {
         "title": "Foydalanuvchini oʻchirasizmi?",
@@ -130,7 +129,33 @@
         "title": "Parolni tiklaysizmi?",
         "description": "{{name}} barcha qurilmalardan chiqariladi va yangi vaqtinchalik parol oladi. Uni faqat bir marta koʻrasiz.",
         "button": "Parolni tiklash"
+      },
+      "cancelInvitation": {
+        "title": "Taklifni bekor qilasizmi?",
+        "description": "{{name}} endi taklifni koʻrmaydi. Keyinroq uni qayta taklif qilishingiz mumkin.",
+        "button": "Taklifni bekor qilish"
       }
+    },
+    "invitedToast": "Bu odamning hisobi allaqachon bor, shuning uchun unga taklif yuborildi. U taklifni qabul qilgach, kirish huquqini oladi.",
+    "invitationPending": "Taklif yuborilgan",
+    "invitationDeclined": "Rad etgan",
+    "invitationCancelled": "Taklif bekor qilingan",
+    "cancelInvitation": "Taklifni bekor qilish"
+  },
+  "invitations": {
+    "title": "Takliflar",
+    "description": "Sizni oʻziga qoʻshilishga taklif qilgan kompaniyalar",
+    "details": "Rol: {{role}} · taklif sanasi: {{date}}",
+    "accept": "Qabul qilish",
+    "decline": "Rad etish",
+    "acceptFor": "{{company}} taklifini qabul qilish",
+    "declineFor": "{{company}} taklifini rad etish",
+    "accepted": "Siz {{company}} kompaniyasiga qoʻshildingiz. Unga ismingiz yozilgan menyu orqali oʻtishingiz mumkin.",
+    "declined": "Taklif rad etildi",
+    "confirmDecline": {
+      "title": "Taklifni rad etasizmi?",
+      "description": "Siz {{company}} kompaniyasiga qoʻshilmaysiz. Kompaniya keyinroq sizni qayta taklif qilishi mumkin.",
+      "button": "Rad etish"
     }
   },
   "roles": {
@@ -221,10 +246,14 @@
       "lastOwner": "Kompaniyada kamida bitta egasi qolishi kerak.",
       "cannotChangeSelf": "Oʻz rolingiz yoki holatingizni oʻzgartira olmaysiz.",
       "onlyOwnerManagesOwners": "Egalarni faqat ega boshqara oladi.",
-      "sharedAccount": "Bu odam boshqa kompaniyalarda ham ishlaydi, shuning uchun parolini faqat oʻzi oʻzgartira oladi."
+      "sharedAccount": "Bu odam boshqa kompaniyalarda ham ishlaydi, shuning uchun parolini faqat oʻzi oʻzgartira oladi.",
+      "invitationNotAccepted": "Bu odam hali taklifni qabul qilmagan. Parolini faqat oʻzi boshqaradi."
     },
     "user": {
       "contactsBelongToDifferentPeople": "Bu telefon va bu email ikki xil odamga tegishli. Ulardan faqat bittasini kiriting."
+    },
+    "invitation": {
+      "notFound": "Bu taklif endi amal qilmaydi."
     }
   }
 }

@@ -32,8 +32,8 @@ export class PlatformService {
     const companies = await this.prisma.company.findMany({
       orderBy: { name: 'asc' },
       include: {
-        _count: { select: { memberships: { where: { isActive: true } } } },
-        memberships: { where: { role: 'OWNER', isActive: true }, include: { user: true } },
+        _count: { select: { memberships: { where: { isActive: true, acceptedAt: { not: null } } } } },
+        memberships: { where: { role: 'OWNER', isActive: true, acceptedAt: { not: null } }, include: { user: true } },
       },
     });
     return companies.map((c) => ({
@@ -60,7 +60,10 @@ export class PlatformService {
         },
       });
       const { user, temporaryPassword } = await this.accounts.findOrCreate(tx, input.owner);
-      await tx.membership.create({ data: { userId: user.id, companyId: company.id, role: 'OWNER' } });
+      // The platform operator sets up owners directly; there is nobody to invite them.
+      await tx.membership.create({
+        data: { userId: user.id, companyId: company.id, role: 'OWNER', acceptedAt: new Date() },
+      });
       await this.audit.record(
         {
           action: 'company.create',

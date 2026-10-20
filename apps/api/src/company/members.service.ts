@@ -15,6 +15,8 @@ export interface MemberView {
   phone: string | null;
   role: Role;
   isActive: boolean;
+  /** Set while the person hasn't accepted: they have an account elsewhere and were invited. */
+  invitation: 'pending' | 'declined' | null;
   lastLoginAt: Date | null;
   mustChangePassword: boolean;
   createdAt: Date;
@@ -34,45 +36,76 @@ export class MembersService {
       include: { user: true },
       orderBy: [{ isActive: 'desc' }, { user: { fullName: 'asc' } }],
     });
-    return rows.map((m) => ({
-      userId: m.userId,
-      fullName: m.user.fullName,
-      email: m.user.email,
-      phone: m.user.phone,
-      role: m.role,
-      isActive: m.isActive,
-      lastLoginAt: m.user.lastLoginAt,
-      mustChangePassword: m.user.mustChangePassword,
-      createdAt: m.createdAt,
-    }));
+    return rows.map((m) => {
+      // Until the person accepts, show only what this company typed: the account's own
+      // name and contacts may have been given to another company.
+      const accepted = m.acceptedAt !== null;
+      return {
+        userId: m.userId,
+        fullName: accepted ? m.user.fullName : (m.invitedName ?? ''),
+        email: accepted ? m.user.email : m.invitedEmail,
+        phone: accepted ? m.user.phone : m.invitedPhone,
+        role: m.role,
+        isActive: m.isActive,
+        invitation: accepted ? null : m.declinedAt ? 'declined' : 'pending',
+        lastLoginAt: accepted ? m.user.lastLoginAt : null,
+        mustChangePassword: accepted && m.user.mustChangePassword,
+        createdAt: m.createdAt,
+      };
+    });
   }
 
-  /** Adds a person to the company; creates their account if they don't have one yet. */
+  /**
+   * Adds a person to the company. Someone without an account gets one with a temporary
+   * password and is a member right away. Someone who already has an account (from
+   * another company) is only invited: they get access after they accept.
+   */
   async create(auth: CompanyAuthContext, input: CreateMember) {
     assertMayGrant(auth, input.role);
     const { role, ...contact } = input;
 
     return this.prisma.$transaction(async (tx) => {
       const { user, temporaryPassword } = await this.accounts.findOrCreate(tx, contact);
-      const existing = await tx.membership.findUnique({
-        where: { userId_companyId: { userId: user.id, companyId: auth.company.id } },
-      });
-      if (existing) throw conflict('member.alreadyExists');
+      const newAccount = temporaryPassword !== undefined;
+      const where = { userId_companyId: { userId: user.id, companyId: auth.company.id } };
+      const existing = await tx.membership.findUnique({ where });
+      // An invitation that was declined or cancelled may be sent again; anything else is a duplicate.
+      const reinvite = existing && existing.acceptedAt === null && (existing.declinedAt !== null || !existing.isActive);
+      if (existing && !reinvite) {
+        throw conflict('member.alreadyExists');
+      }
 
-      await tx.membership.create({ data: { userId: user.id, companyId: auth.company.id, role } });
+      const invited = {
+        invitedName: contact.fullName,
+        invitedEmail: contact.email ?? null,
+        invitedPhone: contact.phone ?? null,
+      };
+      if (existing) {
+        await tx.membership.update({ where, data: { role, isActive: true, declinedAt: null, ...invited } });
+      } else {
+        await tx.membership.create({
+          data: {
+            userId: user.id,
+            companyId: auth.company.id,
+            role,
+            ...invited,
+            acceptedAt: newAccount ? new Date() : null,
+          },
+        });
+      }
       await this.audit.record(
         {
-          action: 'member.add',
+          action: newAccount ? 'member.add' : 'member.invite',
           companyId: auth.company.id,
           actorUserId: auth.user.id,
           entityType: 'User',
           entityId: user.id,
-          data: { role, newAccount: temporaryPassword !== undefined },
+          data: { role, newAccount },
           ip: auth.ip,
         },
         tx,
       );
-      return { userId: user.id, temporaryPassword: temporaryPassword ?? null };
+      return { userId: user.id, temporaryPassword: temporaryPassword ?? null, invited: !newAccount };
     });
   }
 
@@ -91,10 +124,11 @@ export class MembersService {
       const losingOwner =
         member.role === 'OWNER' &&
         member.isActive &&
+        member.acceptedAt !== null &&
         ((input.role !== undefined && input.role !== 'OWNER') || input.isActive === false);
       if (losingOwner) {
         const owners = await tx.membership.count({
-          where: { companyId: auth.company.id, role: 'OWNER', isActive: true },
+          where: { companyId: auth.company.id, role: 'OWNER', isActive: true, acceptedAt: { not: null } },
         });
         if (owners <= 1) throw badRequest('member.lastOwner');
       }
@@ -140,6 +174,8 @@ export class MembersService {
       });
       if (!member) throw notFound('member.notFound');
       if (member.role === 'OWNER') assertMayGrant(auth, 'OWNER');
+      // An invited person's account isn't this company's: only they manage its password.
+      if (member.acceptedAt === null) throw forbidden('member.invitationNotAccepted');
       if (member.user._count.memberships > 1 || member.user.isPlatformAdmin) {
         throw forbidden('member.sharedAccount');
       }

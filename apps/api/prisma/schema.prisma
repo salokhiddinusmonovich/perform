@@ -1,4 +1,7 @@
 // Multi-tenant schema: every business row belongs to a Company.
+// Nothing with history is ever deleted (AGENTS.md: no silent data loss): rows are
+// deactivated instead, and relations use onDelete: NoAction, so a stray delete fails
+// instead of silently taking timesheets, payroll or audit records with it.
 
 generator client {
   provider = "prisma-client-js"
@@ -94,8 +97,8 @@ model AuditLog {
   ip          String?
   createdAt   DateTime @default(now())
 
-  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  actor   User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  actor   User?    @relation(fields: [actorUserId], references: [id], onDelete: NoAction)
 
   @@index([companyId, createdAt])
   @@index([entityType, entityId])
@@ -119,9 +122,21 @@ model Membership {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site    Site?   @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  /// null = pending invitation. A company that adds a person who already has an account
+  /// (from another company) only invites them; they get access once they accept.
+  /// Accounts the company creates itself, and owners set up by the platform, are
+  /// accepted at creation.
+  acceptedAt   DateTime?
+  declinedAt   DateTime?
+  /// What the inviting company typed. Until the person accepts, the company sees only
+  /// these, never the account's own name or contacts (which may come from another company).
+  invitedName  String?
+  invitedEmail String?
+  invitedPhone String?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: NoAction)
+  company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  site    Site?   @relation(fields: [siteId], references: [id], onDelete: NoAction)
 
   @@id([userId, companyId])
 }
@@ -136,7 +151,7 @@ model Site {
   address   String?
   isActive  Boolean @default(true)
 
-  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
   teams       Team[]
   assignments Assignment[]
   memberships Membership[]
@@ -154,9 +169,10 @@ model Team {
   /// e.g. ELECTRICAL, MECHANICAL, ADMIN
   department  String?
   foremanName String?
+  isActive    Boolean @default(true)
 
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site        Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  site        Site         @relation(fields: [siteId], references: [id], onDelete: NoAction)
   assignments Assignment[]
 
   @@unique([siteId, name])
@@ -185,9 +201,10 @@ model Worker {
   phone          String?
   position       String?
   employmentType EmploymentType @default(DIRECT)
+  isActive       Boolean        @default(true)
   createdAt      DateTime       @default(now())
 
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: NoAction)
   assignments Assignment[]
 
   @@unique([companyId, pinfl])
@@ -210,9 +227,9 @@ model Assignment {
   monthlySalary Decimal   @db.Decimal(14, 2)
   shift         Shift     @default(DAY)
 
-  worker      Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  site        Site             @relation(fields: [siteId], references: [id], onDelete: Restrict)
-  team        Team?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  worker      Worker           @relation(fields: [workerId], references: [id], onDelete: NoAction)
+  site        Site             @relation(fields: [siteId], references: [id], onDelete: NoAction)
+  team        Team?            @relation(fields: [teamId], references: [id], onDelete: NoAction)
   entries     TimesheetEntry[]
   adjustments Adjustment[]
 
@@ -228,7 +245,7 @@ model Holiday {
   date      DateTime @db.Date
   name      String
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
 
   @@unique([companyId, date])
 }
@@ -247,9 +264,11 @@ model PayrollRuleSet {
   restWeekdays       Int[]   @default([7])
   options            Json    @default("{}")
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site    Site?   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  site    Site?   @relation(fields: [siteId], references: [id], onDelete: NoAction)
 
+  /// One rule set per site. PostgreSQL treats NULLs as distinct, so "one company default
+  /// (siteId = null)" is a partial unique index added by hand in its migration.
   @@unique([companyId, siteId])
 }
 
@@ -268,7 +287,7 @@ model PayrollPeriod {
   status    PeriodStatus @default(OPEN)
   lockedAt  DateTime?
 
-  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
   entries     TimesheetEntry[]
   adjustments Adjustment[]
 
@@ -296,8 +315,8 @@ model TimesheetEntry {
   note         String?
   updatedAt    DateTime  @updatedAt
 
-  period     PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
-  assignment Assignment    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  period     PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: NoAction)
+  assignment Assignment    @relation(fields: [assignmentId], references: [id], onDelete: NoAction)
 
   @@unique([assignmentId, date])
   @@index([periodId])
@@ -320,8 +339,8 @@ model Adjustment {
   note         String?
   createdAt    DateTime       @default(now())
 
-  period     PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
-  assignment Assignment    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  period     PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: NoAction)
+  assignment Assignment    @relation(fields: [assignmentId], references: [id], onDelete: NoAction)
 
   @@index([periodId, assignmentId])
 }

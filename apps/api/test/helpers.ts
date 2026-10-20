@@ -56,7 +56,7 @@ export async function createCompany(prisma: PrismaService, name = `Company ${++c
 }
 
 export async function addMember(prisma: PrismaService, userId: string, companyId: string, role: Role) {
-  return prisma.membership.create({ data: { userId, companyId, role } });
+  return prisma.membership.create({ data: { userId, companyId, role, acceptedAt: new Date() } });
 }
 
 /** A cookie-keeping client, logged in as the given login. */

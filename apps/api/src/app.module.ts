@@ -4,6 +4,7 @@ import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { CompanyModule } from './company/company.module';
 import { HealthModule } from './health/health.module';
+import { InvitationsModule } from './invitations/invitations.module';
 import { PlatformModule } from './platform/platform.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -15,6 +16,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     HealthModule,
     CompanyModule,
+    InvitationsModule,
     PlatformModule,
   ],
 })

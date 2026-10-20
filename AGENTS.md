@@ -65,7 +65,8 @@ Before finishing a change, run `npm test`, `npm run typecheck` and `npm run buil
 
 - **No Docker or system PostgreSQL on the dev machine.** The dev DB is PGlite behind a socket server (`scripts/dev-db.mjs`):
   - All clients share **one PGlite session**. That's why the dev `DATABASE_URL` has `pgbouncer=true`: Prisma then uses unnamed prepared statements. Without it, clients collide ("prepared statement \"s0\" already exists"), and a killed client's statements break every later client. Keep that flag in dev and never use it in production.
-  - Several clients may connect at once (API, Prisma CLI, tests): `maxConnections` is raised in the script. Session-level state (e.g. `SET`) is shared between clients, so don't rely on it in code.
+  - Several clients may connect at once (API, Prisma CLI, tests): `maxConnections` is raised in `scripts/pglite-server.mjs`, which both the dev DB and the local API tests use.
+  - Out of the box, PGlite answers a failed query (e.g. a unique violation) in a way that makes Prisma report "Server has closed the connection" (P1017) instead of the real error. `scripts/pglite-server.mjs` corrects this, so tests can assert real Prisma codes (P2002, P2003). Always start PGlite through it. Session-level state (e.g. `SET`) is shared between clients, so don't rely on it in code.
   - It has a single database, so `prisma migrate dev` (which needs a shadow DB) fails. Create a migration by diffing the committed schema against the edited one (from `apps/api`):
     ```bash
     git show HEAD:apps/api/prisma/schema.prisma > /tmp/schema.before.prisma
@@ -166,7 +167,7 @@ shadcn does **not** keep the UI consistent by itself. These rules do:
 ## Data integrity
 
 - **Locked months are final.** Once a payroll period is locked, its timesheets and amounts can't change. Corrections go into the next open period as adjustments.
-- **No silent data loss.** Workers, sites and teams are deactivated, not deleted, once they have timesheet or payroll history.
+- **No silent data loss.** Workers, sites and teams are deactivated, not deleted, once they have timesheet or payroll history. Relations use `onDelete: NoAction` (not `Cascade`/`SetNull`, and not `Restrict`, whose Postgres error Prisma doesn't map to P2003), so a stray delete fails instead of taking history with it. Only `Session` cascades from `User`.
 - **Audit trail:** who changed what and when is recorded for timesheet entries, salaries, adjustments and period locks.
 - **Imports never write half a file.** An import validates first, shows every problem row, and then commits all-or-nothing in one transaction.
 - **The server is the source of truth.** All validation and payroll calculation run on the server. The UI may repeat checks for convenience but is never trusted.

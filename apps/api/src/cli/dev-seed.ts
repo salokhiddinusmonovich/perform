@@ -27,9 +27,7 @@ async function main() {
   try {
     const passwordHash = await hashPassword(password);
 
-    // Remove previous demo data (only demo accounts and demo companies).
-    await prisma.user.deleteMany({ where: { email: { endsWith: `@${DEMO_DOMAIN}` } } });
-    await prisma.company.deleteMany({ where: { slug: { in: ['demo-mep', 'demo-other'] } } });
+    await removeDemoData(prisma);
 
     const user = (local: string, fullName: string, extra: { isPlatformAdmin?: boolean; phone?: string } = {}) =>
       prisma.user.create({
@@ -57,16 +55,48 @@ async function main() {
     ];
     for (const [local, name, role, phone] of members) {
       const u = await user(local, name, { phone });
-      await prisma.membership.create({ data: { userId: u.id, companyId: demo.id, role } });
+      await prisma.membership.create({ data: { userId: u.id, companyId: demo.id, role, acceptedAt: new Date() } });
     }
     const otherOwner = await user('other-owner', 'Other Owner');
-    await prisma.membership.create({ data: { userId: otherOwner.id, companyId: other.id, role: 'OWNER' } });
+    await prisma.membership.create({ data: { userId: otherOwner.id, companyId: other.id, role: 'OWNER', acceptedAt: new Date() } });
+    // An open invitation, to see both sides: Demo MEP's users page and other-owner's dashboard.
+    await prisma.membership.create({
+      data: { userId: otherOwner.id, companyId: demo.id, role: 'FOREMAN', invitedName: 'Other Owner', invitedEmail: otherOwner.email },
+    });
 
     console.log(`Demo data ready. Log in as <role>@${DEMO_DOMAIN} (platform, owner, admin, accountant,`);
     console.log('timekeeper, foreman, other-owner) with DEV_SEED_PASSWORD from apps/api/.env.');
   } finally {
     await prisma.$disconnect();
   }
+}
+
+/**
+ * Removes previous demo data (only demo accounts and demo companies). The schema never
+ * cascades deletes, so everything that belongs to them is removed first, children first.
+ */
+async function removeDemoData(prisma: PrismaClient) {
+  const userIds = (await prisma.user.findMany({ where: { email: { endsWith: `@${DEMO_DOMAIN}` } } })).map((u) => u.id);
+  const companyIds = (await prisma.company.findMany({ where: { slug: { in: ['demo-mep', 'demo-other'] } } })).map(
+    (c) => c.id,
+  );
+  const inCompany = { companyId: { in: companyIds } };
+  await prisma.$transaction([
+    prisma.auditLog.deleteMany({ where: { OR: [inCompany, { actorUserId: { in: userIds } }] } }),
+    prisma.adjustment.deleteMany({ where: { period: inCompany } }),
+    prisma.timesheetEntry.deleteMany({ where: { period: inCompany } }),
+    prisma.payrollPeriod.deleteMany({ where: inCompany }),
+    prisma.payrollRuleSet.deleteMany({ where: inCompany }),
+    prisma.holiday.deleteMany({ where: inCompany }),
+    prisma.assignment.deleteMany({ where: { worker: inCompany } }),
+    prisma.membership.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),
+    prisma.worker.deleteMany({ where: inCompany }),
+    prisma.team.deleteMany({ where: inCompany }),
+    prisma.site.deleteMany({ where: inCompany }),
+    prisma.session.deleteMany({ where: { userId: { in: userIds } } }),
+    prisma.user.deleteMany({ where: { id: { in: userIds } } }),
+    prisma.company.deleteMany({ where: { id: { in: companyIds } } }),
+  ]);
 }
 
 main().catch((err) => {

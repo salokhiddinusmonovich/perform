@@ -99,7 +99,7 @@
     "title": "Users",
     "description": "People who can log in to your company and what they may do",
     "add": "Add user",
-    "addDescription": "If the person has no account yet, one is created with a temporary password.",
+    "addDescription": "If the person has no account yet, one is created with a temporary password. If they already have one (from another company), they get an invitation and join once they accept it.",
     "name": "Full name",
     "phone": "Phone",
     "phoneHint": "Phone or email is required; the person logs in with it",
@@ -114,7 +114,6 @@
     "resetPassword": "Reset password",
     "deactivate": "Deactivate",
     "activate": "Activate",
-    "addedExisting": "This person already had an account; they were added to your company and can log in with their existing password.",
     "confirm": {
       "deactivate": {
         "title": "Deactivate user?",
@@ -130,7 +129,33 @@
         "title": "Reset password?",
         "description": "{{name}} will be logged out everywhere and get a new temporary password, which you will see once.",
         "button": "Reset password"
+      },
+      "cancelInvitation": {
+        "title": "Cancel invitation?",
+        "description": "{{name}} will no longer see the invitation. You can invite them again later.",
+        "button": "Cancel invitation"
       }
+    },
+    "invitedToast": "This person already has an account, so they were sent an invitation. They get access once they accept it.",
+    "invitationPending": "Invited",
+    "invitationDeclined": "Declined",
+    "invitationCancelled": "Invitation cancelled",
+    "cancelInvitation": "Cancel invitation"
+  },
+  "invitations": {
+    "title": "Invitations",
+    "description": "Companies that want you to join them",
+    "details": "Role: {{role}} · invited {{date}}",
+    "accept": "Accept",
+    "decline": "Decline",
+    "acceptFor": "Accept invitation from {{company}}",
+    "declineFor": "Decline invitation from {{company}}",
+    "accepted": "You joined {{company}}. Switch to it from the menu with your name.",
+    "declined": "Invitation declined",
+    "confirmDecline": {
+      "title": "Decline invitation?",
+      "description": "You won't join {{company}}. The company can invite you again later.",
+      "button": "Decline"
     }
   },
   "roles": {
@@ -221,10 +246,14 @@
       "lastOwner": "The company must keep at least one owner.",
       "cannotChangeSelf": "You can't change your own role or status.",
       "onlyOwnerManagesOwners": "Only an owner can manage owners.",
-      "sharedAccount": "This person also uses other companies, so only they can change their password."
+      "sharedAccount": "This person also uses other companies, so only they can change their password.",
+      "invitationNotAccepted": "This person hasn't accepted the invitation yet. Only they manage their password."
     },
     "user": {
       "contactsBelongToDifferentPeople": "This phone and this email belong to two different people. Enter only one of them."
+    },
+    "invitation": {
+      "notFound": "This invitation is no longer open."
     }
   }
 }

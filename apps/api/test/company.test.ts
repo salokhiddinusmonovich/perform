@@ -84,18 +84,6 @@ describe('adding members', () => {
     expect(me.body.activeCompany).toMatchObject({ id: company.id, role: 'FOREMAN' });
   });
 
-  it('reuses an existing account without revealing or changing its password', async () => {
-    const other = await memberOfNewCompany(ctx, 'OWNER');
-    const { agent } = await memberOfNewCompany(ctx, 'OWNER');
-    const res = await agent
-      .post('/api/company/members')
-      .send({ fullName: 'Different Name', email: other.user.email, role: 'ACCOUNTANT' })
-      .expect(201);
-    expect(res.body).toEqual({ userId: other.user.id, temporaryPassword: null });
-    const user = await ctx.prisma.user.findUniqueOrThrow({ where: { id: other.user.id } });
-    expect(user.fullName).toBe(other.user.fullName);
-  });
-
   it('refuses a duplicate member and contacts that belong to two different people', async () => {
     const { agent, user } = await memberOfNewCompany(ctx, 'OWNER');
     const dup = await agent.post('/api/company/members').send({ fullName: 'Me Again', email: user.email, role: 'ADMIN' }).expect(409);
@@ -119,6 +107,119 @@ describe('adding members', () => {
         { path: 'phone', message: 'validation.phoneInvalid' },
       ]),
     );
+  });
+});
+
+describe('invitations (adding someone who already has an account)', () => {
+  /** A person with an account in company A (name and phone known there), invited by company B by email. */
+  async function invitedPerson() {
+    const a = await memberOfNewCompany(ctx, 'OWNER');
+    const person = await createUser(ctx.prisma, { email: 'shared@test.local', phone: '+998901234567' });
+    await addMember(ctx.prisma, person.id, a.company.id, 'FOREMAN');
+    const b = await memberOfNewCompany(ctx, 'OWNER');
+    const res = await b.agent
+      .post('/api/company/members')
+      .send({ fullName: 'Name Typed By B', email: 'shared@test.local', role: 'ACCOUNTANT' })
+      .expect(201);
+    const personAgent = await loginAs(ctx.app, 'shared@test.local');
+    return { a, b, person, personAgent, res };
+  }
+
+  const memberRow = async (agent: Awaited<ReturnType<typeof loginAs>>, userId: string) =>
+    (await agent.get('/api/company/members').expect(200)).body.find((m: { userId: string }) => m.userId === userId);
+
+  it("invites instead of adding, and doesn't change the account or reveal its password", async () => {
+    const { person, res } = await invitedPerson();
+    expect(res.body).toEqual({ userId: person.id, temporaryPassword: null, invited: true });
+    const user = await ctx.prisma.user.findUniqueOrThrow({ where: { id: person.id } });
+    expect(user).toMatchObject({ fullName: person.fullName, passwordHash: person.passwordHash });
+  });
+
+  it("shows the inviting company only what it typed, not the account's own name or phone", async () => {
+    const { b, person } = await invitedPerson();
+    expect(await memberRow(b.agent, person.id)).toMatchObject({
+      fullName: 'Name Typed By B',
+      email: 'shared@test.local',
+      phone: null,
+      invitation: 'pending',
+      lastLoginAt: null,
+    });
+  });
+
+  it('gives no access to the company until the person accepts', async () => {
+    const { a, b, personAgent } = await invitedPerson();
+    const me = await personAgent.get('/api/auth/me').expect(200);
+    expect(me.body.companies.map((c: { id: string }) => c.id)).toEqual([a.company.id]);
+    const refused = await personAgent.post('/api/auth/switch-company').send({ companyId: b.company.id }).expect(403);
+    expect(refused.body.code).toBe('company.notMember');
+  });
+
+  it('lets the person see, accept, and then use the company, which now sees their details', async () => {
+    const { b, person, personAgent } = await invitedPerson();
+    const list = await personAgent.get('/api/invitations').expect(200);
+    expect(list.body).toEqual([
+      { companyId: b.company.id, companyName: b.company.name, role: 'ACCOUNTANT', invitedAt: expect.any(String) },
+    ]);
+
+    await personAgent.post(`/api/invitations/${b.company.id}/accept`).expect(204);
+    await personAgent.post('/api/auth/switch-company').send({ companyId: b.company.id }).expect(204);
+    const me = await personAgent.get('/api/auth/me').expect(200);
+    expect(me.body.activeCompany).toMatchObject({ id: b.company.id, role: 'ACCOUNTANT' });
+    expect((await personAgent.get('/api/invitations').expect(200)).body).toEqual([]);
+
+    expect(await memberRow(b.agent, person.id)).toMatchObject({
+      fullName: person.fullName,
+      phone: '+998901234567',
+      invitation: null,
+    });
+    const audit = await ctx.prisma.auditLog.findFirst({ where: { action: 'member.invitationAccepted', companyId: b.company.id } });
+    expect(audit?.actorUserId).toBe(person.id);
+  });
+
+  it('lets the person decline, and the company invite them again later', async () => {
+    const { b, person, personAgent } = await invitedPerson();
+    await personAgent.post(`/api/invitations/${b.company.id}/decline`).expect(204);
+    expect(await memberRow(b.agent, person.id)).toMatchObject({ invitation: 'declined' });
+    await personAgent.post(`/api/invitations/${b.company.id}/accept`).expect(404);
+
+    await b.agent
+      .post('/api/company/members')
+      .send({ fullName: 'Second Try', email: 'shared@test.local', role: 'FOREMAN' })
+      .expect(201);
+    expect(await memberRow(b.agent, person.id)).toMatchObject({
+      fullName: 'Second Try',
+      role: 'FOREMAN',
+      invitation: 'pending',
+    });
+    const again = await b.agent.post('/api/company/members').send({ fullName: 'Third Try', email: 'shared@test.local', role: 'FOREMAN' }).expect(409);
+    expect(again.body.code).toBe('member.alreadyExists');
+  });
+
+  it("doesn't let the company reset an invited person's password", async () => {
+    const { b, person } = await invitedPerson();
+    const res = await b.agent.post(`/api/company/members/${person.id}/reset-password`).expect(403);
+    expect(res.body.code).toBe('member.invitationNotAccepted');
+  });
+
+  it("doesn't count an invited owner as an owner until they accept", async () => {
+    const { b, person } = await invitedPerson();
+    await b.agent.patch(`/api/company/members/${person.id}`).send({ role: 'OWNER' }).expect(204);
+    const coOwner = await createUser(ctx.prisma);
+    await addMember(ctx.prisma, coOwner.id, b.company.id, 'OWNER');
+    // b's owner may demote the accepted co-owner; the invited "owner" doesn't count, so b.user stays.
+    await b.agent.patch(`/api/company/members/${coOwner.id}`).send({ role: 'ADMIN' }).expect(204);
+    const coOwnerAgent = await loginAs(ctx.app, coOwner.email!);
+    const res = await coOwnerAgent.get('/api/company/members').expect(200);
+    expect(res.body.filter((m: { role: string; invitation: string | null }) => m.role === 'OWNER' && !m.invitation)).toHaveLength(1);
+  });
+
+  it("can't be seen or answered by anyone else", async () => {
+    const { b } = await invitedPerson();
+    const stranger = await memberOfNewCompany(ctx, 'OWNER');
+    expect((await stranger.agent.get('/api/invitations').expect(200)).body).toEqual([]);
+    const res = await stranger.agent.post(`/api/invitations/${b.company.id}/accept`).expect(404);
+    expect(res.body.code).toBe('invitation.notFound');
+    expect(await ctx.prisma.membership.count({ where: { userId: stranger.user.id, companyId: b.company.id } })).toBe(0);
   });
 });
 

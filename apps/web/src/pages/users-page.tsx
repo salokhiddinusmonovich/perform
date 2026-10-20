@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { createMemberSchema, type CreateMemberInput, type Role } from '@puantaj/schemas';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { KeyRound, MoreHorizontal, Pencil, Power, UserPlus } from 'lucide-react';
+import { KeyRound, MailX, MoreHorizontal, Pencil, Power, UserPlus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -36,13 +36,17 @@ interface Member {
   phone: string | null;
   role: Role;
   isActive: boolean;
+  /** Set while the person hasn't accepted (they have an account from another company). */
+  invitation: 'pending' | 'declined' | null;
   lastLoginAt: string | null;
   mustChangePassword: boolean;
 }
 
-type ConfirmAction = 'deactivate' | 'activate' | 'reset';
+type ConfirmAction = 'deactivate' | 'activate' | 'reset' | 'cancelInvitation';
 
 const MEMBERS_KEY = ['company', 'members'] as const;
+
+const isOpenInvitation = (m: Member) => m.invitation === 'pending' && m.isActive;
 
 const describe = (m: { fullName: string; phone?: string | null; email?: string | null }) =>
   `${m.fullName} (${m.phone || m.email})`;
@@ -107,6 +111,7 @@ function UsersView({
       const res = await api.post<{ temporaryPassword: string }>(`/company/members/${member.userId}/reset-password`);
       setTempPassword({ password: res.temporaryPassword, forWhom: describe(member) });
     } else {
+      // Cancelling an invitation deactivates it; it can be sent again later with "Add user".
       await api.patch(`/company/members/${member.userId}`, { isActive: action === 'activate' });
       toast.success(t('common.saved'));
     }
@@ -137,7 +142,13 @@ function UsersView({
         header: t('users.status'),
         cell: ({ row }) =>
           !row.original.isActive ? (
-            <StatusBadge tone="neutral">{t('users.inactive')}</StatusBadge>
+            <StatusBadge tone="neutral">
+              {row.original.invitation ? t('users.invitationCancelled') : t('users.inactive')}
+            </StatusBadge>
+          ) : row.original.invitation === 'pending' ? (
+            <StatusBadge tone="warning">{t('users.invitationPending')}</StatusBadge>
+          ) : row.original.invitation === 'declined' ? (
+            <StatusBadge tone="neutral">{t('users.invitationDeclined')}</StatusBadge>
           ) : row.original.mustChangePassword ? (
             <StatusBadge tone="warning">{t('users.awaitingFirstLogin')}</StatusBadge>
           ) : (
@@ -154,7 +165,9 @@ function UsersView({
         header: () => <span className="sr-only">{t('common.actions')}</span>,
         enableSorting: false,
         cell: ({ row }) =>
-          canManage(row.original) && (
+          canManage(row.original) &&
+          // A declined or cancelled invitation has nothing to manage; "Add user" sends it again.
+          (row.original.invitation === null || isOpenInvitation(row.original)) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label={t('common.actionsFor', { name: row.original.fullName })}>
@@ -166,18 +179,27 @@ function UsersView({
                   <Pencil aria-hidden />
                   {t('users.changeRole')}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setConfirm({ member: row.original, action: 'reset' })}>
-                  <KeyRound aria-hidden />
-                  {t('users.resetPassword')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() =>
-                    setConfirm({ member: row.original, action: row.original.isActive ? 'deactivate' : 'activate' })
-                  }
-                >
-                  <Power aria-hidden />
-                  {row.original.isActive ? t('users.deactivate') : t('users.activate')}
-                </DropdownMenuItem>
+                {isOpenInvitation(row.original) ? (
+                  <DropdownMenuItem onSelect={() => setConfirm({ member: row.original, action: 'cancelInvitation' })}>
+                    <MailX aria-hidden />
+                    {t('users.cancelInvitation')}
+                  </DropdownMenuItem>
+                ) : (
+                  <>
+                    <DropdownMenuItem onSelect={() => setConfirm({ member: row.original, action: 'reset' })}>
+                      <KeyRound aria-hidden />
+                      {t('users.resetPassword')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        setConfirm({ member: row.original, action: row.original.isActive ? 'deactivate' : 'activate' })
+                      }
+                    >
+                      <Power aria-hidden />
+                      {row.original.isActive ? t('users.deactivate') : t('users.activate')}
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           ),
@@ -208,7 +230,7 @@ function UsersView({
           if (result.temporaryPassword) {
             setTempPassword({ password: result.temporaryPassword, forWhom: describe(values) });
           } else {
-            toast.success(t('users.addedExisting'));
+            toast.success(t('users.invitedToast'));
           }
         }}
       />

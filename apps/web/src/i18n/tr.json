@@ -99,7 +99,7 @@
     "title": "Kullanıcılar",
     "description": "Şirketinize giriş yapabilen kişiler ve yetkileri",
     "add": "Kullanıcı ekle",
-    "addDescription": "Kişinin henüz hesabı yoksa geçici şifreyle yeni bir hesap oluşturulur.",
+    "addDescription": "Kişinin henüz hesabı yoksa geçici şifreyle yeni bir hesap oluşturulur. Zaten hesabı varsa (başka bir şirketten), bir davet alır ve kabul ettiğinde katılır.",
     "name": "Ad soyad",
     "phone": "Telefon",
     "phoneHint": "Telefon veya e-posta zorunlu; kişi bununla giriş yapar",
@@ -114,7 +114,6 @@
     "resetPassword": "Şifreyi sıfırla",
     "deactivate": "Pasifleştir",
     "activate": "Aktifleştir",
-    "addedExisting": "Bu kişinin zaten bir hesabı vardı; şirketinize eklendi ve mevcut şifresiyle giriş yapabilir.",
     "confirm": {
       "deactivate": {
         "title": "Kullanıcı pasifleştirilsin mi?",
@@ -130,7 +129,33 @@
         "title": "Şifre sıfırlansın mı?",
         "description": "{{name}} tüm cihazlarda oturumu kapatılacak ve yeni bir geçici şifre alacak; bu şifreyi yalnızca bir kez göreceksiniz.",
         "button": "Şifreyi sıfırla"
+      },
+      "cancelInvitation": {
+        "title": "Davet iptal edilsin mi?",
+        "description": "{{name}} artık daveti görmeyecek. Daha sonra tekrar davet edebilirsiniz.",
+        "button": "Daveti iptal et"
       }
+    },
+    "invitedToast": "Bu kişinin zaten bir hesabı var, bu yüzden ona davet gönderildi. Daveti kabul ettiğinde erişim kazanır.",
+    "invitationPending": "Davet edildi",
+    "invitationDeclined": "Reddetti",
+    "invitationCancelled": "Davet iptal edildi",
+    "cancelInvitation": "Daveti iptal et"
+  },
+  "invitations": {
+    "title": "Davetler",
+    "description": "Size katılma daveti gönderen şirketler",
+    "details": "Rol: {{role}} · davet tarihi: {{date}}",
+    "accept": "Kabul et",
+    "decline": "Reddet",
+    "acceptFor": "{{company}} davetini kabul et",
+    "declineFor": "{{company}} davetini reddet",
+    "accepted": "{{company}} şirketine katıldınız. Adınızın yazılı olduğu menüden bu şirkete geçebilirsiniz.",
+    "declined": "Davet reddedildi",
+    "confirmDecline": {
+      "title": "Davet reddedilsin mi?",
+      "description": "{{company}} şirketine katılmayacaksınız. Şirket sizi daha sonra tekrar davet edebilir.",
+      "button": "Reddet"
     }
   },
   "roles": {
@@ -221,10 +246,14 @@
       "lastOwner": "Şirkette en az bir sahip kalmalı.",
       "cannotChangeSelf": "Kendi rolünüzü veya durumunuzu değiştiremezsiniz.",
       "onlyOwnerManagesOwners": "Sahipleri yalnızca bir sahip yönetebilir.",
-      "sharedAccount": "Bu kişi başka şirketlerde de çalışıyor; şifresini yalnızca kendisi değiştirebilir."
+      "sharedAccount": "Bu kişi başka şirketlerde de çalışıyor; şifresini yalnızca kendisi değiştirebilir.",
+      "invitationNotAccepted": "Bu kişi daveti henüz kabul etmedi. Şifresini yalnızca kendisi yönetir."
     },
     "user": {
       "contactsBelongToDifferentPeople": "Bu telefon ve bu e-posta iki farklı kişiye ait. Yalnızca birini girin."
+    },
+    "invitation": {
+      "notFound": "Bu davet artık geçerli değil."
     }
   }
 }

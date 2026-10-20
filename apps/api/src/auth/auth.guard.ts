@@ -13,6 +13,7 @@ import {
   type ActiveCompany,
   type AuthedRequest,
 } from './auth.context';
+import { USABLE_MEMBERSHIP } from './memberships';
 import { SESSION_COOKIE, sessionCookieOptions, SessionService } from './session.service';
 
 /**
@@ -85,7 +86,7 @@ export class AuthGuard implements CanActivate {
     userId: string,
     activeCompanyId: string | null,
   ): Promise<ActiveCompany | null> {
-    const usable = { userId, isActive: true, company: { isActive: true } } as const;
+    const usable = { userId, ...USABLE_MEMBERSHIP };
     const membership =
       (activeCompanyId &&
         (await this.prisma.membership.findFirst({

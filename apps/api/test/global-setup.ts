@@ -45,11 +45,10 @@ export default async function setup(project: TestProject) {
 
   if (!databaseUrl) {
     const { PGlite } = await import('@electric-sql/pglite');
-    const { PGLiteSocketServer } = await import('@electric-sql/pglite-socket');
+    const { startPgliteServer } = await import('../../../scripts/pglite-server.mjs');
     const port = await freePort();
     const db = await PGlite.create();
-    const server = new PGLiteSocketServer({ db, port, host: '127.0.0.1', maxConnections: 100 });
-    await server.start();
+    const server = await startPgliteServer(db, { port });
     databaseUrl = `postgresql://postgres:postgres@127.0.0.1:${port}/postgres?pgbouncer=true&connection_limit=1&sslmode=disable`;
     stop = async () => {
       await server.stop();
