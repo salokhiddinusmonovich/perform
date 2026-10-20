@@ -1,57 +1,389 @@
 import { describe, expect, it } from 'vitest';
-import { buildMonthCalendar, countWorkdays } from './calendar';
-import { parseCell } from './entry';
+import { buildMonthCalendar, countWorkdays, workingDays } from './calendar';
+import { divRound, fromUnits, toUnits } from './decimal';
+import { normalizeCode, parseCell, type CodeMap, type DayEntry } from './entry';
+import { missingMovingHolidays, uzbekistanFixedHolidays } from './holidays';
+import { calculatePay, type PaySettings } from './pay';
 import { summarizeMonth } from './summary';
 
 // September 2026: Sept 1 (Tue) is Independence Day, Sundays are 6/13/20/27.
-const september = buildMonthCalendar(2026, 9, { holidays: ['2026-09-01'] });
+const september = buildMonthCalendar(2026, 9, { restWeekdays: [7], holidays: ['2026-09-01'] });
 
-describe('buildMonthCalendar', () => {
-  it('has 25 workdays in September 2026', () => {
+/** Made-up company codes, like the ones in customer Excel files. */
+const codes: CodeMap = new Map([
+  [normalizeCode('T'), 'OFF'],
+  [normalizeCode('B/T'), 'OFF'],
+  [normalizeCode('Y'), 'ABSENT'],
+  [normalizeCode('IZ'), 'LEAVE'],
+  [normalizeCode('İ'), 'LEAVE'],
+  [normalizeCode('R'), 'SICK'],
+  [normalizeCode('TR'), 'TRAVEL'],
+  [normalizeCode('-'), 'NOT_EMPLOYED'],
+]);
+
+const worked = (date: string, hours: string): DayEntry => ({ date, status: 'WORKED', hours });
+const status = (date: string, s: DayEntry['status']): DayEntry => ({ date, status: s, hours: '0' });
+
+/** Every working day at `hours`, everything else OFF; `overrides` replace single days. */
+function month(hours: string, overrides: DayEntry[] = []): DayEntry[] {
+  const byDate = new Map(overrides.map((e) => [e.date, e]));
+  return september.map(
+    (d) => byDate.get(d.date) ?? (d.kind === 'WORKDAY' ? worked(d.date, hours) : status(d.date, 'OFF')),
+  );
+}
+
+const settings: PaySettings = {
+  normalHoursPerDay: '9',
+  multipliers: { NORMAL: '1', OVERTIME: '1.5', REST_DAY: '2', HOLIDAY: '2' },
+  absence: {
+    SICK: { paid: true, hoursPerDay: '8' },
+    LEAVE: { paid: true, hoursPerDay: null },
+    TRAVEL: { paid: false, hoursPerDay: null },
+  },
+  payRoundingStep: '1000',
+};
+
+describe('decimals', () => {
+  it('round-trips 2-decimal strings exactly', () => {
+    expect(toUnits('7500000')).toBe(750000000n);
+    expect(toUnits('0.1')).toBe(10n);
+    expect(toUnits('-3.05')).toBe(-305n);
+    expect(fromUnits(750000050n)).toBe('7500000.50');
+    expect(fromUnits(-5n)).toBe('-0.05');
+  });
+
+  it('rejects values it would have to round', () => {
+    expect(() => toUnits('1.005')).toThrow(RangeError);
+    expect(() => toUnits('1e3')).toThrow(RangeError);
+    expect(() => toUnits('')).toThrow(RangeError);
+  });
+
+  it('rounds halves away from zero', () => {
+    expect(divRound(5n, 2n)).toBe(3n);
+    expect(divRound(-5n, 2n)).toBe(-3n);
+    expect(divRound(4n, 3n)).toBe(1n);
+    expect(divRound(5n, 3n)).toBe(2n);
+  });
+});
+
+describe('calendar', () => {
+  it('has 25 working days in September 2026', () => {
     expect(september).toHaveLength(30);
     expect(countWorkdays(september)).toBe(25);
   });
 
-  it('marks holidays and Sundays', () => {
+  it('marks holidays and rest weekdays', () => {
     expect(september[0]).toMatchObject({ date: '2026-09-01', weekday: 2, kind: 'HOLIDAY' });
     expect(september[5]).toMatchObject({ date: '2026-09-06', weekday: 7, kind: 'REST_DAY' });
+  });
+
+  it('counts a holiday on a rest weekday as a holiday', () => {
+    // 2026-03-08 is a Sunday.
+    const march = buildMonthCalendar(2026, 3, { restWeekdays: [7], holidays: ['2026-03-08'] });
+    expect(march[7]).toMatchObject({ weekday: 7, kind: 'HOLIDAY' });
+  });
+
+  it('keeps the calculated and overridden working days side by side', () => {
+    expect(workingDays(september)).toEqual({ calculated: 25, override: null, effective: 25 });
+    expect(workingDays(september, 24)).toEqual({ calculated: 25, override: 24, effective: 24 });
+    expect(() => workingDays(september, 0)).toThrow(RangeError);
+    expect(() => workingDays(september, 31)).toThrow(RangeError);
+  });
+
+  it('turns a rest weekday into a working day when a day-off swap says so', () => {
+    // Government swap: Monday 2026-09-07 off, Sunday 2026-09-13 worked instead.
+    const swapped = buildMonthCalendar(2026, 9, {
+      restWeekdays: [7],
+      holidays: ['2026-09-01', '2026-09-07'],
+      extraWorkdays: ['2026-09-13'],
+    });
+    expect(swapped[6]).toMatchObject({ date: '2026-09-07', kind: 'HOLIDAY' });
+    expect(swapped[12]).toMatchObject({ date: '2026-09-13', weekday: 7, kind: 'WORKDAY' });
+    expect(countWorkdays(swapped)).toBe(25);
+    // Already a working day at a site with other rest days: nothing changes.
+    const sixDay = buildMonthCalendar(2026, 9, { restWeekdays: [6, 7], holidays: [], extraWorkdays: ['2026-09-14'] });
+    expect(sixDay[13]).toMatchObject({ date: '2026-09-14', kind: 'WORKDAY' });
+    expect(() =>
+      buildMonthCalendar(2026, 9, { restWeekdays: [7], holidays: ['2026-09-13'], extraWorkdays: ['2026-09-13'] }),
+    ).toThrow(RangeError);
+  });
+
+  it('rejects invalid rest weekdays', () => {
+    expect(() => buildMonthCalendar(2026, 9, { restWeekdays: [0], holidays: [] })).toThrow(RangeError);
+  });
+});
+
+describe('Uzbekistan holidays', () => {
+  it('ships the fixed-date public holidays for any year', () => {
+    expect(uzbekistanFixedHolidays(2027).map((h) => h.date)).toEqual([
+      '2027-01-01',
+      '2027-03-08',
+      '2027-03-21',
+      '2027-05-09',
+      '2027-09-01',
+      '2027-10-01',
+      '2027-12-08',
+    ]);
+  });
+
+  it('warns about moving holidays not entered for the year', () => {
+    expect(missingMovingHolidays([])).toEqual(['RAMAZON_HAYIT', 'QURBON_HAYIT']);
+    expect(missingMovingHolidays(['RAMAZON_HAYIT', 'COMPANY_DAY_OFF'])).toEqual(['QURBON_HAYIT']);
+    expect(missingMovingHolidays(['QURBON_HAYIT', 'RAMAZON_HAYIT'])).toEqual([]);
   });
 });
 
 describe('parseCell', () => {
-  it('reads hours and codes used in the sample files', () => {
-    expect(parseCell(12)).toEqual({ status: 'WORKED', hours: 12 });
-    expect(parseCell('9')).toEqual({ status: 'WORKED', hours: 9 });
-    expect(parseCell('T')?.status).toBe('OFF');
-    expect(parseCell('Y')?.status).toBe('ABSENT');
-    expect(parseCell('iz')?.status).toBe('LEAVE');
-    expect(parseCell('İ')?.status).toBe('LEAVE');
-    expect(parseCell('-')?.status).toBe('NOT_EMPLOYED');
+  it('reads hours', () => {
+    expect(parseCell(12, codes, true)).toEqual({ status: 'WORKED', hours: '12.00' });
+    expect(parseCell('9', codes, true)).toEqual({ status: 'WORKED', hours: '9.00' });
+    expect(parseCell('7,5', codes, true)).toEqual({ status: 'WORKED', hours: '7.50' });
+    expect(parseCell(24, codes, true)).toEqual({ status: 'WORKED', hours: '24.00' });
   });
 
-  it('returns null for unknown codes', () => {
-    expect(parseCell('???')).toBeNull();
+  it("reads the company's codes, folding Turkish and Latin i", () => {
+    expect(parseCell('T', codes, true)?.status).toBe('OFF');
+    expect(parseCell(' y ', codes, true)?.status).toBe('ABSENT');
+    expect(parseCell('iz', codes, true)?.status).toBe('LEAVE');
+    expect(parseCell('İ', codes, true)?.status).toBe('LEAVE');
+    expect(parseCell('i', codes, true)?.status).toBe('LEAVE');
+  });
+
+  it('returns null for anything it cannot understand', () => {
+    expect(parseCell('???', codes, true)).toBeNull();
+    expect(parseCell(-3, codes, true)).toBeNull();
+    expect(parseCell('-3', codes, true)).toBeNull();
+    expect(parseCell(25, codes, true)).toBeNull();
+    expect(parseCell(7.499999, codes, true)).toBeNull();
+    expect(parseCell(Number.NaN, codes, true)).toBeNull();
+    expect(parseCell(true, codes, true)).toBeNull();
+    expect(parseCell(0, codes, true)).toBeNull();
+    expect(parseCell(0, new Map([...codes, ['0', 'OFF']]), true)?.status).toBe('OFF');
+  });
+
+  it('decides blank cells by the employment dates', () => {
+    // Before hire or after exit: blank or a "not employed" code.
+    expect(parseCell(null, codes, false)).toEqual({ status: 'NOT_EMPLOYED', hours: '0' });
+    expect(parseCell(undefined, codes, false)?.status).toBe('NOT_EMPLOYED');
+    expect(parseCell('  ', codes, false)?.status).toBe('NOT_EMPLOYED');
+    expect(parseCell('-', codes, false)?.status).toBe('NOT_EMPLOYED');
+    // While employed a blank is missing data, and "not employed" contradicts the dates.
+    expect(parseCell(null, codes, true)).toBeNull();
+    expect(parseCell('', codes, true)).toBeNull();
+    expect(parseCell('-', codes, true)).toBeNull();
+    // Hours or other codes outside employment are problems too.
+    expect(parseCell(9, codes, false)).toBeNull();
+    expect(parseCell('T', codes, false)).toBeNull();
   });
 });
 
 describe('summarizeMonth', () => {
-  it('splits normal, overtime and rest-day hours', () => {
-    const entries = september.map((d) => {
-      if (d.date === '2026-09-06') return parseCell(8)!; // worked a Sunday
-      if (d.date === '2026-09-10') return parseCell('Y')!;
-      if (d.kind !== 'WORKDAY') return parseCell('T')!;
-      return parseCell(d.day % 2 ? 11 : 9)!;
+  it('splits normal, overtime, rest-day and holiday hours', () => {
+    const entries = month('9', [
+      worked('2026-09-01', '4'), // holiday
+      worked('2026-09-02', '11'), // 2h overtime
+      worked('2026-09-06', '8'), // Sunday
+      status('2026-09-10', 'ABSENT'),
+    ]);
+    expect(summarizeMonth(september, entries, '9')).toEqual({
+      normalHours: `${23 * 9 + 9}.00`,
+      overtimeHours: '2.00',
+      restDayHours: '8.00',
+      holidayHours: '4.00',
+      daysWorked: 26,
+      workdaysWorked: 24,
+      absentDays: 1,
+      leaveDays: 0,
+      sickDays: 0,
+      travelDays: 0,
+      absencesOnDaysOff: 0,
+      unrecordedDays: 0,
     });
-    const s = summarizeMonth(september, entries, 9);
+  });
 
-    expect(s.daysWorked).toBe(24);
-    expect(s.normalHours).toBe(24 * 9);
-    expect(s.restDayHours).toBe(8);
-    expect(s.absentDays).toBe(1);
-    // Odd-numbered workdays get 2h overtime; Sept 1 is a holiday.
-    const oddWorkdays = september.filter(
-      (d) => d.kind === 'WORKDAY' && d.day % 2 === 1,
-    ).length;
-    expect(s.overtimeHours).toBe(oddWorkdays * 2);
+  it('matches entries to days by date, not by position', () => {
+    const entries = month('9', [worked('2026-09-06', '8')]);
+    const shuffled = [...entries].reverse();
+    expect(summarizeMonth(september, shuffled, '9')).toEqual(summarizeMonth(september, entries, '9'));
+
+    const partial = [worked('2026-09-06', '8'), worked('2026-09-02', '10')];
+    expect(summarizeMonth(september, partial, '9')).toMatchObject({
+      normalHours: '9.00',
+      overtimeHours: '1.00',
+      restDayHours: '8.00',
+      unrecordedDays: 28,
+    });
+  });
+
+  it('does not count absences on days off as absence days', () => {
+    const entries = [status('2026-09-06', 'SICK'), status('2026-09-01', 'LEAVE'), status('2026-09-07', 'SICK')];
+    expect(summarizeMonth(september, entries, '9')).toMatchObject({ sickDays: 1, leaveDays: 0, absencesOnDaysOff: 2 });
+  });
+
+  it('rejects entries that do not fit the month or their status', () => {
+    expect(() => summarizeMonth(september, [worked('2026-10-01', '9')], '9')).toThrow(/outside the month/);
+    expect(() => summarizeMonth(september, [worked('2026-09-02', '9'), status('2026-09-02', 'SICK')], '9')).toThrow(
+      /Two entries/,
+    );
+    expect(() => summarizeMonth(september, [worked('2026-09-02', '0')], '9')).toThrow(RangeError);
+    expect(() => summarizeMonth(september, [worked('2026-09-02', '24.5')], '9')).toThrow(RangeError);
+    expect(() => summarizeMonth(september, [{ date: '2026-09-02', status: 'SICK', hours: '8' }], '9')).toThrow(
+      /has hours/,
+    );
+  });
+});
+
+describe('calculatePay', () => {
+  const base = {
+    monthlySalary: '7500000',
+    workingDays: workingDays(september),
+    calendar: september,
+    settings,
+    travel: null,
+  };
+
+  it('pays exactly the monthly salary for every working day at normal hours', () => {
+    const result = calculatePay({ ...base, entries: month('9') });
+    expect(result.total).toBe('7500000.00');
+    expect(result.lines).toEqual([
+      { type: 'HOURS', kind: 'NORMAL', hours: '225.00', multiplier: '1.00', amount: '7500000.00' },
+    ]);
+    expect(result.hourlyRate).toEqual({
+      monthlySalary: '7500000.00',
+      workingDays: { calculated: 25, override: null, effective: 25 },
+      normalHoursPerDay: '9.00',
+      rounded: '33333.33',
+    });
+
+    // Also for salaries whose hourly rate has no exact decimal form.
+    const odd = calculatePay({ ...base, monthlySalary: '7777777.77', entries: month('9') });
+    expect(odd.lines[0]).toMatchObject({ kind: 'NORMAL', amount: '7777777.77' });
+    expect(odd.lines[1]).toEqual({ type: 'ROUNDING', step: '1000.00', amount: '222.23' });
+    expect(odd.total).toBe('7778000.00');
+  });
+
+  it('pays exact hours: a 4-hour day pays 4 hours', () => {
+    const result = calculatePay({ ...base, entries: [worked('2026-09-02', '4')] });
+    expect(result.lines).toEqual([
+      { type: 'HOURS', kind: 'NORMAL', hours: '4.00', multiplier: '1.00', amount: '133333.33' },
+      { type: 'ROUNDING', step: '1000.00', amount: '-333.33' },
+    ]);
+    expect(result.total).toBe('133000.00');
+  });
+
+  it('explains every amount of a mixed month', () => {
+    const entries = month('9', [
+      worked('2026-09-01', '4'), // holiday
+      worked('2026-09-02', '11'), // 2h overtime
+      status('2026-09-03', 'SICK'),
+      status('2026-09-04', 'LEAVE'),
+      status('2026-09-05', 'TRAVEL'),
+      worked('2026-09-06', '8'), // Sunday
+      worked('2026-09-07', '4'), // short day
+      status('2026-09-13', 'SICK'), // Sunday: not an absence day
+    ]);
+    const result = calculatePay({
+      ...base,
+      entries,
+      travel: { kind: 'PER_DAY_WORKED', route: 'Route A', amountPerDay: '20000' },
+    });
+
+    // Rate = 7 500 000 ÷ (25 × 9) = 33 333.33…
+    expect(result.lines).toEqual([
+      { type: 'HOURS', kind: 'NORMAL', hours: '193.00', multiplier: '1.00', amount: '6433333.33' },
+      { type: 'HOURS', kind: 'OVERTIME', hours: '2.00', multiplier: '1.50', amount: '100000.00' },
+      { type: 'HOURS', kind: 'REST_DAY', hours: '8.00', multiplier: '2.00', amount: '533333.33' },
+      { type: 'HOURS', kind: 'HOLIDAY', hours: '4.00', multiplier: '2.00', amount: '266666.67' },
+      {
+        type: 'ABSENCE',
+        absence: 'LEAVE',
+        days: 1,
+        paid: true,
+        hoursPerDay: '9.00',
+        hoursPerDaySource: 'NORMAL_DAY',
+        hours: '9.00',
+        amount: '300000.00',
+      },
+      {
+        type: 'ABSENCE',
+        absence: 'SICK',
+        days: 1,
+        paid: true,
+        hoursPerDay: '8.00',
+        hoursPerDaySource: 'SETTING',
+        hours: '8.00',
+        amount: '266666.67',
+      },
+      {
+        type: 'ABSENCE',
+        absence: 'TRAVEL',
+        days: 1,
+        paid: false,
+        hoursPerDay: '9.00',
+        hoursPerDaySource: 'NORMAL_DAY',
+        hours: '0.00',
+        amount: '0.00',
+      },
+      // Working days only: the holiday and the Sunday worked don't count.
+      { type: 'TRAVEL_PER_DAY', route: 'Route A', days: 22, amountPerDay: '20000.00', amount: '440000.00' },
+    ]);
+    expect(result.summary.absencesOnDaysOff).toBe(1);
+    expect(result.total).toBe('8340000.00');
+  });
+
+  it('uses the admin override of working days for the hourly rate', () => {
+    const result = calculatePay({ ...base, workingDays: workingDays(september, 26), entries: month('9') });
+    // 7 500 000 × 225 ÷ (26 × 9) = 7 211 538.4615…, rounded to 7 212 000
+    expect(result.lines[0]).toMatchObject({ kind: 'NORMAL', amount: '7211538.46' });
+    expect(result.total).toBe('7212000.00');
+    expect(result.hourlyRate.rounded).toBe('32051.28');
+    expect(result.hourlyRate.workingDays).toEqual({ calculated: 25, override: 26, effective: 26 });
+  });
+
+  it('prorates a mid-month hire by the hours worked', () => {
+    const entries = september.map((d) =>
+      d.day < 16 ? status(d.date, 'NOT_EMPLOYED') : d.kind === 'WORKDAY' ? worked(d.date, '9') : status(d.date, 'OFF'),
+    );
+    // Sept 16–30 has 13 working days.
+    const result = calculatePay({ ...base, entries });
+    expect(result.lines).toEqual([
+      { type: 'HOURS', kind: 'NORMAL', hours: '117.00', multiplier: '1.00', amount: '3900000.00' },
+    ]);
+  });
+
+  it('adds a monthly travel amount entered by the accountant', () => {
+    const result = calculatePay({ ...base, entries: month('9'), travel: { kind: 'MONTHLY_AMOUNT', amount: '350000' } });
+    expect(result.lines.at(-1)).toEqual({ type: 'TRAVEL_MONTHLY', amount: '350000.00' });
+    expect(result.total).toBe('7850000.00');
+  });
+
+  it('rounds the total to the nearest rounding step, halves up', () => {
+    const pay = (hours: string, payRoundingStep = '1000') =>
+      calculatePay({ ...base, settings: { ...settings, payRoundingStep }, entries: [worked('2026-09-02', hours)] });
+    expect(pay('0.01').total).toBe('0.00'); // 333.33
+    expect(pay('9').total).toBe('300000.00'); // already a multiple: no ROUNDING line
+    expect(pay('9').lines).toHaveLength(1);
+    expect(pay('1.5').total).toBe('50000.00');
+    expect(pay('0.03').total).toBe('1000.00'); // 1 000.00 exactly
+    expect(pay('0.02').total).toBe('1000.00'); // 666.67
+    expect(pay('4', '0.01').total).toBe('133333.33');
+    expect(() => pay('9', '0')).toThrow(RangeError);
+
+    // Exactly half a step rounds up.
+    const half = calculatePay({ ...base, entries: [], travel: { kind: 'MONTHLY_AMOUNT', amount: '500' } });
+    expect(half.lines.at(-1)).toEqual({ type: 'ROUNDING', step: '1000.00', amount: '500.00' });
+    expect(half.total).toBe('1000.00');
+  });
+
+  it('rejects settings it cannot pay from', () => {
+    const entries = month('9');
+    expect(() => calculatePay({ ...base, entries, monthlySalary: '-1' })).toThrow(RangeError);
+    expect(() => calculatePay({ ...base, entries, monthlySalary: '100.001' })).toThrow(RangeError);
+    expect(() =>
+      calculatePay({ ...base, entries, workingDays: { calculated: 25, override: null, effective: 0 } }),
+    ).toThrow(RangeError);
+    expect(() => calculatePay({ ...base, entries, settings: { ...settings, normalHoursPerDay: '0' } })).toThrow(
+      RangeError,
+    );
   });
 });

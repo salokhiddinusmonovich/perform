@@ -83,12 +83,15 @@ async function removeDemoData(prisma: PrismaClient) {
   const inCompany = { companyId: { in: companyIds } };
   await prisma.$transaction([
     prisma.auditLog.deleteMany({ where: { OR: [inCompany, { actorUserId: { in: userIds } }] } }),
-    prisma.adjustment.deleteMany({ where: { period: inCompany } }),
-    prisma.timesheetEntry.deleteMany({ where: { period: inCompany } }),
+    prisma.adjustment.deleteMany({ where: inCompany }),
+    prisma.timesheetEntry.deleteMany({ where: inCompany }),
     prisma.payrollPeriod.deleteMany({ where: inCompany }),
+    prisma.workingDaysOverride.deleteMany({ where: inCompany }),
     prisma.payrollRuleSet.deleteMany({ where: inCompany }),
     prisma.holiday.deleteMany({ where: inCompany }),
-    prisma.assignment.deleteMany({ where: { worker: inCompany } }),
+    prisma.timesheetCode.deleteMany({ where: inCompany }),
+    prisma.assignment.deleteMany({ where: inCompany }),
+    prisma.travelRoute.deleteMany({ where: inCompany }),
     prisma.membership.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),
     prisma.worker.deleteMany({ where: inCompany }),
     prisma.team.deleteMany({ where: inCompany }),

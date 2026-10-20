@@ -26,14 +26,16 @@ model Company {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  memberships Membership[]
-  sites       Site[]
-  teams       Team[]
-  workers     Worker[]
-  holidays    Holiday[]
-  ruleSets    PayrollRuleSet[]
-  periods     PayrollPeriod[]
-  auditLogs   AuditLog[]
+  memberships    Membership[]
+  sites          Site[]
+  teams          Team[]
+  workers        Worker[]
+  holidays       Holiday[]
+  ruleSets       PayrollRuleSet[]
+  periods        PayrollPeriod[]
+  auditLogs      AuditLog[]
+  travelRoutes   TravelRoute[]
+  timesheetCodes TimesheetCode[]
 }
 
 /// A person who can log in. Logs in with email or phone (at least one is set,
@@ -59,6 +61,9 @@ model User {
   memberships Membership[]
   sessions    Session[]
   auditLogs   AuditLog[]
+
+  lockedPeriods        PayrollPeriod[]
+  workingDaysOverrides WorkingDaysOverride[]
 }
 
 /// Server-side login session. The browser holds a random token in an httpOnly
@@ -136,7 +141,7 @@ model Membership {
 
   user    User    @relation(fields: [userId], references: [id], onDelete: NoAction)
   company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  site    Site?   @relation(fields: [siteId], references: [id], onDelete: NoAction)
+  site    Site?   @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
 
   @@id([userId, companyId])
 }
@@ -158,6 +163,8 @@ model Site {
   ruleSets    PayrollRuleSet[]
 
   @@unique([companyId, name])
+  /// Target of composite foreign keys that keep children in the same company
+  @@unique([id, companyId])
   @@index([companyId])
 }
 
@@ -172,10 +179,11 @@ model Team {
   isActive    Boolean @default(true)
 
   company     Company      @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  site        Site         @relation(fields: [siteId], references: [id], onDelete: NoAction)
+  site        Site         @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
   assignments Assignment[]
 
   @@unique([siteId, name])
+  @@unique([id, companyId])
   @@index([companyId])
 }
 
@@ -208,6 +216,7 @@ model Worker {
   assignments Assignment[]
 
   @@unique([companyId, pinfl])
+  @@unique([id, companyId])
   @@index([companyId, lastName])
 }
 
@@ -217,32 +226,56 @@ enum Shift {
 }
 
 /// A worker's employment on a site for a span of time, with its salary.
+/// companyId is the worker's company; the composite foreign keys make the database
+/// refuse a worker, site, team or travel route from another company.
 model Assignment {
   id            String    @id @default(uuid()) @db.Uuid
+  companyId     String    @db.Uuid
   workerId      String    @db.Uuid
   siteId        String    @db.Uuid
   teamId        String?   @db.Uuid
+  /// Used when travel pay is PER_DAY_WORKED; null = no travel pay
+  travelRouteId String?   @db.Uuid
   hiredOn       DateTime  @db.Date
   leftOn        DateTime? @db.Date
   monthlySalary Decimal   @db.Decimal(14, 2)
   shift         Shift     @default(DAY)
 
-  worker      Worker           @relation(fields: [workerId], references: [id], onDelete: NoAction)
-  site        Site             @relation(fields: [siteId], references: [id], onDelete: NoAction)
-  team        Team?            @relation(fields: [teamId], references: [id], onDelete: NoAction)
+  worker      Worker           @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+  site        Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  team        Team?            @relation(fields: [teamId, companyId], references: [id, companyId], onDelete: NoAction)
+  travelRoute TravelRoute?     @relation(fields: [travelRouteId, companyId], references: [id, companyId], onDelete: NoAction)
   entries     TimesheetEntry[]
   adjustments Adjustment[]
 
+  @@unique([id, companyId])
+  @@index([companyId])
   @@index([siteId, hiredOn])
   @@index([workerId])
 }
 
 // ---------- Calendar & rules ----------
 
+/// Holidays an admin enters. Uzbekistan's fixed-date public holidays are shipped in
+/// @puantaj/payroll (uzbekistanFixedHolidays) and not stored here.
+enum HolidayKind {
+  /// Moving public holidays, announced each year. A year without both is incomplete.
+  RAMAZON_HAYIT
+  QURBON_HAYIT
+  /// Extra public day off declared by the government
+  PUBLIC_EXTRA
+  /// Day off for this company only
+  COMPANY_DAY_OFF
+  /// Not a day off: a rest weekday that is a working day, the other half of a
+  /// government day-off swap
+  WORKING_DAY
+}
+
 model Holiday {
-  id        String   @id @default(uuid()) @db.Uuid
-  companyId String   @db.Uuid
-  date      DateTime @db.Date
+  id        String      @id @default(uuid()) @db.Uuid
+  companyId String      @db.Uuid
+  date      DateTime    @db.Date
+  kind      HolidayKind
   name      String
 
   company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
@@ -250,26 +283,107 @@ model Holiday {
   @@unique([companyId, date])
 }
 
-/// Pay policy. A site-level rule set overrides the company default (siteId = null).
-/// Policy fields are still being defined; `options` holds the not-yet-modelled ones.
-model PayrollRuleSet {
-  id                 String  @id @default(uuid()) @db.Uuid
-  companyId          String  @db.Uuid
-  siteId             String? @db.Uuid
-  name               String
-  standardDayHours   Decimal @default(9) @db.Decimal(4, 2)
-  overtimeMultiplier Decimal @default(1) @db.Decimal(4, 2)
-  restDayMultiplier  Decimal @default(1) @db.Decimal(4, 2)
-  /// ISO weekdays that are rest days (7 = Sunday)
-  restWeekdays       Int[]   @default([7])
-  options            Json    @default("{}")
+/// How travel pay is worked out (Settings).
+enum TravelPayMode {
+  /// The company doesn't pay travel
+  NONE
+  /// Days worked × the amount per day of the worker's route (Assignment.travelRoute)
+  PER_DAY_WORKED
+  /// A monthly amount the accountant enters per worker (Adjustment of type TRAVEL)
+  MONTHLY_AMOUNT
+}
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  site    Site?   @relation(fields: [siteId], references: [id], onDelete: NoAction)
+/// Pay policy (Settings). A site-level rule set overrides the company default
+/// (siteId = null). Value ranges are CHECK constraints in the migration.
+model PayrollRuleSet {
+  id                   String        @id @default(uuid()) @db.Uuid
+  companyId            String        @db.Uuid
+  siteId               String?       @db.Uuid
+  name                 String
+  /// ISO weekdays that are rest days (7 = Sunday)
+  restWeekdays         Int[]
+  /// Normal hours on a working day; hours above it are overtime
+  normalHoursPerDay    Decimal       @db.Decimal(4, 2)
+  /// Pay multipliers per kind of hour. Normal is 1 so that working every working day
+  /// at normal hours pays exactly the monthly salary.
+  normalMultiplier     Decimal       @default(1) @db.Decimal(4, 2)
+  overtimeMultiplier   Decimal       @db.Decimal(4, 2)
+  restDayMultiplier    Decimal       @db.Decimal(4, 2)
+  holidayMultiplier    Decimal       @db.Decimal(4, 2)
+  /// Absence pay per type: paid or not, and hours paid per absence day.
+  /// Hours null = the normal hours per day, following it when it changes (the default
+  /// for leave and travel/transfer). Absences on rest days and holidays are never paid.
+  leavePaid            Boolean       @default(true)
+  leaveHoursPerDay     Decimal?      @db.Decimal(4, 2)
+  sickPaid             Boolean       @default(true)
+  sickHoursPerDay      Decimal?      @default(8) @db.Decimal(4, 2)
+  /// Travel/transfer days (DayStatus TRAVEL), not to be confused with travel pay
+  travelDayPaid        Boolean       @default(true)
+  travelDayHoursPerDay Decimal?      @db.Decimal(4, 2)
+  travelPayMode        TravelPayMode
+  /// Final pay is rounded to the nearest multiple of this (halves up)
+  payRoundingStep      Decimal       @default(1000) @db.Decimal(14, 2)
+  updatedAt            DateTime      @updatedAt
+
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  site                 Site?                 @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  workingDaysOverrides WorkingDaysOverride[]
 
   /// One rule set per site. PostgreSQL treats NULLs as distinct, so "one company default
   /// (siteId = null)" is a partial unique index added by hand in its migration.
   @@unique([companyId, siteId])
+  @@unique([id, companyId])
+}
+
+/// An admin's override of the calculated working days for one month of a rule set.
+/// The calculated value isn't stored: it follows from the rule set's rest weekdays
+/// and the holidays, so the app can always show both side by side. Who changed it
+/// is kept here and every change is also in AuditLog.
+model WorkingDaysOverride {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @db.Uuid
+  ruleSetId   String   @db.Uuid
+  year        Int
+  month       Int
+  workingDays Int
+  reason      String?
+  setById     String   @db.Uuid
+  setAt       DateTime @default(now())
+
+  ruleSet PayrollRuleSet @relation(fields: [ruleSetId, companyId], references: [id, companyId], onDelete: NoAction)
+  setBy   User           @relation(fields: [setById], references: [id], onDelete: NoAction)
+
+  @@unique([ruleSetId, year, month])
+  @@index([companyId])
+}
+
+/// A route workers travel to a site, with its travel pay per day worked.
+model TravelRoute {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String   @db.Uuid
+  name         String
+  amountPerDay Decimal  @db.Decimal(14, 2)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  assignments Assignment[]
+
+  @@unique([companyId, name])
+  @@unique([id, companyId])
+}
+
+/// A company's own timesheet code (e.g. "IZ" = LEAVE), used by the importer.
+/// code is normalized with normalizeCode() from @puantaj/payroll and never blank: a blank
+/// cell means "not employed" outside the worker's employment dates and is a problem inside.
+model TimesheetCode {
+  companyId String    @db.Uuid
+  code      String
+  status    DayStatus
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
+
+  @@id([companyId, code])
 }
 
 // ---------- Timesheets & payroll ----------
@@ -279,19 +393,24 @@ enum PeriodStatus {
   LOCKED
 }
 
+/// A locked period is final. lockedAt and lockedById are set exactly when it is
+/// LOCKED (CHECK constraint in the migration).
 model PayrollPeriod {
-  id        String       @id @default(uuid()) @db.Uuid
-  companyId String       @db.Uuid
-  year      Int
-  month     Int
-  status    PeriodStatus @default(OPEN)
-  lockedAt  DateTime?
+  id         String       @id @default(uuid()) @db.Uuid
+  companyId  String       @db.Uuid
+  year       Int
+  month      Int
+  status     PeriodStatus @default(OPEN)
+  lockedAt   DateTime?
+  lockedById String?      @db.Uuid
 
   company     Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  lockedBy    User?            @relation(fields: [lockedById], references: [id], onDelete: NoAction)
   entries     TimesheetEntry[]
   adjustments Adjustment[]
 
   @@unique([companyId, year, month])
+  @@unique([id, companyId])
 }
 
 /// Mirrors DayStatus in @puantaj/payroll.
@@ -305,8 +424,10 @@ enum DayStatus {
   NOT_EMPLOYED
 }
 
+/// companyId must match both the period's and the assignment's (composite foreign keys).
 model TimesheetEntry {
   id           String    @id @default(uuid()) @db.Uuid
+  companyId    String    @db.Uuid
   periodId     String    @db.Uuid
   assignmentId String    @db.Uuid
   date         DateTime  @db.Date
@@ -315,8 +436,8 @@ model TimesheetEntry {
   note         String?
   updatedAt    DateTime  @updatedAt
 
-  period     PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: NoAction)
-  assignment Assignment    @relation(fields: [assignmentId], references: [id], onDelete: NoAction)
+  period     PayrollPeriod @relation(fields: [periodId, companyId], references: [id, companyId], onDelete: NoAction)
+  assignment Assignment    @relation(fields: [assignmentId, companyId], references: [id, companyId], onDelete: NoAction)
 
   @@unique([assignmentId, date])
   @@index([periodId])
@@ -329,9 +450,12 @@ enum AdjustmentType {
   DEDUCTION
 }
 
-/// Money added to or taken from a worker's pay for one period.
+/// Money added to or taken from a worker's pay for one period. A TRAVEL adjustment is
+/// the monthly travel amount entered by the accountant (travel pay MONTHLY_AMOUNT).
+/// companyId must match both the period's and the assignment's (composite foreign keys).
 model Adjustment {
   id           String         @id @default(uuid()) @db.Uuid
+  companyId    String         @db.Uuid
   periodId     String         @db.Uuid
   assignmentId String         @db.Uuid
   type         AdjustmentType
@@ -339,8 +463,8 @@ model Adjustment {
   note         String?
   createdAt    DateTime       @default(now())
 
-  period     PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: NoAction)
-  assignment Assignment    @relation(fields: [assignmentId], references: [id], onDelete: NoAction)
+  period     PayrollPeriod @relation(fields: [periodId, companyId], references: [id, companyId], onDelete: NoAction)
+  assignment Assignment    @relation(fields: [assignmentId, companyId], references: [id, companyId], onDelete: NoAction)
 
   @@index([periodId, assignmentId])
 }

@@ -13,10 +13,13 @@ Multi-company web app for construction **timesheets and payroll** ("puantaj" in 
   - **Exact hours are paid.** A 4-hour day pays 4 hours. There are no half-day or "counts as a day" thresholds.
   - Hour kinds, each with its own multiplier set in Settings: **normal** (up to the normal hours on a working day), **overtime** (above normal hours on a working day), **rest day** (any hours on a rest weekday, e.g. Sunday), **holiday** (any hours on a public holiday).
   - **Normal hours per day** is a Settings value (e.g. 9).
-  - **Absence pay** is set per type (leave, sick, travel/transfer) in Settings: paid or unpaid, plus **hours paid per absence day** (pay = those hours × hourly rate). Default for **sick: 8 hours**. Default for leave and travel/transfer: the normal hours per day (assumed; the user hasn't confirmed these two).
-  - **Travel pay** is configured in Settings: fixed amount per day worked per route, or a monthly amount entered by the accountant.
-  - **Working days per month (decided: option D):** calculated automatically from the rest weekdays and the holiday list, with a per-month admin override. The app shows the calculated and overridden values side by side and records who changed them (audit trail). The app ships Uzbekistan's fixed-date public holidays per year. Moving holidays (Ramazon Hayit, Qurbon Hayit) and company days off are entered by an admin, and the app warns when a year's holidays are missing.
-  - Open: whether rest weekdays and pay settings can differ per site, rounding of final pay, and mid-month hire/exit (the hour model already prorates).
+  - **Absence pay** is set per type (leave, sick, travel/transfer) in Settings: paid or unpaid, plus **hours paid per absence day** (pay = those hours × hourly rate). All three are **paid by default**. Default for **sick: 8 hours**. Default for leave and travel/transfer: the normal hours per day, following it if it changes (confirmed 2026-10-20). Absences recorded on rest days or holidays are **not paid** (nobody was due at work), so a full month never pays more than the salary.
+  - **Travel pay** is configured in Settings: fixed amount per day worked per route, or a monthly amount entered by the accountant. "Per day worked" counts **working days only**: rest days and holidays worked don't earn travel pay.
+  - **Working days per month (decided: option D):** calculated automatically from the rest weekdays and the holiday list, with a per-month admin override. The app shows the calculated and overridden values side by side and records who changed them (audit trail). The app ships Uzbekistan's fixed-date public holidays per year. Moving holidays (Ramazon Hayit, Qurbon Hayit) and company days off are entered by an admin, and the app warns when a year's holidays are missing. Government day-off swaps are entered as both halves: the extra day off, and the rest weekday that becomes a working day (holiday kind `WORKING_DAY`).
+  - **Final pay is rounded to the nearest 1000 soʻm** (halves up), a Settings value. The difference shows as its own rounding line.
+  - **Per-site settings:** a site may have its own rule set (rest weekdays and pay settings) that overrides the company default. Working-days overrides are per rule set.
+  - Open: mid-month hire/exit (the hour model already prorates).
+  - The overtime, rest-day and holiday multipliers have **no default**: the admin enters them when setting up the company.
   - Uzbek legal minimums (overtime, holiday pay) are deliberately out of scope for now. Don't enforce or assume them until the user raises it.
 - UI languages: `uz` (default), `ru`, `tr`, `en`. Every user-facing string goes through i18n in all four files.
 
@@ -82,7 +85,7 @@ Before finishing a change, run `npm test`, `npm run typecheck` and `npm run buil
 
 ## Conventions
 
-- **Tenancy:** every business table has `companyId` (directly or through its parent). Every query must be scoped to the caller's company. Never trust a `companyId` sent by the client.
+- **Tenancy:** every business table has `companyId` (directly or through its parent). Every query must be scoped to the caller's company. Never trust a `companyId` sent by the client. A child that points to another company-scoped row carries `companyId` too and uses a composite foreign key `(parentId, companyId) → (id, companyId)`, so the database refuses rows that mix two companies.
 - **Auth (API):**
   - Server-side sessions: the httpOnly cookie holds a random token, and the DB stores only its hash. Passwords use Argon2id.
   - Every route needs a login unless marked `@Public()` (never reads the session) or `@OptionalAuth()` (runs either way).
@@ -96,9 +99,9 @@ Before finishing a change, run `npm test`, `npm run typecheck` and `npm run buil
 - **Validation:** request bodies go through `new ZodPipe(schema)` with a schema from `@puantaj/schemas`, and forms use the same schema via `zodResolver`. Schemas export `…Input` (form) and plain (validated) types.
 - **Audit:** every change to company data records an `AuditLog` row through `AuditService.record(entry, tx)`, inside the same transaction as the change. Never put passwords or tokens in audit data.
 - **Tests:** API tests run the real app (`startApp()` in `test/helpers.ts`) against a real database. Every new company-scoped endpoint needs a tenant-isolation test (company A can't read or change company B's data). When a test passes on the first try, break the code on purpose once to prove the test can fail.
-- **Money:** `Decimal` in the DB (`@db.Decimal(14,2)`). Never use floats for money in payroll code.
+- **Money:** `Decimal` in the DB (`@db.Decimal(14,2)`). Never use floats for money in payroll code. `packages/payroll` takes money, hours and multipliers as decimal strings (Prisma's `Decimal#toString()`), computes in BigInt hundredths (`decimal.ts`) and rounds each pay line once.
 - **Dates:** timesheet days are `@db.Date` (no time). Months are 1-based. Weekdays are ISO (1 = Monday, 7 = Sunday).
-- Day statuses form a fixed set (`DayStatus` in both `packages/payroll/src/entry.ts` and `schema.prisma`, kept in sync). Customer Excel codes map onto it at import time.
+- Day statuses form a fixed set (`DayStatus` in both `packages/payroll/src/entry.ts` and `schema.prisma`, kept in sync). Customer Excel codes map onto it at import time through each company's own code list (`TimesheetCode`). A **blank cell** means "not employed" before hire or after exit, and is a problem row while the worker is employed (missing data is never guessed).
 - Schema changes always come with a migration under `apps/api/prisma/migrations`. Never edit an applied migration.
 - Match the style of the surrounding code. TypeScript strict mode, 2-space indent, LF line endings.
 
