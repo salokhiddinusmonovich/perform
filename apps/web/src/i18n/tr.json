@@ -15,7 +15,10 @@
     "userMenu": "Hesap menüsü",
     "switchCompany": "Şirket değiştir",
     "changePassword": "Şifre değiştir",
-    "logout": "Çıkış yap"
+    "logout": "Çıkış yap",
+    "payRules": "Ücret kuralları",
+    "holidays": "Tatiller",
+    "workingDays": "İş günleri"
   },
   "settings": {
     "language": "Dil",
@@ -49,7 +52,12 @@
     "page": "Sayfa {{page}} / {{total}}",
     "previous": "Önceki",
     "next": "Sonraki",
-    "close": "Kapat"
+    "close": "Kapat",
+    "pickDate": "Tarih seçin",
+    "year": "Yıl",
+    "month": "Ay",
+    "previousYear": "Önceki yıl",
+    "nextYear": "Sonraki yıl"
   },
   "states": {
     "emptyTitle": "Henüz bir şey yok",
@@ -168,7 +176,7 @@
     "hint": {
       "OWNER": "Diğer sahipler dahil tam yetki",
       "ADMIN": "Şirket ayarlarını ve kullanıcıları yönetir (sahipler hariç)",
-      "ACCOUNTANT": "Bordro ve ödemelerle çalışır",
+      "ACCOUNTANT": "Bordro ile çalışır",
       "TIMEKEEPER": "Puantajı girer ve kontrol eder",
       "FOREMAN": "Kendi ekibinin puantajını girer"
     }
@@ -222,7 +230,15 @@
     "currentPasswordWrong": "Şifre yanlış",
     "currencyInvalid": "Para birimi seçin",
     "timezoneInvalid": "Saat dilimi seçin",
-    "nothingToUpdate": "Değiştirilecek bir şey yok"
+    "nothingToUpdate": "Değiştirilecek bir şey yok",
+    "decimalInvalid": "En fazla 2 ondalık basamaklı bir sayı girin, örn. 1,5",
+    "hoursRange": "0 ile 24 arası",
+    "normalHoursRange": "0'dan büyük ve en fazla 24",
+    "multiplierRange": "0 ile 99,99 arası",
+    "roundingStepRange": "0'dan büyük olmalı",
+    "restWeekdaysAllWeek": "Haftanın en az bir günü iş günü olmalı",
+    "dateInvalid": "Geçerli bir tarih girin",
+    "workingDaysRange": "1 ile aydaki gün sayısı arası"
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -254,6 +270,170 @@
     },
     "invitation": {
       "notFound": "Bu davet artık geçerli değil."
+    },
+    "period": {
+      "locked": "Bu ay kapatıldı. Kapatılmış aylar değiştirilemez."
+    },
+    "payRules": {
+      "notFound": "Bu kurallar artık yok.",
+      "notSet": "Bu ay için henüz ücret kuralı yok. Önce kuralları girin."
+    },
+    "holiday": {
+      "notFound": "Bu gün artık yok.",
+      "fixedDate": "Bu tarih zaten sabit bir resmî tatil.",
+      "dateTaken": "Bu tarih için zaten bir kayıt var.",
+      "movingAlreadyEntered": "Bu bayram bu yıl için zaten girildi. Çevresindeki ek günler \"Ek resmî tatil günü\" olarak girilir."
+    },
+    "workingDays": {
+      "unchanged": "Bu değer zaten kullanılıyor."
     }
+  },
+  "payRules": {
+    "title": "Ücret kuralları",
+    "description": "Saatlerin, devamsızlıkların ve yol ücretinin nasıl ödendiği. Değişiklikler seçtiğiniz aydan itibaren geçerlidir; önceki aylar kendi kurallarıyla kalır.",
+    "emptyTitle": "Henüz ücret kuralı yok",
+    "emptyDescription": "Kurallar girilene kadar bordro hesaplanamaz. Fazla mesai katsayısı gibi bazı değerlerin varsayılanı yoktur: bunları siz girersiniz.",
+    "emptyDescriptionReadOnly": "Sahip veya yönetici kuralları girene kadar bordro hesaplanamaz.",
+    "setUp": "Kuralları gir",
+    "inForce": "Kurallar: {{month}}",
+    "inForceSince": "Başlangıç ayı: {{month}}",
+    "noneInForce": "Bu ay için henüz kural yok: kurallar daha sonra başlıyor.",
+    "change": "Kuralları değiştir",
+    "history": "Kural değişiklikleri",
+    "historyHint": "Her sürüm kendi ayından bir sonraki sürüme kadar geçerlidir.",
+    "from": "Başlangıç ayı",
+    "multipliersShort": "Fazla mesai · hafta tatili · resmî tatil",
+    "setBy": "Kaydeden",
+    "edit": "Düzenle",
+    "view": "Görüntüle",
+    "delete": "Sil",
+    "newTitle": "Yeni ücret kuralları",
+    "editTitle": "Kurallar (başlangıç: {{month}})",
+    "viewTitle": "Kurallar (başlangıç: {{month}})",
+    "appliesFrom": "Başlangıç ayı",
+    "appliesFromHint": "Bu kurallar bu aydan itibaren bir sonraki değişikliğe kadar geçerlidir. Önceki aylar kendi kurallarıyla kalır. Kapatılmış aylar değiştirilemez.",
+    "replacesVersion": "Başlangıcı {{month}} olan kuralların yerine geçer",
+    "workingTime": "Çalışma süresi",
+    "restWeekdays": "Hafta tatili günleri",
+    "restWeekdaysHint": "Kimsenin işe gelmek zorunda olmadığı haftanın günleri. Bu günlerdeki saatler hafta tatili saati olarak ödenir.",
+    "noRestDays": "Yok: her gün iş günü",
+    "normalHoursPerDay": "Günlük normal saat",
+    "normalHoursHint": "Bir iş gününde bunun üzerindeki saatler fazla mesaidir. Saatlik ücret = maaş ÷ (iş günü × bu saat).",
+    "multipliers": "Ücret katsayıları",
+    "multipliersHint": "Bir saatin ücreti = saatlik ücret × katsayı. Normal saatler her zaman × 1 ile ödenir; böylece tam bir ay tam olarak maaşı öder.",
+    "multiplier": {
+      "NORMAL": "Normal saatler",
+      "OVERTIME": "Fazla mesai",
+      "REST_DAY": "Hafta tatili saatleri",
+      "HOLIDAY": "Resmî tatil saatleri"
+    },
+    "overtimeHint": "Bir iş gününde normal saatin üzerindeki saatler",
+    "restDayHint": "Hafta tatilindeki tüm saatler",
+    "holidayHint": "Resmî tatil veya şirket tatilindeki tüm saatler",
+    "times": "× {{value}}",
+    "hours": "{{value}} sa",
+    "absences": "Devamsızlıklar",
+    "absencesHint": "Ücretli devamsızlık: günlük saat × saatlik ücret. Hafta tatiline ve resmî tatile denk gelenler hiçbir zaman ödenmez.",
+    "absence": {
+      "LEAVE": "İzin",
+      "SICK": "Hastalık izni",
+      "TRAVEL": "Yol / transfer günleri"
+    },
+    "paid": "Ücretli",
+    "notPaid": "Ücretsiz",
+    "paidHours": "Ücretli, günde {{hours}}",
+    "paidNormalHours": "Ücretli, günlük normal saat ({{hours}})",
+    "hoursPerAbsenceDay": "Günde ödenen saat",
+    "emptyIsNormalHours": "Boş bırakılırsa günlük normal saat kullanılır",
+    "travelPay": "Yol ücreti",
+    "travelPayMode": "Yol ücreti nasıl ödenir",
+    "chooseTravelMode": "Yol ücreti şeklini seçin",
+    "travelMode": {
+      "NONE": "Ödenmez",
+      "PER_DAY_WORKED": "Çalışılan her iş günü için sabit tutar",
+      "MONTHLY_AMOUNT": "Muhasebecinin girdiği aylık tutar"
+    },
+    "travelModeHint": {
+      "NONE": "Şirket yol ücreti ödemez.",
+      "PER_DAY_WORKED": "Çalışılan her iş günü için işçinin güzergâh tutarı ödenir. Hafta tatili ve resmî tatiller sayılmaz.",
+      "MONTHLY_AMOUNT": "Muhasebeci her ay her işçi için yol ücreti tutarını girer."
+    },
+    "rounding": "Yuvarlama",
+    "roundingStep": "Net ücret yuvarlama adımı ({{currency}})",
+    "roundingHint": "Net ücret bu tutarın en yakın katına yuvarlanır (yarım yukarı). Fark ayrı bir satırda gösterilir.",
+    "confirmDelete": {
+      "title": "Bu kurallar silinsin mi?",
+      "description": "Başlangıcı {{month}} olan kurallar silinecek. O aydan itibaren önceki kurallar (başlangıç: {{previous}}) geçerli olacak.",
+      "descriptionNoPrevious": "Başlangıcı {{month}} olan kurallar silinecek. O aydan itibaren yeni kurallar girilene kadar ücret kuralı olmayacak."
+    }
+  },
+  "holidays": {
+    "title": "Tatiller",
+    "description": "Tatil günleri ve kaydırılan iş günleri. Her ayın iş günlerini bunlar belirler.",
+    "add": "Gün ekle",
+    "addDescription": "Özbekistan'ın sabit tarihli resmî tatilleri zaten ekli. Her yıl tarihi değişen bayramları, ek tatil günlerini ve şirketinizin kendi tatil günlerini ekleyin.",
+    "edit": "Düzenle",
+    "delete": "Sil",
+    "date": "Tarih",
+    "name": "Tatil",
+    "type": "Tür",
+    "note": "Not",
+    "noteHint": "İsteğe bağlı, örn. iş gününün hangi günle kaydırıldığı",
+    "chooseKind": "Türü seçin",
+    "builtIn": "Hazır",
+    "dayOff": "Tatil",
+    "workingDay": "İş günü",
+    "goToHolidays": "Tatilleri gir",
+    "missingTitle": "{{year}} yılının tatilleri eksik",
+    "missingDescription": "Henüz girilmedi: {{names}}. Girilene kadar yılın iş günleri ve saatlik ücretler yanlış olur.",
+    "fixed": {
+      "NEW_YEAR": "Yılbaşı",
+      "WOMENS_DAY": "Dünya Kadınlar Günü",
+      "NAVRUZ": "Nevruz",
+      "REMEMBRANCE_DAY": "Anma ve Saygı Günü",
+      "INDEPENDENCE_DAY": "Bağımsızlık Günü",
+      "TEACHERS_DAY": "Öğretmenler ve Eğitmenler Günü",
+      "CONSTITUTION_DAY": "Anayasa Günü"
+    },
+    "kind": {
+      "RAMAZON_HAYIT": "Ramazan Bayramı",
+      "QURBON_HAYIT": "Kurban Bayramı",
+      "PUBLIC_EXTRA": "Ek resmî tatil günü",
+      "COMPANY_DAY_OFF": "Şirket tatil günü",
+      "WORKING_DAY": "İş günü (tatil kaydırması)"
+    },
+    "kindHint": {
+      "RAMAZON_HAYIT": "Her yıl ilan edilen, tarihi değişen bayram. Bir gün: çevresindeki ek tatil günleri \"Ek resmî tatil günü\" olarak girilir.",
+      "QURBON_HAYIT": "Her yıl ilan edilen, tarihi değişen bayram. Bir gün: çevresindeki ek tatil günleri \"Ek resmî tatil günü\" olarak girilir.",
+      "PUBLIC_EXTRA": "Devletin ilan ettiği tatil günü.",
+      "COMPANY_DAY_OFF": "Yalnızca şirketiniz için tatil günü. Bu günde çalışılan saatler resmî tatil saatidir.",
+      "WORKING_DAY": "İş gününe dönüşen hafta tatili: devletin ilan ettiği tatil kaydırmasının diğer yarısı."
+    },
+    "confirmDelete": {
+      "title": "Bu gün silinsin mi?",
+      "description": "{{holiday}} silinecek. Bu ayın iş günleri yeniden hesaplanacak."
+    }
+  },
+  "workingDays": {
+    "title": "İş günleri",
+    "description": "Aylara göre iş günleri: hafta tatillerinden ve resmî tatillerden hesaplanır ya da elle girilir. Saatlik ücret \"Bordroda kullanılan\" sütunundan hesaplanır.",
+    "calculated": "Hesaplanan",
+    "override": "Elle girilen",
+    "effective": "Bordroda kullanılan",
+    "status": "Durum",
+    "locked": "Kapatıldı",
+    "overridden": "Elle girildi",
+    "lastChange": "Son değişiklik",
+    "noRules": "Kural yok",
+    "changeFor": "İş günleri: {{month}}",
+    "calculatedIs": "Takvime göre hesaplanan: {{count}}",
+    "useCalculated": "Hesaplanan değeri kullan",
+    "workingDays": "İş günü sayısı",
+    "reason": "Gerekçe",
+    "reasonHint": "İsteğe bağlı, örn. karar numarası",
+    "history": "Değişiklikler",
+    "historySet": "Girilen değer: {{count}}",
+    "historyBackToCalculated": "Hesaplanan değere dönüldü",
+    "lockedHint": "Bu ay kapatıldı. İş günleri değiştirilemez."
   }
 }

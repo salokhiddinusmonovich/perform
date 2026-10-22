@@ -87,6 +87,7 @@ async function removeDemoData(prisma: PrismaClient) {
     prisma.timesheetEntry.deleteMany({ where: inCompany }),
     prisma.payrollPeriod.deleteMany({ where: inCompany }),
     prisma.workingDaysOverride.deleteMany({ where: inCompany }),
+    prisma.payrollRules.deleteMany({ where: inCompany }),
     prisma.payrollRuleSet.deleteMany({ where: inCompany }),
     prisma.holiday.deleteMany({ where: inCompany }),
     prisma.timesheetCode.deleteMany({ where: inCompany }),

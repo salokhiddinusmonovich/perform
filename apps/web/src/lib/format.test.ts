@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatMoney, formatMonth, formatNumber } from './format';
+import { formatDate, formatMoney, formatMonth, formatMonthName, formatNumber, formatWeekday } from './format';
 
 // Intl uses non-breaking spaces as group separators; compare with plain spaces.
 const plain = (s: string) => s.replace(/[  ]/g, ' ');
@@ -65,5 +65,17 @@ describe('formatMonth', () => {
     expect(formatMonth(2026, 9, 'en')).toBe('September 2026');
     expect(formatMonth(2026, 9, 'tr')).toBe('Eylül 2026');
     expect(formatMonth(2026, 9, 'uz')).toBe('sentabr, 2026');
+  });
+});
+
+describe('weekday and month names', () => {
+  it('names ISO weekdays and months per language, Uzbek by hand', () => {
+    expect(formatWeekday(1, 'uz')).toBe('dushanba');
+    expect(formatWeekday(7, 'uz')).toBe('yakshanba');
+    expect(formatWeekday(1, 'en')).toBe('Monday');
+    expect(formatWeekday(7, 'ru')).toBe('воскресенье');
+    expect(formatMonthName(11, 'uz')).toBe('noyabr');
+    expect(formatMonthName(11, 'ru')).toBe('ноябрь');
+    expect(formatMonthName(11, 'tr')).toBe('Kasım');
   });
 });

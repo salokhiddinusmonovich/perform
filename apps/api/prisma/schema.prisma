@@ -64,6 +64,7 @@ model User {
 
   lockedPeriods        PayrollPeriod[]
   workingDaysOverrides WorkingDaysOverride[]
+  payrollRules         PayrollRules[]
 }
 
 /// Server-side login session. The browser holds a random token in an httpOnly
@@ -280,7 +281,8 @@ model Holiday {
   companyId String      @db.Uuid
   date      DateTime    @db.Date
   kind      HolidayKind
-  name      String
+  /// Optional note, e.g. the day a WORKING_DAY swaps with. The kind names the day.
+  name      String?
 
   company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
 
@@ -297,40 +299,18 @@ enum TravelPayMode {
   MONTHLY_AMOUNT
 }
 
-/// Pay policy (Settings). A site-level rule set overrides the company default
-/// (siteId = null). Value ranges are CHECK constraints in the migration.
+/// Where pay rules apply: the company default (siteId = null) or one site, whose
+/// rules override the default. The rules themselves are versioned by month
+/// (PayrollRules); working-days overrides belong to the rule set.
 model PayrollRuleSet {
-  id                   String        @id @default(uuid()) @db.Uuid
-  companyId            String        @db.Uuid
-  siteId               String?       @db.Uuid
-  name                 String
-  /// ISO weekdays that are rest days (7 = Sunday)
-  restWeekdays         Int[]
-  /// Normal hours on a working day; hours above it are overtime
-  normalHoursPerDay    Decimal       @db.Decimal(4, 2)
-  /// Pay multipliers per kind of hour. Normal is 1 so that working every working day
-  /// at normal hours pays exactly the monthly salary.
-  normalMultiplier     Decimal       @default(1) @db.Decimal(4, 2)
-  overtimeMultiplier   Decimal       @db.Decimal(4, 2)
-  restDayMultiplier    Decimal       @db.Decimal(4, 2)
-  holidayMultiplier    Decimal       @db.Decimal(4, 2)
-  /// Absence pay per type: paid or not, and hours paid per absence day.
-  /// Hours null = the normal hours per day, following it when it changes (the default
-  /// for leave and travel/transfer). Absences on rest days and holidays are never paid.
-  leavePaid            Boolean       @default(true)
-  leaveHoursPerDay     Decimal?      @db.Decimal(4, 2)
-  sickPaid             Boolean       @default(true)
-  sickHoursPerDay      Decimal?      @default(8) @db.Decimal(4, 2)
-  /// Travel/transfer days (DayStatus TRAVEL), not to be confused with travel pay
-  travelDayPaid        Boolean       @default(true)
-  travelDayHoursPerDay Decimal?      @db.Decimal(4, 2)
-  travelPayMode        TravelPayMode
-  /// Final pay is rounded to the nearest multiple of this (halves up)
-  payRoundingStep      Decimal       @default(1000) @db.Decimal(14, 2)
-  updatedAt            DateTime      @updatedAt
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  siteId    String?  @db.Uuid
+  createdAt DateTime @default(now())
 
   company              Company               @relation(fields: [companyId], references: [id], onDelete: NoAction)
   site                 Site?                 @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  versions             PayrollRules[]
   workingDaysOverrides WorkingDaysOverride[]
 
   /// One rule set per site. PostgreSQL treats NULLs as distinct, so "one company default
@@ -339,25 +319,73 @@ model PayrollRuleSet {
   @@unique([id, companyId])
 }
 
-/// An admin's override of the calculated working days for one month of a rule set.
-/// The calculated value isn't stored: it follows from the rule set's rest weekdays
-/// and the holidays, so the app can always show both side by side. Who changed it
-/// is kept here and every change is also in AuditLog.
+/// Pay policy (Settings) of a rule set from a month on: it applies to that month and
+/// every later one until the next version, so older months keep the rules they had.
+/// Value ranges are CHECK constraints in the migration.
+/// The normal-hours multiplier is always 1 and isn't stored: working every working
+/// day at normal hours pays exactly the monthly salary.
+model PayrollRules {
+  id                   String        @id @default(uuid()) @db.Uuid
+  companyId            String        @db.Uuid
+  ruleSetId            String        @db.Uuid
+  fromYear             Int
+  /// 1-based
+  fromMonth            Int
+  /// ISO weekdays that are rest days (7 = Sunday)
+  restWeekdays         Int[]
+  /// Normal hours on a working day; hours above it are overtime
+  normalHoursPerDay    Decimal       @db.Decimal(4, 2)
+  /// Multipliers of the other kinds of hour. No defaults: the admin enters them.
+  overtimeMultiplier   Decimal       @db.Decimal(4, 2)
+  restDayMultiplier    Decimal       @db.Decimal(4, 2)
+  holidayMultiplier    Decimal       @db.Decimal(4, 2)
+  /// Absence pay per type: paid or not, and hours paid per absence day.
+  /// Hours null = the normal hours per day, following it when it changes (the default
+  /// for leave and travel/transfer). Absences on rest days and holidays are never paid.
+  leavePaid            Boolean
+  leaveHoursPerDay     Decimal?      @db.Decimal(4, 2)
+  sickPaid             Boolean
+  sickHoursPerDay      Decimal?      @db.Decimal(4, 2)
+  /// Travel/transfer days (DayStatus TRAVEL), not to be confused with travel pay
+  travelDayPaid        Boolean
+  travelDayHoursPerDay Decimal?      @db.Decimal(4, 2)
+  travelPayMode        TravelPayMode
+  /// Final pay is rounded to the nearest multiple of this (halves up)
+  payRoundingStep      Decimal       @db.Decimal(14, 2)
+  /// Who saved this version last (owners and admins may replace it). Every change is
+  /// also in AuditLog.
+  setById              String        @db.Uuid
+  setAt                DateTime      @default(now())
+
+  ruleSet PayrollRuleSet @relation(fields: [ruleSetId, companyId], references: [id, companyId], onDelete: NoAction)
+  setBy   User           @relation(fields: [setById], references: [id], onDelete: NoAction)
+
+  @@unique([ruleSetId, fromYear, fromMonth])
+  @@index([companyId])
+}
+
+/// An override of the calculated working days for one month of a rule set. Overrides
+/// are never changed: a correction is a newer row, and the newest (highest seq) counts.
+/// workingDays null = back to the calculated value. The calculated value isn't stored:
+/// it follows from the rules' rest weekdays and the holidays, so the app can always
+/// show both side by side.
 model WorkingDaysOverride {
   id          String   @id @default(uuid()) @db.Uuid
   companyId   String   @db.Uuid
   ruleSetId   String   @db.Uuid
   year        Int
   month       Int
-  workingDays Int
+  workingDays Int?
   reason      String?
+  /// Order the overrides were added in
+  seq         BigInt   @unique @default(autoincrement())
   setById     String   @db.Uuid
   setAt       DateTime @default(now())
 
   ruleSet PayrollRuleSet @relation(fields: [ruleSetId, companyId], references: [id, companyId], onDelete: NoAction)
   setBy   User           @relation(fields: [setById], references: [id], onDelete: NoAction)
 
-  @@unique([ruleSetId, year, month])
+  @@index([ruleSetId, year, month])
   @@index([companyId])
 }
 

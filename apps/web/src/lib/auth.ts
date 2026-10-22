@@ -47,3 +47,9 @@ export function useResetSession() {
 export function canManageCompany(me: Me | null | undefined): boolean {
   return me?.activeCompany?.role === 'OWNER' || me?.activeCompany?.role === 'ADMIN';
 }
+
+/** Can see pay rules, holidays and working days, and override working days. Changing rules and holidays is canManageCompany. */
+export function canViewPayRules(me: Me | null | undefined): boolean {
+  const role = me?.activeCompany?.role;
+  return role === 'OWNER' || role === 'ADMIN' || role === 'ACCOUNTANT';
+}

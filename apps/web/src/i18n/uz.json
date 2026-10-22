@@ -15,7 +15,10 @@
     "userMenu": "Hisob menyusi",
     "switchCompany": "Kompaniyani almashtirish",
     "changePassword": "Parolni oʻzgartirish",
-    "logout": "Chiqish"
+    "logout": "Chiqish",
+    "payRules": "Ish haqi qoidalari",
+    "holidays": "Bayram kunlari",
+    "workingDays": "Ish kunlari"
   },
   "settings": {
     "language": "Til",
@@ -49,7 +52,12 @@
     "page": "{{page}} / {{total}} sahifa",
     "previous": "Oldingi",
     "next": "Keyingi",
-    "close": "Yopish"
+    "close": "Yopish",
+    "pickDate": "Sanani tanlang",
+    "year": "Yil",
+    "month": "Oy",
+    "previousYear": "Oldingi yil",
+    "nextYear": "Keyingi yil"
   },
   "states": {
     "emptyTitle": "Hozircha hech narsa yoʻq",
@@ -168,7 +176,7 @@
     "hint": {
       "OWNER": "Toʻliq boshqaruv, boshqa egalar ham",
       "ADMIN": "Kompaniya sozlamalari va foydalanuvchilarni boshqaradi (egalardan tashqari)",
-      "ACCOUNTANT": "Ish haqi va toʻlovlar bilan ishlaydi",
+      "ACCOUNTANT": "Ish haqi hisob-kitobi bilan ishlaydi",
       "TIMEKEEPER": "Tabelni kiritadi va tekshiradi",
       "FOREMAN": "Oʻz brigadasi tabelini kiritadi"
     }
@@ -222,7 +230,15 @@
     "currentPasswordWrong": "Parol notoʻgʻri",
     "currencyInvalid": "Valyutani tanlang",
     "timezoneInvalid": "Vaqt mintaqasini tanlang",
-    "nothingToUpdate": "Oʻzgartiradigan narsa yoʻq"
+    "nothingToUpdate": "Oʻzgartiradigan narsa yoʻq",
+    "decimalInvalid": "Koʻpi bilan 2 ta kasr xonali son kiriting, masalan 1,5",
+    "hoursRange": "0 dan 24 gacha",
+    "normalHoursRange": "0 dan katta va 24 dan oshmasin",
+    "multiplierRange": "0 dan 99,99 gacha",
+    "roundingStepRange": "0 dan katta boʻlishi kerak",
+    "restWeekdaysAllWeek": "Haftaning kamida bir kuni ish kuni boʻlishi kerak",
+    "dateInvalid": "Toʻgʻri sana kiriting",
+    "workingDaysRange": "1 dan oydagi kunlar sonigacha"
   },
   "errors": {
     "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
@@ -254,6 +270,170 @@
     },
     "invitation": {
       "notFound": "Bu taklif endi amal qilmaydi."
+    },
+    "period": {
+      "locked": "Bu oy yopilgan. Yopilgan oylarni oʻzgartirib boʻlmaydi."
+    },
+    "payRules": {
+      "notFound": "Bu qoidalar endi mavjud emas.",
+      "notSet": "Bu oy uchun hali ish haqi qoidalari yoʻq. Avval ularni kiriting."
+    },
+    "holiday": {
+      "notFound": "Bu kun endi mavjud emas.",
+      "fixedDate": "Bu sana allaqachon belgilangan bayram kuni.",
+      "dateTaken": "Bu sana uchun yozuv allaqachon bor.",
+      "movingAlreadyEntered": "Bu bayram shu yil uchun allaqachon kiritilgan. Uning atrofidagi qoʻshimcha kunlar \"Qoʻshimcha dam olish kuni (davlat)\" sifatida kiritiladi."
+    },
+    "workingDays": {
+      "unchanged": "Bu qiymat allaqachon ishlatilmoqda."
     }
+  },
+  "payRules": {
+    "title": "Ish haqi qoidalari",
+    "description": "Soatlar, ishga chiqilmagan kunlar va yoʻl haqi qanday toʻlanadi. Oʻzgarishlar siz tanlagan oydan boshlab amal qiladi; oldingi oylar oʻz qoidalarida qoladi.",
+    "emptyTitle": "Ish haqi qoidalari hali kiritilmagan",
+    "emptyDescription": "Qoidalar kiritilmaguncha ish haqini hisoblab boʻlmaydi. Baʼzi qiymatlar, masalan qoʻshimcha ish koeffitsiyenti, oldindan berilmaydi: ularni siz kiritasiz.",
+    "emptyDescriptionReadOnly": "Egasi yoki administrator qoidalarni kiritmaguncha ish haqini hisoblab boʻlmaydi.",
+    "setUp": "Qoidalarni kiritish",
+    "inForce": "Qoidalar: {{month}}",
+    "inForceSince": "Boshlanish oyi: {{month}}",
+    "noneInForce": "Bu oy uchun hali qoidalar yoʻq: ular keyinroq boshlanadi.",
+    "change": "Qoidalarni oʻzgartirish",
+    "history": "Qoidalar tarixi",
+    "historyHint": "Har bir versiya oʻz oyidan keyingi versiyagacha amal qiladi.",
+    "from": "Boshlanish oyi",
+    "multipliersShort": "Qoʻshimcha ish · dam olish kuni · bayram",
+    "setBy": "Kim saqlagan",
+    "edit": "Tahrirlash",
+    "view": "Koʻrish",
+    "delete": "Oʻchirish",
+    "newTitle": "Yangi ish haqi qoidalari",
+    "editTitle": "Qoidalar (boshlanishi: {{month}})",
+    "viewTitle": "Qoidalar (boshlanishi: {{month}})",
+    "appliesFrom": "Boshlanish oyi",
+    "appliesFromHint": "Bu qoidalar shu oydan boshlab keyingi oʻzgarishgacha amal qiladi. Oldingi oylar oʻz qoidalarida qoladi. Yopilgan oylarni oʻzgartirib boʻlmaydi.",
+    "replacesVersion": "Boshlanishi {{month}} boʻlgan qoidalar almashtiriladi",
+    "workingTime": "Ish vaqti",
+    "restWeekdays": "Dam olish kunlari",
+    "restWeekdaysHint": "Hech kim ishga chiqishi shart boʻlmagan hafta kunlari. Bu kunlardagi soatlar dam olish kuni soati sifatida toʻlanadi.",
+    "noRestDays": "Yoʻq: har kuni ish kuni",
+    "normalHoursPerDay": "Kunlik normal soat",
+    "normalHoursHint": "Ish kunida bundan ortiq soatlar qoʻshimcha ish hisoblanadi. Soatlik stavka = maosh ÷ (ish kunlari × shu soat).",
+    "multipliers": "Toʻlov koeffitsiyentlari",
+    "multipliersHint": "Bir soat uchun toʻlov = soatlik stavka × koeffitsiyent. Normal soatlar doim × 1 bilan toʻlanadi, shuning uchun toʻliq oy aynan maoshga teng boʻladi.",
+    "multiplier": {
+      "NORMAL": "Normal soatlar",
+      "OVERTIME": "Qoʻshimcha ish",
+      "REST_DAY": "Dam olish kuni soatlari",
+      "HOLIDAY": "Bayram kuni soatlari"
+    },
+    "overtimeHint": "Ish kunida normal soatdan ortiq soatlar",
+    "restDayHint": "Dam olish kunidagi har qanday soat",
+    "holidayHint": "Bayram yoki korxona dam olish kunidagi har qanday soat",
+    "times": "× {{value}}",
+    "hours": "{{value}} soat",
+    "absences": "Ishga chiqilmagan kunlar",
+    "absencesHint": "Toʻlanadigan kun: kunlik soat × soatlik stavka. Dam olish va bayram kunlariga toʻgʻri kelganlari hech qachon toʻlanmaydi.",
+    "absence": {
+      "LEAVE": "Taʼtil",
+      "SICK": "Kasallik varaqasi",
+      "TRAVEL": "Yoʻlda / koʻchish kunlari"
+    },
+    "paid": "Toʻlanadi",
+    "notPaid": "Toʻlanmaydi",
+    "paidHours": "Toʻlanadi, kuniga {{hours}}",
+    "paidNormalHours": "Toʻlanadi, kunlik normal soat ({{hours}})",
+    "hoursPerAbsenceDay": "Kuniga toʻlanadigan soat",
+    "emptyIsNormalHours": "Boʻsh qoldirilsa, kunlik normal soat olinadi",
+    "travelPay": "Yoʻl haqi",
+    "travelPayMode": "Yoʻl haqi qanday toʻlanadi",
+    "chooseTravelMode": "Yoʻl haqi turini tanlang",
+    "travelMode": {
+      "NONE": "Toʻlanmaydi",
+      "PER_DAY_WORKED": "Ishlangan har bir ish kuni uchun belgilangan summa",
+      "MONTHLY_AMOUNT": "Buxgalter kiritadigan oylik summa"
+    },
+    "travelModeHint": {
+      "NONE": "Kompaniya yoʻl haqi toʻlamaydi.",
+      "PER_DAY_WORKED": "Ishlangan har bir ish kuni uchun ishchi yoʻnalishining summasi toʻlanadi. Dam olish va bayram kunlari hisobga olinmaydi.",
+      "MONTHLY_AMOUNT": "Buxgalter har oy har bir ishchi uchun yoʻl haqi summasini kiritadi."
+    },
+    "rounding": "Yaxlitlash",
+    "roundingStep": "Yakuniy summani yaxlitlash qadami ({{currency}})",
+    "roundingHint": "Yakuniy ish haqi shu summaning eng yaqin karralisiga yaxlitlanadi (yarmi yuqoriga). Farq alohida qatorda koʻrsatiladi.",
+    "confirmDelete": {
+      "title": "Bu qoidalarni oʻchirasizmi?",
+      "description": "Boshlanishi {{month}} boʻlgan qoidalar oʻchiriladi. Oʻsha oydan boshlab oldingi qoidalar (boshlanishi: {{previous}}) amal qiladi.",
+      "descriptionNoPrevious": "Boshlanishi {{month}} boʻlgan qoidalar oʻchiriladi. Oʻsha oydan boshlab yangi qoidalar kiritilmaguncha ish haqi qoidalari boʻlmaydi."
+    }
+  },
+  "holidays": {
+    "title": "Bayram kunlari",
+    "description": "Dam olish kunlari va koʻchirilgan ish kunlari. Har oyning ish kunlari shular asosida aniqlanadi.",
+    "add": "Kun qoʻshish",
+    "addDescription": "Oʻzbekistonning belgilangan sanali bayramlari allaqachon kiritilgan. Har yili koʻchib yuruvchi bayramlarni, qoʻshimcha dam olish kunlarini va korxonangizning oʻz dam olish kunlarini qoʻshing.",
+    "edit": "Tahrirlash",
+    "delete": "Oʻchirish",
+    "date": "Sana",
+    "name": "Bayram",
+    "type": "Turi",
+    "note": "Izoh",
+    "noteHint": "Ixtiyoriy, masalan ish kuni qaysi kun bilan almashtirilgani",
+    "chooseKind": "Turini tanlang",
+    "builtIn": "Ilovada bor",
+    "dayOff": "Dam olish kuni",
+    "workingDay": "Ish kuni",
+    "goToHolidays": "Bayramlarni kiritish",
+    "missingTitle": "{{year}} yil bayramlari toʻliq emas",
+    "missingDescription": "Hali kiritilmagan: {{names}}. Ular kiritilmaguncha yilning ish kunlari va soatlik stavkalar notoʻgʻri boʻladi.",
+    "fixed": {
+      "NEW_YEAR": "Yangi yil",
+      "WOMENS_DAY": "Xalqaro xotin-qizlar kuni",
+      "NAVRUZ": "Navroʻz bayrami",
+      "REMEMBRANCE_DAY": "Xotira va qadrlash kuni",
+      "INDEPENDENCE_DAY": "Mustaqillik kuni",
+      "TEACHERS_DAY": "Oʻqituvchi va murabbiylar kuni",
+      "CONSTITUTION_DAY": "Konstitutsiya kuni"
+    },
+    "kind": {
+      "RAMAZON_HAYIT": "Ramazon hayiti",
+      "QURBON_HAYIT": "Qurbon hayiti",
+      "PUBLIC_EXTRA": "Qoʻshimcha dam olish kuni (davlat)",
+      "COMPANY_DAY_OFF": "Korxona dam olish kuni",
+      "WORKING_DAY": "Ish kuni (dam olish kuni koʻchirilgan)"
+    },
+    "kindHint": {
+      "RAMAZON_HAYIT": "Har yili eʼlon qilinadigan bayram. Bir kun: uning atrofidagi qoʻshimcha dam olish kunlari \"Qoʻshimcha dam olish kuni (davlat)\" sifatida kiritiladi.",
+      "QURBON_HAYIT": "Har yili eʼlon qilinadigan bayram. Bir kun: uning atrofidagi qoʻshimcha dam olish kunlari \"Qoʻshimcha dam olish kuni (davlat)\" sifatida kiritiladi.",
+      "PUBLIC_EXTRA": "Davlat eʼlon qilgan dam olish kuni.",
+      "COMPANY_DAY_OFF": "Faqat sizning korxonangiz uchun dam olish kuni. Bu kunda ishlangan soatlar bayram soati hisoblanadi.",
+      "WORKING_DAY": "Ish kuniga aylangan dam olish kuni: davlat dam olish kunini koʻchirganda uning ikkinchi yarmi."
+    },
+    "confirmDelete": {
+      "title": "Bu kunni oʻchirasizmi?",
+      "description": "{{holiday}} oʻchiriladi. Shu oyning ish kunlari qayta hisoblanadi."
+    }
+  },
+  "workingDays": {
+    "title": "Ish kunlari",
+    "description": "Har oydagi ish kunlari: dam olish va bayram kunlaridan hisoblanadi yoki qoʻlda belgilanadi. Soatlik stavka \"Hisobda ishlatiladi\" ustunidagi qiymatdan olinadi.",
+    "calculated": "Hisoblangan",
+    "override": "Qoʻlda belgilangan",
+    "effective": "Hisobda ishlatiladi",
+    "status": "Holati",
+    "locked": "Yopilgan",
+    "overridden": "Qoʻlda belgilangan",
+    "lastChange": "Oxirgi oʻzgarish",
+    "noRules": "Qoidalar yoʻq",
+    "changeFor": "Ish kunlari: {{month}}",
+    "calculatedIs": "Kalendar boʻyicha hisoblangan: {{count}}",
+    "useCalculated": "Hisoblangan qiymatdan foydalanish",
+    "workingDays": "Ish kunlari",
+    "reason": "Sabab",
+    "reasonHint": "Ixtiyoriy, masalan buyruq raqami",
+    "history": "Oʻzgarishlar",
+    "historySet": "Belgilandi: {{count}}",
+    "historyBackToCalculated": "Hisoblangan qiymatga qaytarildi",
+    "lockedHint": "Bu oy yopilgan. Uning ish kunlarini oʻzgartirib boʻlmaydi."
   }
 }

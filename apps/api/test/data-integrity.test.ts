@@ -97,12 +97,14 @@ describe('history is never deleted by accident', () => {
   });
 });
 
-/** Made-up pay settings; the values only need to be valid. */
-function ruleSet(companyId: string, name: string, siteId?: string) {
+/** Made-up pay rules from a month; the values only need to be valid. */
+function rules(companyId: string, ruleSetId: string, setById: string, fromMonth = 9) {
   return {
     companyId,
-    siteId,
-    name,
+    ruleSetId,
+    setById,
+    fromYear: 2026,
+    fromMonth,
     restWeekdays: [7],
     normalHoursPerDay: '9',
     overtimeMultiplier: '1.5',
@@ -110,8 +112,10 @@ function ruleSet(companyId: string, name: string, siteId?: string) {
     holidayMultiplier: '2',
     leavePaid: true,
     sickPaid: true,
+    sickHoursPerDay: '8',
     travelDayPaid: false,
     travelPayMode: 'NONE' as const,
+    payRoundingStep: '1000',
   };
 }
 
@@ -123,23 +127,39 @@ describe('payroll rule sets', () => {
     const siteA = await prisma.site.create({ data: { companyId: company.id, name: 'Site A' } });
     const siteB = await prisma.site.create({ data: { companyId: company.id, name: 'Site B' } });
 
-    await prisma.payrollRuleSet.create({ data: ruleSet(company.id, 'Default') });
-    await expect(prisma.payrollRuleSet.create({ data: ruleSet(company.id, 'Second default') })).rejects.toMatchObject(UNIQUE_VIOLATION);
+    await prisma.payrollRuleSet.create({ data: { companyId: company.id } });
+    await expect(prisma.payrollRuleSet.create({ data: { companyId: company.id } })).rejects.toMatchObject(UNIQUE_VIOLATION);
 
-    await prisma.payrollRuleSet.create({ data: ruleSet(company.id, 'Site A', siteA.id) });
-    await prisma.payrollRuleSet.create({ data: ruleSet(company.id, 'Site B', siteB.id) });
+    await prisma.payrollRuleSet.create({ data: { companyId: company.id, siteId: siteA.id } });
+    await prisma.payrollRuleSet.create({ data: { companyId: company.id, siteId: siteB.id } });
     await expect(
-      prisma.payrollRuleSet.create({ data: ruleSet(company.id, 'Site A again', siteA.id) }),
+      prisma.payrollRuleSet.create({ data: { companyId: company.id, siteId: siteA.id } }),
     ).rejects.toMatchObject(UNIQUE_VIOLATION);
 
     // Another company has its own default.
-    await prisma.payrollRuleSet.create({ data: ruleSet(other.id, 'Default') });
+    await prisma.payrollRuleSet.create({ data: { companyId: other.id } });
+  });
+
+  it('keeps one version of the rules per rule set and month', async () => {
+    const { prisma } = ctx;
+    const company = await createCompany(prisma);
+    const user = await createUser(prisma);
+    const set = await prisma.payrollRuleSet.create({ data: { companyId: company.id } });
+
+    await prisma.payrollRules.create({ data: rules(company.id, set.id, user.id, 9) });
+    await prisma.payrollRules.create({ data: rules(company.id, set.id, user.id, 11) });
+    await expect(prisma.payrollRules.create({ data: rules(company.id, set.id, user.id, 9) })).rejects.toMatchObject(
+      UNIQUE_VIOLATION,
+    );
   });
 
   it('refuses settings out of range', async () => {
     const { prisma } = ctx;
     const company = await createCompany(prisma);
+    const user = await createUser(prisma);
+    const set = await prisma.payrollRuleSet.create({ data: { companyId: company.id } });
     const bad = [
+      { fromMonth: 13 },
       { normalHoursPerDay: '0' },
       { normalHoursPerDay: '25' },
       { overtimeMultiplier: '-1' },
@@ -150,22 +170,12 @@ describe('payroll rule sets', () => {
     ];
     for (const override of bad) {
       await expect(
-        prisma.payrollRuleSet.create({ data: { ...ruleSet(company.id, 'Default'), ...override } }),
-      ).rejects.toThrow(/PayrollRuleSet_settings_check/);
+        prisma.payrollRules.create({ data: { ...rules(company.id, set.id, user.id), ...override } }),
+      ).rejects.toThrow(/PayrollRules_settings_check/);
     }
-    const created = await prisma.payrollRuleSet.create({ data: ruleSet(company.id, 'Default') });
-    expect(created.sickHoursPerDay?.toString()).toBe('8');
-    expect(created.normalMultiplier.toString()).toBe('1');
+    const created = await prisma.payrollRules.create({ data: rules(company.id, set.id, user.id) });
     expect(created.leaveHoursPerDay).toBeNull();
     expect(created.payRoundingStep.toString()).toBe('1000');
-  });
-
-  it('pays every absence type by default', async () => {
-    const { prisma } = ctx;
-    const company = await createCompany(prisma);
-    const { leavePaid: _l, sickPaid: _s, travelDayPaid: _t, ...rest } = ruleSet(company.id, 'Default');
-    const created = await prisma.payrollRuleSet.create({ data: rest });
-    expect(created).toMatchObject({ leavePaid: true, sickPaid: true, travelDayPaid: true });
   });
 });
 
@@ -213,7 +223,7 @@ describe('rows never mix two companies', () => {
       prisma.team.create({ data: { companyId: a.company.id, siteId: otherSite.id, name: 'Team X' } }),
     ).rejects.toMatchObject(STILL_REFERENCED);
     await expect(
-      prisma.payrollRuleSet.create({ data: ruleSet(a.company.id, 'Site B', otherSite.id) }),
+      prisma.payrollRuleSet.create({ data: { companyId: a.company.id, siteId: otherSite.id } }),
     ).rejects.toMatchObject(STILL_REFERENCED);
 
     const user = await createUser(prisma);
@@ -250,18 +260,33 @@ describe('rows never mix two companies', () => {
     await prisma.timesheetEntry.create({ data: { ...day, companyId: a.company.id, periodId: a.period.id } });
   });
 
+  it("refuses pay rules on another company's rule set", async () => {
+    const { prisma } = ctx;
+    const company = await createCompany(prisma);
+    const other = await createCompany(prisma);
+    const user = await createUser(prisma);
+    const otherSet = await prisma.payrollRuleSet.create({ data: { companyId: other.id } });
+
+    await expect(
+      prisma.payrollRules.create({ data: rules(company.id, otherSet.id, user.id) }),
+    ).rejects.toMatchObject(STILL_REFERENCED);
+    await prisma.payrollRules.create({ data: rules(other.id, otherSet.id, user.id) });
+  });
+
   it("refuses a working-days override on another company's rule set", async () => {
     const { prisma } = ctx;
     const company = await createCompany(prisma);
     const other = await createCompany(prisma);
     const user = await createUser(prisma);
-    const otherRules = await prisma.payrollRuleSet.create({ data: ruleSet(other.id, 'Default') });
+    const otherRules = await prisma.payrollRuleSet.create({ data: { companyId: other.id } });
     const override = { ruleSetId: otherRules.id, year: 2026, month: 9, workingDays: 24, setById: user.id };
 
     await expect(
       prisma.workingDaysOverride.create({ data: { ...override, companyId: company.id } }),
     ).rejects.toMatchObject(STILL_REFERENCED);
     await prisma.workingDaysOverride.create({ data: { ...override, companyId: other.id } });
+    // Corrections are newer rows, including "back to the calculated value" (null).
+    await prisma.workingDaysOverride.create({ data: { ...override, companyId: other.id, workingDays: null } });
     await expect(
       prisma.workingDaysOverride.create({ data: { ...override, companyId: other.id, month: 13 } }),
     ).rejects.toThrow(/WorkingDaysOverride_range_check/);

@@ -32,6 +32,18 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/users-page')).UsersPage }),
       },
       {
+        path: 'settings/pay-rules',
+        lazy: async () => ({ Component: (await import('@/pages/pay-rules-page')).PayRulesPage }),
+      },
+      {
+        path: 'settings/holidays',
+        lazy: async () => ({ Component: (await import('@/pages/holidays-page')).HolidaysPage }),
+      },
+      {
+        path: 'settings/working-days',
+        lazy: async () => ({ Component: (await import('@/pages/working-days-page')).WorkingDaysPage }),
+      },
+      {
         path: 'platform/companies',
         lazy: async () => ({
           Component: (await import('@/pages/platform-companies-page')).PlatformCompaniesPage,

@@ -4,8 +4,12 @@ import {
   companySettingsSchema,
   contactSchema,
   createMemberSchema,
+  holidaySchema,
+  NEW_PAY_RULES,
   normalizePhone,
   parseIdentifier,
+  payRulesSchema,
+  workingDaysOverrideSchema,
 } from './index.js';
 
 const messages = (result: { success: boolean; error?: { issues: { message: string }[] } }) =>
@@ -87,5 +91,111 @@ describe('companySettingsSchema', () => {
   it('rejects an unknown time zone', () => {
     const result = companySettingsSchema.safeParse({ name: 'Test MEP', currency: 'UZS', timezone: 'Mars/Base' });
     expect(messages(result)).toContain('validation.timezoneInvalid');
+  });
+});
+
+describe('payRulesSchema', () => {
+  const valid = {
+    ...NEW_PAY_RULES,
+    restWeekdays: [7, 6, 7],
+    normalHoursPerDay: '9',
+    overtimeMultiplier: '1,5',
+    restDayMultiplier: '2.00',
+    holidayMultiplier: '2',
+    travelPayMode: 'NONE' as const,
+  };
+
+  it('normalizes decimals, rest days and empty absence hours', () => {
+    expect(payRulesSchema.parse(valid)).toEqual({
+      restWeekdays: [6, 7],
+      normalHoursPerDay: '9',
+      overtimeMultiplier: '1.5',
+      restDayMultiplier: '2',
+      holidayMultiplier: '2',
+      absence: {
+        LEAVE: { paid: true, hoursPerDay: null },
+        SICK: { paid: true, hoursPerDay: '8' },
+        TRAVEL: { paid: true, hoursPerDay: null },
+      },
+      travelPayMode: 'NONE',
+      payRoundingStep: '1000',
+    });
+  });
+
+  it('starts a new company with the decided defaults only', () => {
+    // Multipliers, normal hours and travel pay have no default: the admin must enter them.
+    const result = payRulesSchema.safeParse(NEW_PAY_RULES);
+    const paths = result.error?.issues.map((i) => i.path.join('.'));
+    expect(paths).toEqual(
+      expect.arrayContaining(['normalHoursPerDay', 'overtimeMultiplier', 'restDayMultiplier', 'holidayMultiplier', 'travelPayMode']),
+    );
+    expect(paths).not.toContain('absence.SICK.hoursPerDay');
+  });
+
+  it('reports bad values with translation keys', () => {
+    const bad = (patch: object) => messages(payRulesSchema.safeParse({ ...valid, ...patch }));
+    expect(bad({ normalHoursPerDay: '0' })).toEqual(['validation.normalHoursRange']);
+    expect(bad({ normalHoursPerDay: '24.5' })).toEqual(['validation.normalHoursRange']);
+    expect(bad({ overtimeMultiplier: '1.555' })).toEqual(['validation.decimalInvalid']);
+    expect(bad({ overtimeMultiplier: 'x' })).toEqual(['validation.decimalInvalid']);
+    expect(bad({ overtimeMultiplier: '-1' })).toEqual(['validation.decimalInvalid']);
+    expect(bad({ holidayMultiplier: '100' })).toEqual(['validation.multiplierRange']);
+    expect(bad({ restWeekdays: [1, 2, 3, 4, 5, 6, 7] })).toEqual(['validation.restWeekdaysAllWeek']);
+    expect(bad({ payRoundingStep: '0' })).toEqual(['validation.roundingStepRange']);
+    expect(payRulesSchema.parse({ ...valid, payRoundingStep: '1 000' }).payRoundingStep).toBe('1000');
+    expect(bad({ absence: { ...valid.absence, SICK: { paid: true, hoursPerDay: '25' } } })).toEqual([
+      'validation.hoursRange',
+    ]);
+  });
+});
+
+describe('holidaySchema', () => {
+  it('accepts real days and turns an empty note into null', () => {
+    expect(holidaySchema.parse({ date: '2028-02-29', kind: 'RAMAZON_HAYIT', name: ' ' })).toEqual({
+      date: '2028-02-29',
+      kind: 'RAMAZON_HAYIT',
+      name: null,
+    });
+  });
+
+  it('rejects days that do not exist', () => {
+    for (const date of ['2026-02-29', '2026-13-01', '26-01-01', '1999-01-01']) {
+      expect(messages(holidaySchema.safeParse({ date, kind: 'COMPANY_DAY_OFF' }))).toEqual(['validation.dateInvalid']);
+    }
+  });
+});
+
+describe('workingDaysOverrideSchema', () => {
+  it('accepts a number of days or null (back to calculated)', () => {
+    expect(workingDaysOverrideSchema.parse({ workingDays: 22, reason: '' })).toEqual({ workingDays: 22, reason: null });
+    expect(workingDaysOverrideSchema.parse({ workingDays: null })).toEqual({ workingDays: null, reason: null });
+    expect(messages(workingDaysOverrideSchema.safeParse({ workingDays: 0 }))).toEqual(['validation.workingDaysRange']);
+  });
+});
+
+describe('the API accepts what a form sends', () => {
+  // Forms submit the schema's output (zodResolver), and the API validates it again with
+  // the same schema, so parsing an output must give the same output.
+  it('pay rules, holidays and working-day overrides parse their own output', () => {
+    const cases = [
+      [
+        payRulesSchema,
+        {
+          ...NEW_PAY_RULES,
+          restWeekdays: [7],
+          normalHoursPerDay: '9',
+          overtimeMultiplier: '1,5',
+          restDayMultiplier: '2',
+          holidayMultiplier: '2',
+          travelPayMode: 'NONE',
+        },
+      ],
+      [holidaySchema, { date: '2026-03-20', kind: 'RAMAZON_HAYIT', name: '' }],
+      [workingDaysOverrideSchema, { workingDays: 22, reason: '' }],
+    ] as const;
+    for (const [schema, input] of cases) {
+      const once = schema.parse(input);
+      expect(schema.parse(JSON.parse(JSON.stringify(once)))).toEqual(once);
+    }
   });
 });

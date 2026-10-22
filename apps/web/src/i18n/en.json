@@ -15,7 +15,10 @@
     "userMenu": "Account menu",
     "switchCompany": "Switch company",
     "changePassword": "Change password",
-    "logout": "Log out"
+    "logout": "Log out",
+    "payRules": "Pay rules",
+    "holidays": "Holidays",
+    "workingDays": "Working days"
   },
   "settings": {
     "language": "Language",
@@ -49,7 +52,12 @@
     "page": "Page {{page}} of {{total}}",
     "previous": "Previous",
     "next": "Next",
-    "close": "Close"
+    "close": "Close",
+    "pickDate": "Pick a date",
+    "year": "Year",
+    "month": "Month",
+    "previousYear": "Previous year",
+    "nextYear": "Next year"
   },
   "states": {
     "emptyTitle": "Nothing here yet",
@@ -168,7 +176,7 @@
     "hint": {
       "OWNER": "Full control, including other owners",
       "ADMIN": "Manages company settings and users (except owners)",
-      "ACCOUNTANT": "Works with payroll and payments",
+      "ACCOUNTANT": "Works with payroll",
       "TIMEKEEPER": "Enters and checks timesheets",
       "FOREMAN": "Enters timesheets for their team"
     }
@@ -222,7 +230,15 @@
     "currentPasswordWrong": "The password is wrong",
     "currencyInvalid": "Choose a currency",
     "timezoneInvalid": "Choose a time zone",
-    "nothingToUpdate": "Nothing to change"
+    "nothingToUpdate": "Nothing to change",
+    "decimalInvalid": "Enter a number with at most 2 decimals, e.g. 1.5",
+    "hoursRange": "From 0 to 24",
+    "normalHoursRange": "More than 0 and at most 24",
+    "multiplierRange": "From 0 to 99.99",
+    "roundingStepRange": "Must be more than 0",
+    "restWeekdaysAllWeek": "At least one day of the week must be a working day",
+    "dateInvalid": "Enter a valid date",
+    "workingDaysRange": "From 1 to the number of days in the month"
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -254,6 +270,170 @@
     },
     "invitation": {
       "notFound": "This invitation is no longer open."
+    },
+    "period": {
+      "locked": "This month is locked. Locked months can't be changed."
+    },
+    "payRules": {
+      "notFound": "These rules no longer exist.",
+      "notSet": "There are no pay rules for this month yet. Set them up first."
+    },
+    "holiday": {
+      "notFound": "This day no longer exists.",
+      "fixedDate": "This date is already a fixed public holiday.",
+      "dateTaken": "This date already has an entry.",
+      "movingAlreadyEntered": "This holiday is already entered for this year. Extra days off around it are \"Extra public day off\"."
+    },
+    "workingDays": {
+      "unchanged": "That is already the value in use."
     }
+  },
+  "payRules": {
+    "title": "Pay rules",
+    "description": "How hours, absences and travel are paid. Changes apply from a month you choose; earlier months keep their rules.",
+    "emptyTitle": "No pay rules yet",
+    "emptyDescription": "Payroll can't be calculated until the pay rules are set up. Some values, like the overtime multiplier, have no default: you enter them.",
+    "emptyDescriptionReadOnly": "Payroll can't be calculated until an owner or administrator sets up the pay rules.",
+    "setUp": "Set up pay rules",
+    "inForce": "Rules for {{month}}",
+    "inForceSince": "In force since {{month}}",
+    "noneInForce": "No rules apply to this month yet: they start later.",
+    "change": "Change rules",
+    "history": "Rule changes",
+    "historyHint": "Each version applies from its month until the next one.",
+    "from": "From",
+    "multipliersShort": "Overtime · rest day · holiday",
+    "setBy": "Saved by",
+    "edit": "Edit",
+    "view": "View",
+    "delete": "Delete",
+    "newTitle": "New pay rules",
+    "editTitle": "Rules from {{month}}",
+    "viewTitle": "Rules from {{month}}",
+    "appliesFrom": "Applies from",
+    "appliesFromHint": "These rules apply from this month on, until the next change. Earlier months keep their rules. Locked months can't be changed.",
+    "replacesVersion": "Replaces the rules from {{month}}",
+    "workingTime": "Working time",
+    "restWeekdays": "Rest days",
+    "restWeekdaysHint": "Days of the week nobody is due at work. Hours on them are paid as rest-day hours.",
+    "noRestDays": "None: every day is a working day",
+    "normalHoursPerDay": "Normal hours per day",
+    "normalHoursHint": "Hours above this on a working day are overtime. Hourly rate = salary ÷ (working days × these hours).",
+    "multipliers": "Pay multipliers",
+    "multipliersHint": "Pay for an hour = hourly rate × multiplier. Normal hours are always paid at × 1, so a full month pays exactly the salary.",
+    "multiplier": {
+      "NORMAL": "Normal hours",
+      "OVERTIME": "Overtime",
+      "REST_DAY": "Rest-day hours",
+      "HOLIDAY": "Holiday hours"
+    },
+    "overtimeHint": "Hours above the normal hours on a working day",
+    "restDayHint": "Any hours on a rest day",
+    "holidayHint": "Any hours on a public holiday or company day off",
+    "times": "× {{value}}",
+    "hours": "{{value}} h",
+    "absences": "Absences",
+    "absencesHint": "A paid absence pays hours per day × hourly rate. Absences on rest days and holidays are never paid.",
+    "absence": {
+      "LEAVE": "Leave",
+      "SICK": "Sick leave",
+      "TRAVEL": "Travel / transfer days"
+    },
+    "paid": "Paid",
+    "notPaid": "Not paid",
+    "paidHours": "Paid, {{hours}} per day",
+    "paidNormalHours": "Paid, normal hours per day ({{hours}})",
+    "hoursPerAbsenceDay": "Hours paid per day",
+    "emptyIsNormalHours": "Leave empty to use the normal hours per day",
+    "travelPay": "Travel pay",
+    "travelPayMode": "How travel is paid",
+    "chooseTravelMode": "Choose how travel is paid",
+    "travelMode": {
+      "NONE": "Not paid",
+      "PER_DAY_WORKED": "Fixed amount per working day worked",
+      "MONTHLY_AMOUNT": "Monthly amount entered by the accountant"
+    },
+    "travelModeHint": {
+      "NONE": "The company doesn't pay for travel.",
+      "PER_DAY_WORKED": "Each working day worked pays the amount of the worker's route. Rest days and holidays worked don't count.",
+      "MONTHLY_AMOUNT": "The accountant enters a travel amount for each worker every month."
+    },
+    "rounding": "Rounding",
+    "roundingStep": "Round final pay to the nearest ({{currency}})",
+    "roundingHint": "Final pay is rounded to the nearest multiple of this amount, halves up. The difference is shown as its own line.",
+    "confirmDelete": {
+      "title": "Delete these rules?",
+      "description": "The rules from {{month}} will be removed. From then on, the rules from {{previous}} will apply.",
+      "descriptionNoPrevious": "The rules from {{month}} will be removed. From then on there will be no pay rules until new ones are set."
+    }
+  },
+  "holidays": {
+    "title": "Holidays",
+    "description": "Days off and swapped working days. They decide each month's working days.",
+    "add": "Add a day",
+    "addDescription": "Uzbekistan's fixed-date public holidays are already included. Each year, add the moving holidays, extra days off and your company's own days off.",
+    "edit": "Edit",
+    "delete": "Delete",
+    "date": "Date",
+    "name": "Holiday",
+    "type": "Type",
+    "note": "Note",
+    "noteHint": "Optional, e.g. which day a working day is swapped with",
+    "chooseKind": "Choose the type",
+    "builtIn": "Built in",
+    "dayOff": "Day off",
+    "workingDay": "Working day",
+    "goToHolidays": "Enter holidays",
+    "missingTitle": "Holidays for {{year}} are incomplete",
+    "missingDescription": "Not entered yet: {{names}}. Until they are, the year's working days and hourly rates are wrong.",
+    "fixed": {
+      "NEW_YEAR": "New Year",
+      "WOMENS_DAY": "International Women's Day",
+      "NAVRUZ": "Navruz",
+      "REMEMBRANCE_DAY": "Day of Remembrance and Honour",
+      "INDEPENDENCE_DAY": "Independence Day",
+      "TEACHERS_DAY": "Teachers' and Mentors' Day",
+      "CONSTITUTION_DAY": "Constitution Day"
+    },
+    "kind": {
+      "RAMAZON_HAYIT": "Ramazon Hayit",
+      "QURBON_HAYIT": "Qurbon Hayit",
+      "PUBLIC_EXTRA": "Extra public day off",
+      "COMPANY_DAY_OFF": "Company day off",
+      "WORKING_DAY": "Working day (swapped day off)"
+    },
+    "kindHint": {
+      "RAMAZON_HAYIT": "A moving public holiday, announced each year. One day: extra days off around it are \"Extra public day off\".",
+      "QURBON_HAYIT": "A moving public holiday, announced each year. One day: extra days off around it are \"Extra public day off\".",
+      "PUBLIC_EXTRA": "A day off the government declares.",
+      "COMPANY_DAY_OFF": "A day off for your company only. Hours worked on it are holiday hours.",
+      "WORKING_DAY": "A rest day that becomes a working day: the other half of a day-off swap the government declares."
+    },
+    "confirmDelete": {
+      "title": "Delete this day?",
+      "description": "{{holiday}} will be removed. The working days of its month will be recalculated."
+    }
+  },
+  "workingDays": {
+    "title": "Working days",
+    "description": "Working days per month: calculated from the rest days and holidays, or set by hand. Hourly rates use the \"Used for pay\" column.",
+    "calculated": "Calculated",
+    "override": "Set by hand",
+    "effective": "Used for pay",
+    "status": "Status",
+    "locked": "Locked",
+    "overridden": "Set by hand",
+    "lastChange": "Last change",
+    "noRules": "No pay rules",
+    "changeFor": "Working days for {{month}}",
+    "calculatedIs": "Calculated from the calendar: {{count}}",
+    "useCalculated": "Use the calculated value",
+    "workingDays": "Working days",
+    "reason": "Reason",
+    "reasonHint": "Optional, e.g. the order number",
+    "history": "Changes",
+    "historySet": "Set to {{count}}",
+    "historyBackToCalculated": "Back to the calculated value",
+    "lockedHint": "This month is locked. Its working days can't be changed."
   }
 }

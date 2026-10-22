@@ -108,3 +108,28 @@ function parseDate(value: string | Date): { date: Date; calendarDay: boolean } {
   }
   throw new Error(`Invalid date: ${value}`);
 }
+
+const UZ_WEEKDAYS = ['dushanba', 'seshanba', 'chorshanba', 'payshanba', 'juma', 'shanba', 'yakshanba'];
+
+/** Name of an ISO weekday (1 = Monday … 7 = Sunday), e.g. "dushanba" / "Monday". */
+export function formatWeekday(weekday: number, lang: Language): string {
+  if (lang === 'uz') return UZ_WEEKDAYS[weekday - 1];
+  // 2024-01-01 was a Monday.
+  return new Intl.DateTimeFormat(localeOf(lang), { weekday: 'long', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(2024, 0, weekday)),
+  );
+}
+
+/** Name of a month on its own, e.g. "noyabr" / "ноябрь" / "November". `month` is 1-based. */
+export function formatMonthName(month: number, lang: Language): string {
+  if (lang === 'uz') return UZ_MONTHS[month - 1];
+  return new Intl.DateTimeFormat(localeOf(lang), { month: 'long', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(2024, month - 1, 1)),
+  );
+}
+
+/** ISO weekday (1 = Monday … 7 = Sunday) of a calendar day "YYYY-MM-DD". */
+export function isoWeekday(day: string): number {
+  const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
+  return weekday === 0 ? 7 : weekday;
+}
