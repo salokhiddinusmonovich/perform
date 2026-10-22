@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import type { SessionKind } from '@prisma/client';
+import type { Prisma, SessionKind } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
 const SESSION_DAYS = 14;
+/** How long a platform admin may act as a user; never extended (AGENTS.md: Platform admin). */
+export const IMPERSONATION_MINUTES = 60;
 /** Extend a session at most this often, to avoid a DB write on every request. */
 const TOUCH_INTERVAL_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -28,6 +30,11 @@ export function bearerToken(req: { get(name: string): string | undefined }): str
   const match = /^Bearer\s+(\S+)$/i.exec(req.get('authorization') ?? '');
   return match ? match[1] : null;
 }
+
+const SESSION_INCLUDE = { user: true, impersonatedUser: true } as const;
+export type ValidSession = Prisma.SessionGetPayload<{ include: typeof SESSION_INCLUDE }>;
+
+const NO_IMPERSONATION = { impersonatedUserId: null, impersonatedCompanyId: null, impersonationEndsAt: null };
 
 @Injectable()
 export class SessionService {
@@ -66,10 +73,10 @@ export class SessionService {
    * use. A token only works the way it was issued: an app token in a cookie (or the
    * other way round) is not a session.
    */
-  async findValid(token: string, kind: SessionKind) {
+  async findValid(token: string, kind: SessionKind): Promise<ValidSession | null> {
     const session = await this.prisma.session.findUnique({
       where: { tokenHash: hashToken(token) },
-      include: { user: true },
+      include: SESSION_INCLUDE,
     });
     if (!session || session.kind !== kind) return null;
     if (session.expiresAt.getTime() <= Date.now()) {
@@ -96,7 +103,25 @@ export class SessionService {
     });
   }
 
-  async setActiveCompany(sessionId: string, companyId: string | null) {
-    await this.prisma.session.update({ where: { id: sessionId }, data: { activeCompanyId: companyId } });
+  /** The company worked in: the user's own, or the impersonated user's while impersonating. */
+  async setActiveCompany(sessionId: string, companyId: string | null, impersonating: boolean) {
+    await this.prisma.session.update({
+      where: { id: sessionId },
+      data: impersonating ? { impersonatedCompanyId: companyId } : { activeCompanyId: companyId },
+    });
+  }
+
+  /** Makes a platform admin's session act as another user; returns when it ends. */
+  async startImpersonation(tx: Prisma.TransactionClient, sessionId: string, userId: string): Promise<Date> {
+    const endsAt = new Date(Date.now() + IMPERSONATION_MINUTES * 60 * 1000);
+    await tx.session.update({
+      where: { id: sessionId },
+      data: { impersonatedUserId: userId, impersonatedCompanyId: null, impersonationEndsAt: endsAt },
+    });
+    return endsAt;
+  }
+
+  async endImpersonation(sessionId: string, tx: Prisma.TransactionClient = this.prisma) {
+    await tx.session.update({ where: { id: sessionId }, data: NO_IMPERSONATION });
   }
 }

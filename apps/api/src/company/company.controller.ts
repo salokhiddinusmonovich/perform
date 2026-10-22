@@ -43,11 +43,10 @@ export class CompanyController {
         {
           action: 'company.update',
           companyId: auth.company.id,
-          actorUserId: auth.user.id,
+          auth,
           entityType: 'Company',
           entityId: auth.company.id,
           data: diff({ name: before.name, currency: before.currency, timezone: before.timezone }, body),
-          ip: auth.ip,
         },
         tx,
       );

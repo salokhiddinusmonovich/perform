@@ -14,6 +14,7 @@ import {
   AllowTemporaryPassword,
   Auth,
   MaybeAuth,
+  NotWhileImpersonating,
   OptionalAuth,
   Public,
   type AuthContext,
@@ -55,12 +56,14 @@ export class AuthController {
   }
 
   @AllowTemporaryPassword()
+  @NotWhileImpersonating()
   @Get('sessions')
   sessions(@Auth() auth: AuthContext): Promise<SessionView[]> {
     return this.auth.listSessions(auth);
   }
 
   @AllowTemporaryPassword()
+  @NotWhileImpersonating()
   @Delete('sessions/:id')
   @HttpCode(204)
   revokeSession(@Auth() auth: AuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
@@ -84,6 +87,7 @@ export class AuthController {
   }
 
   @AllowTemporaryPassword()
+  @NotWhileImpersonating()
   @Post('change-password')
   @HttpCode(204)
   changePassword(
@@ -91,6 +95,13 @@ export class AuthController {
     @Body(new ZodPipe(changePasswordSchema)) body: ChangePasswordInput,
   ): Promise<void> {
     return this.auth.changePassword(auth, body);
+  }
+
+  /** A platform admin stops acting as a user and is themselves again. */
+  @Post('impersonation/end')
+  @HttpCode(204)
+  endImpersonation(@Auth() auth: AuthContext): Promise<void> {
+    return this.auth.endImpersonation(auth);
   }
 
   @Post('switch-company')

@@ -72,11 +72,10 @@ export class HolidaysService {
         {
           action: 'holiday.create',
           companyId,
-          actorUserId: auth.user.id,
+          auth,
           entityType: 'Holiday',
           entityId: holiday.id,
           data: { ...input },
-          ip: auth.ip,
         },
         tx,
       );
@@ -100,11 +99,10 @@ export class HolidaysService {
         {
           action: 'holiday.update',
           companyId,
-          actorUserId: auth.user.id,
+          auth,
           entityType: 'Holiday',
           entityId: id,
           data: diff({ date: isoDay(before.date), kind: before.kind, name: before.name }, input),
-          ip: auth.ip,
         },
         tx,
       );
@@ -122,11 +120,10 @@ export class HolidaysService {
         {
           action: 'holiday.delete',
           companyId,
-          actorUserId: auth.user.id,
+          auth,
           entityType: 'Holiday',
           entityId: id,
           data: { date: isoDay(before.date), kind: before.kind, name: before.name },
-          ip: auth.ip,
         },
         tx,
       );

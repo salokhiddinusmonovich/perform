@@ -3,10 +3,13 @@ import { Reflector } from '@nestjs/core';
 import type { Role } from '@prisma/client';
 import type { Response } from 'express';
 import { forbidden, unauthorized } from '../common/api-error';
+import { todayIn } from '../common/dates';
+import { subscriptionState } from '../platform/subscription';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ALLOW_TEMPORARY_PASSWORD,
   IS_PUBLIC,
+  NOT_WHILE_IMPERSONATING,
   OPTIONAL_AUTH,
   PLATFORM_ADMIN_ONLY,
   MODULE,
@@ -14,21 +17,26 @@ import {
   type ActiveCompany,
   type CompanyModule,
   type AuthedRequest,
+  type Impersonator,
 } from './auth.context';
 import { SITE_SCOPED, USABLE_MEMBERSHIP } from './memberships';
+import { bearerToken, SESSION_COOKIE, sessionCookieOptions, SessionService, type ValidSession } from './session.service';
 
 const SCOPE_INCLUDE = {
-  company: true,
+  company: { include: { plan: true } },
   sites: { select: { siteId: true } },
   teams: { select: { teamId: true } },
 } as const;
-import { bearerToken, SESSION_COOKIE, sessionCookieOptions, SessionService } from './session.service';
+
+/** Methods that only read; anything else is a change, refused in a read-only company. */
+const READ_METHODS = ['GET', 'HEAD', 'OPTIONS'];
 
 /**
  * Runs on every request (registered as APP_GUARD). Everything requires a login
  * unless marked @Public() (never looks at the session) or @OptionalAuth() (runs
  * either way, with the user if there is one). Then it applies, in order:
- * temporary-password lock, @PlatformAdminOnly(), @ForModule() and @Roles().
+ * temporary-password lock, @NotWhileImpersonating(), @PlatformAdminOnly(),
+ * @ForModule(), @Roles() and the read-only state of an expired subscription.
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -58,8 +66,13 @@ export class AuthGuard implements CanActivate {
       throw unauthorized();
     }
 
-    const company = await this.resolveCompany(session.id, session.userId, session.activeCompanyId);
-    const { user } = session;
+    const impersonation = await this.impersonation(session);
+    // While impersonating, the request acts as the impersonated user, in their company.
+    const user = impersonation?.user ?? session.user;
+    const company = impersonation
+      ? await this.resolveCompany(session.id, user.id, session.impersonatedCompanyId, true)
+      : await this.resolveCompany(session.id, user.id, session.activeCompanyId, false);
+    const impersonator = impersonation?.impersonator ?? null;
     req.auth = {
       sessionId: session.id,
       user: {
@@ -71,12 +84,22 @@ export class AuthGuard implements CanActivate {
         isPlatformAdmin: user.isPlatformAdmin,
         mustChangePassword: user.mustChangePassword,
       },
+      impersonator,
       company,
       ip: req.ip ?? '',
     };
 
-    if (user.mustChangePassword && !this.reflector.getAllAndOverride<boolean>(ALLOW_TEMPORARY_PASSWORD, targets)) {
+    // The lock is for the person to choose their own password; an admin acting as them
+    // must not, so it doesn't apply to them.
+    if (
+      user.mustChangePassword &&
+      !impersonator &&
+      !this.reflector.getAllAndOverride<boolean>(ALLOW_TEMPORARY_PASSWORD, targets)
+    ) {
       throw forbidden('auth.passwordChangeRequired');
+    }
+    if (impersonator && this.reflector.getAllAndOverride<boolean>(NOT_WHILE_IMPERSONATING, targets)) {
+      throw forbidden('impersonation.notAllowed');
     }
     if (this.reflector.getAllAndOverride<boolean>(PLATFORM_ADMIN_ONLY, targets) && !user.isPlatformAdmin) {
       throw forbidden();
@@ -89,18 +112,42 @@ export class AuthGuard implements CanActivate {
       if (!company) throw forbidden('company.required');
       if (!company.modules.includes(module)) throw forbidden('module.disabled');
       if (!roles.includes(company.role)) throw forbidden();
+      if (company.subscription.status === 'READ_ONLY' && !READ_METHODS.includes(req.method)) {
+        throw forbidden('subscription.expired');
+      }
     }
     return true;
   }
 
   /**
+   * The running impersonation, or null. One that ran out, whose admin is no longer a
+   * platform admin, or whose user can no longer be impersonated ends here, and the
+   * session is the admin's own again.
+   */
+  private async impersonation(session: ValidSession) {
+    const target = session.impersonatedUser;
+    const endsAt = session.impersonationEndsAt;
+    if (!target || !endsAt) return null;
+    const valid = endsAt.getTime() > Date.now() && session.user.isPlatformAdmin && target.isActive && !target.isPlatformAdmin;
+    if (!valid) {
+      await this.sessions.endImpersonation(session.id);
+      return null;
+    }
+    const impersonator: Impersonator = { id: session.user.id, fullName: session.user.fullName, endsAt };
+    return { user: target, impersonator };
+  }
+
+  /**
    * The session's company, if the user is still an active member of an active company.
    * Otherwise falls back to the user's first such company (and remembers it), or null.
+   * While impersonating, it is the impersonated user's company, kept apart from the
+   * admin's own.
    */
   private async resolveCompany(
     sessionId: string,
     userId: string,
     activeCompanyId: string | null,
+    impersonating: boolean,
   ): Promise<ActiveCompany | null> {
     const usable = { userId, ...USABLE_MEMBERSHIP };
     const membership =
@@ -116,7 +163,7 @@ export class AuthGuard implements CanActivate {
       }));
 
     const companyId = membership?.companyId ?? null;
-    if (companyId !== activeCompanyId) await this.sessions.setActiveCompany(sessionId, companyId);
+    if (companyId !== activeCompanyId) await this.sessions.setActiveCompany(sessionId, companyId, impersonating);
     if (!membership) return null;
 
     const { company } = membership;
@@ -126,9 +173,10 @@ export class AuthGuard implements CanActivate {
       currency: company.currency,
       timezone: company.timezone,
       role: membership.role,
-      modules: company.timesheetModule ? ['PAYROLL', 'TIMESHEET'] : ['PAYROLL'],
+      modules: company.plan?.timesheetModule ? ['PAYROLL', 'TIMESHEET'] : ['PAYROLL'],
       siteIds: SITE_SCOPED.includes(membership.role) ? membership.sites.map((s) => s.siteId) : null,
       teamIds: membership.role === 'FOREMAN' ? membership.teams.map((t) => t.teamId) : null,
+      subscription: subscriptionState(company, todayIn(company.timezone)),
     };
   }
 }

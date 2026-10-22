@@ -3,14 +3,16 @@ import {
   Building2,
   CalendarCheck,
   CalendarDays,
+  CreditCard,
   HardHat,
   LayoutDashboard,
   MapPin,
   Scale,
+  UserCog,
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import { canManageCompany, canViewPayRules, inCompany, type Me } from '@/lib/auth';
+import { canManageCompany, canViewPayRules, inCompany, isPlatformAdmin, type Me } from '@/lib/auth';
 
 export interface NavItem {
   path: string;
@@ -52,7 +54,9 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     titleKey: 'nav.platform',
     items: [
-      { path: '/platform/companies', labelKey: 'nav.companies', icon: Building2, visible: (me) => me.user.isPlatformAdmin },
+      { path: '/platform/companies', labelKey: 'nav.companies', icon: Building2, visible: isPlatformAdmin },
+      { path: '/platform/users', labelKey: 'nav.platformUsers', icon: UserCog, visible: isPlatformAdmin },
+      { path: '/platform/plans', labelKey: 'nav.plans', icon: CreditCard, visible: isPlatformAdmin },
     ],
   },
 ];

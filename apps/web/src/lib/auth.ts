@@ -24,8 +24,22 @@ export interface Me {
     siteIds: string[] | null;
     /** Teams a foreman leads; null for other roles */
     teamIds: string[] | null;
+    subscription: Subscription;
   } | null;
   companies: { id: string; name: string; role: Role }[];
+  /** Set while a platform admin is logged in as this user */
+  impersonation: { by: string; endsAt: string } | null;
+}
+
+/**
+ * NONE: no paid-until date (never expires). GRACE: unpaid, still working (14 days).
+ * READ_ONLY: the grace period is over; nothing can be changed.
+ */
+export interface Subscription {
+  status: 'NONE' | 'ACTIVE' | 'GRACE' | 'READ_ONLY';
+  planName: string | null;
+  paidUntil: string | null;
+  graceEndsOn: string | null;
 }
 
 export const ME_KEY = ['auth', 'me'] as const;
@@ -46,6 +60,11 @@ export function useResetSession() {
     queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== ME_KEY[0] });
     await queryClient.invalidateQueries({ queryKey: ME_KEY });
   };
+}
+
+/** The product operator: manages companies, users and plans. */
+export function isPlatformAdmin(me: Me | null | undefined): boolean {
+  return me?.user.isPlatformAdmin === true;
 }
 
 /** Can manage the active company's settings and users. */

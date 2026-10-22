@@ -253,7 +253,7 @@ export class SitesService {
 
   private record(tx: Tx, auth: CompanyAuthContext, action: string, entityType: string, entityId: string, data: Prisma.InputJsonObject) {
     return this.audit.record(
-      { action, companyId: auth.company.id, actorUserId: auth.user.id, entityType, entityId, data, ip: auth.ip },
+      { action, companyId: auth.company.id, auth, entityType, entityId, data },
       tx,
     );
   }

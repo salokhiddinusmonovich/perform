@@ -7,6 +7,7 @@ import {
   formatMonth,
   formatMonthName,
   formatNumber,
+  formatTime,
   formatWeekday,
   type DecimalInput,
 } from '@/lib/format';
@@ -22,6 +23,7 @@ export function useFormat() {
       number: (value: DecimalInput, maxFractionDigits?: number) =>
         formatNumber(value, lang, maxFractionDigits),
       date: (value: string | Date) => formatDate(value, lang),
+      time: (value: string | Date) => formatTime(value, lang),
       month: (year: number, month: number) => formatMonth(year, month, lang),
       monthName: (month: number) => formatMonthName(month, lang),
       weekday: (isoWeekday: number) => formatWeekday(isoWeekday, lang),

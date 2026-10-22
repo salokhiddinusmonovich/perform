@@ -5,6 +5,7 @@ import { Navigate, NavLink, Outlet, useLocation } from 'react-router';
 import { ErrorState } from '@/components/error-state';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { LoadingState } from '@/components/loading-state';
+import { ImpersonationBanner, SubscriptionBanner } from '@/components/session-banners';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -30,7 +31,8 @@ export function AppShell() {
     const next = location.pathname + location.search;
     return <Navigate to={next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`} replace />;
   }
-  if (me.data.user.mustChangePassword) return <Navigate to="/change-password" replace />;
+  // A platform admin acting as someone isn't asked to choose that person's password.
+  if (me.data.user.mustChangePassword && !me.data.impersonation) return <Navigate to="/change-password" replace />;
 
   return (
     <div className="flex min-h-svh">
@@ -51,6 +53,7 @@ export function AppShell() {
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <ImpersonationBanner me={me.data} />
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <Button
             variant="ghost"
@@ -70,6 +73,7 @@ export function AppShell() {
         </header>
 
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          <SubscriptionBanner me={me.data} />
           <Outlet />
         </main>
       </div>

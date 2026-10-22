@@ -15,6 +15,7 @@ export const badRequest = (code: string, details?: Record<string, unknown>) =>
 export const unauthorized = (code = 'auth.required') => new ApiError(HttpStatus.UNAUTHORIZED, code);
 export const forbidden = (code = 'auth.forbidden') => new ApiError(HttpStatus.FORBIDDEN, code);
 export const notFound = (code = 'notFound') => new ApiError(HttpStatus.NOT_FOUND, code);
-export const conflict = (code: string) => new ApiError(HttpStatus.CONFLICT, code);
+export const conflict = (code: string, details?: Record<string, unknown>) =>
+  new ApiError(HttpStatus.CONFLICT, code, details);
 export const tooManyRequests = (code: string, retryAfterSeconds: number) =>
   new ApiError(HttpStatus.TOO_MANY_REQUESTS, code, { retryAfterSeconds });

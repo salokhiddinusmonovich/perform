@@ -32,7 +32,7 @@ const DECIMAL = /^\d+(?:\.\d{1,2})?$/;
  * A decimal typed in a form ("1,5" or "1.5"), at most 2 decimal places, as a
  * normalized string ("1.5") for the API and the payroll engine. Never a float.
  */
-function decimalSchema({ min, max, minExclusive = false, rangeError }: {
+export function decimalSchema({ min, max, minExclusive = false, rangeError }: {
   min: number;
   max: number;
   minExclusive?: boolean;

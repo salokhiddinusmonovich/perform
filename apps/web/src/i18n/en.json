@@ -21,7 +21,9 @@
     "workingDays": "Working days",
     "organisation": "Organisation",
     "sites": "Sites",
-    "workers": "Workers"
+    "workers": "Workers",
+    "platformUsers": "All users",
+    "plans": "Plans"
   },
   "settings": {
     "language": "Language",
@@ -218,21 +220,33 @@
         "title": "Activate company?",
         "description": "Users of {{name}} will be able to work in it again.",
         "button": "Activate"
-      },
-      "timesheetOn": {
-        "title": "Turn on the Timesheet module?",
-        "description": "{{name}} will be able to enter daily hours in the app. Payroll uses them from the next open month.",
-        "button": "Turn on"
-      },
-      "timesheetOff": {
-        "title": "Turn off the Timesheet module?",
-        "description": "{{name}} will no longer enter daily hours. Entered hours are kept. From the next open month, hours come from Excel import or monthly totals.",
-        "button": "Turn off"
       }
     },
     "modules": "Modules",
-    "timesheetOn": "Turn on Timesheet module",
-    "timesheetOff": "Turn off Timesheet module"
+    "edit": "Edit company",
+    "editDescription": "Name, currency, time zone and plan.",
+    "plan": "Plan",
+    "choosePlan": "Choose a plan",
+    "planOption": "{{name}} — {{price}}, up to {{limit}} workers",
+    "noPlan": "No plan",
+    "activeWorkers": "Workers this month: {{active}} of {{limit}}",
+    "subscription": "Subscription",
+    "paidUntil": "Paid until {{date}}",
+    "graceUntil": "Unpaid, read-only from {{date}}",
+    "readOnlySince": "Read-only since {{date}}",
+    "noPaidUntil": "No end date",
+    "firstPaidUntil": "Paid until",
+    "firstPaidUntilHint": "The end of the first paid period or of the trial.",
+    "payments": "Payments",
+    "recordPayment": "Record payment",
+    "paymentRecorded": "Payment recorded",
+    "amount": "Amount",
+    "amountSom": "Amount, soʻm",
+    "amountHint": "0 for a free extension",
+    "paidOn": "Paid on",
+    "newPaidUntil": "Paid until",
+    "note": "Note",
+    "noPayments": "No payments recorded yet"
   },
   "validation": {
     "required": "Required",
@@ -260,7 +274,9 @@
     "pinflInvalid": "PINFL is 14 digits",
     "placementBeforeCurrent": "Must be after the first day at the current site",
     "leaveBeforeStart": "Can't be before the first working day",
-    "teamNotOnSite": "This team isn't on the chosen site"
+    "teamNotOnSite": "This team isn't on the chosen site",
+    "amountRange": "Must be 0 or more",
+    "workerLimitRange": "From 1 to 1 000 000"
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -288,7 +304,9 @@
       "invitationNotAccepted": "This person hasn't accepted the invitation yet. Only they manage their password."
     },
     "user": {
-      "contactsBelongToDifferentPeople": "This phone and this email belong to two different people. Enter only one of them."
+      "contactsBelongToDifferentPeople": "This phone and this email belong to two different people. Enter only one of them.",
+      "contactTaken": "This phone or email is already used by another account.",
+      "notFound": "This account doesn’t exist."
     },
     "invitation": {
       "notFound": "This invitation is no longer open."
@@ -334,6 +352,24 @@
       "notFound": "This worker doesn't exist or you don't see them.",
       "pinflTaken": "A worker with this PINFL already exists.",
       "hasLaterEntries": "There are timesheet days after this date. Change or remove them first."
+    },
+    "impersonation": {
+      "inactiveUser": "This account is deactivated, so you can’t log in as this person.",
+      "notActive": "You are not logged in as another user.",
+      "notAllowed": "Only the person themselves can do this, not someone logged in as them.",
+      "platformAdmin": "You can’t log in as another platform administrator."
+    },
+    "plan": {
+      "archived": "This plan is archived and can’t be given to a company.",
+      "nameTaken": "A plan with this name already exists.",
+      "notFound": "This plan doesn’t exist.",
+      "workerLimitReached": "Your plan allows {{limit}} active workers a month, and this would add one more. Ask the system operator for a bigger plan."
+    },
+    "platform": {
+      "cannotChangeSelf": "You can’t do this to your own account."
+    },
+    "subscription": {
+      "expired": "Your company’s subscription has ended, so changes can’t be saved. You can still view and export."
     }
   },
   "payRules": {
@@ -608,5 +644,100 @@
     "changeLastDay": "Change last working day",
     "leaveHint": "The last day they work. Days after it are not theirs any more.",
     "lastDay": "Last working day"
+  },
+  "impersonation": {
+    "banner": "You are logged in as {{name}}.",
+    "bannerDetails": "Everything you do is recorded as done by {{by}} on their behalf. Ends at {{time}}.",
+    "end": "Back to my account"
+  },
+  "subscription": {
+    "graceTitle": "The subscription ended on {{date}}",
+    "graceDescription": "Everything still works until {{date}}. After that the company becomes read-only until the payment is received. Contact the system operator to pay.",
+    "readOnlyTitle": "Read-only: the subscription has ended",
+    "readOnlyOwner": "You can view and export everything, but nothing can be changed. Contact the system operator to pay.",
+    "readOnlyMember": "You can view and export everything, but nothing can be changed until your company renews its subscription."
+  },
+  "platformUsers": {
+    "title": "All users",
+    "description": "Every account on the platform, in every company",
+    "create": "New account",
+    "createDescription": "Creates an account with a temporary password. Add the person to a company afterwards.",
+    "edit": "Edit details",
+    "editDescription": "Name, phone and email. The person logs in with the phone or the email.",
+    "companies": "Companies",
+    "noCompany": "No company",
+    "platformAdmin": "Platform administrator",
+    "membership": "Company and role",
+    "membershipDescription": "Put {{name}} in a company with a role, or change their role or access there.",
+    "membershipIncomplete": "Choose a company and a role.",
+    "chooseCompany": "Choose a company",
+    "hasAccess": "Has access to this company",
+    "impersonate": "Log in as this user",
+    "grantAdmin": "Make platform administrator",
+    "revokeAdmin": "Remove platform administrator",
+    "confirm": {
+      "deactivate": {
+        "title": "Deactivate account?",
+        "description": "{{name}} will be logged out everywhere and can’t log in until the account is activated again. No data is deleted.",
+        "button": "Deactivate"
+      },
+      "activate": {
+        "title": "Activate account?",
+        "description": "{{name}} will be able to log in again.",
+        "button": "Activate"
+      },
+      "reset": {
+        "title": "Reset password?",
+        "description": "{{name}} will be logged out everywhere and get a new temporary password, which you will see once.",
+        "button": "Reset password"
+      },
+      "impersonate": {
+        "title": "Log in as this user?",
+        "description": "You will see and do exactly what {{name}} can, for up to one hour. Everything you do is recorded under both your names.",
+        "button": "Log in"
+      },
+      "grantAdmin": {
+        "title": "Make platform administrator?",
+        "description": "{{name}} will be able to manage every company, account and plan.",
+        "button": "Make administrator"
+      },
+      "revokeAdmin": {
+        "title": "Remove platform administrator?",
+        "description": "{{name}} will no longer manage companies, accounts and plans.",
+        "button": "Remove"
+      }
+    }
+  },
+  "plans": {
+    "title": "Plans",
+    "description": "What companies pay for: a limit of active workers and the modules included",
+    "create": "New plan",
+    "createDescription": "Users and sites are never limited, only active workers.",
+    "edit": "Edit plan",
+    "editDescription": "Companies on this plan: {{companies}}. Changes apply to all of them.",
+    "name": "Name",
+    "monthlyPrice": "Price per month",
+    "monthlyPriceSom": "Price per month, soʻm",
+    "maxActiveWorkers": "Active workers",
+    "maxActiveWorkersHint": "Workers with a placement in a month. Above this, no new worker can be added.",
+    "includesTimesheet": "Includes the Timesheet module",
+    "companies": "Companies",
+    "offered": "Offered",
+    "archived": "Archived",
+    "archive": "Archive",
+    "restore": "Offer again",
+    "empty": "No plans yet",
+    "confirm": {
+      "archive": {
+        "title": "Archive plan?",
+        "description": "{{name}} will no longer be offered. Companies that have it keep it.",
+        "button": "Archive"
+      },
+      "restore": {
+        "title": "Offer plan again?",
+        "description": "{{name}} can be given to companies again.",
+        "button": "Offer again"
+      }
+    }
   }
 }

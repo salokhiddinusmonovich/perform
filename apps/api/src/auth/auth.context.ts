@@ -2,6 +2,7 @@ import { createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/com
 import type { Role } from '@prisma/client';
 import type { Request } from 'express';
 import { forbidden, unauthorized } from '../common/api-error';
+import type { SubscriptionState } from '../platform/subscription';
 
 export interface AuthUser {
   id: string;
@@ -25,6 +26,16 @@ export interface ActiveCompany {
   siteIds: string[] | null;
   /** Teams a foreman leads (MemberTeam); null for other roles. */
   teamIds: string[] | null;
+  /** Plan and paid-until date; READ_ONLY refuses every change (AGENTS.md: Subscriptions). */
+  subscription: SubscriptionState;
+}
+
+/** The platform admin who is logged in as `user` (AGENTS.md: Platform admin). */
+export interface Impersonator {
+  id: string;
+  fullName: string;
+  /** When the impersonation ends by itself */
+  endsAt: Date;
 }
 
 /** Feature modules (AGENTS.md: Modules). Every company has PAYROLL; TIMESHEET is optional. */
@@ -33,7 +44,10 @@ export type CompanyModule = (typeof COMPANY_MODULES)[number];
 
 export interface AuthContext {
   sessionId: string;
+  /** Who the request acts as: the impersonated user while a platform admin is logged in as them. */
   user: AuthUser;
+  /** The platform admin acting as `user`, or null for a normal login. */
+  impersonator: Impersonator | null;
   /** null when the user has no active membership (e.g. a platform admin only) */
   company: ActiveCompany | null;
   ip: string;
@@ -51,6 +65,7 @@ export const ALLOW_TEMPORARY_PASSWORD = 'auth:allowTemporaryPassword';
 export const PLATFORM_ADMIN_ONLY = 'auth:platformAdmin';
 export const ROLES = 'auth:roles';
 export const MODULE = 'auth:module';
+export const NOT_WHILE_IMPERSONATING = 'auth:notWhileImpersonating';
 
 /** No login needed (health check, login itself). */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
@@ -60,6 +75,11 @@ export const OptionalAuth = () => SetMetadata(OPTIONAL_AUTH, true);
 export const AllowTemporaryPassword = () => SetMetadata(ALLOW_TEMPORARY_PASSWORD, true);
 /** Only for platform admins (the product operator). */
 export const PlatformAdminOnly = () => SetMetadata(PLATFORM_ADMIN_ONLY, true);
+/**
+ * Only the real person may do this (their password, sessions, invitations): refused with
+ * `impersonation.notAllowed` while a platform admin is logged in as them.
+ */
+export const NotWhileImpersonating = () => SetMetadata(NOT_WHILE_IMPERSONATING, true);
 /** Needs an active company where the user has one of these roles. */
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES, roles);
 /**

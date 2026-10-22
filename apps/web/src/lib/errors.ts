@@ -10,7 +10,8 @@ export function errorMessage(t: TFunction, error: unknown): string {
     }
     if (error.code && error.code !== 'validation') {
       const key = `errors.${error.code}`;
-      const text = t(key);
+      // Details the API sends with the code (e.g. a plan's worker limit) fill the message.
+      const text = t(key, error.body as Record<string, unknown>);
       if (text !== key) return text;
     }
   }

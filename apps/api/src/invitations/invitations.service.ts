@@ -56,11 +56,10 @@ export class InvitationsService {
         {
           action: answer === 'accepted' ? 'member.invitationAccepted' : 'member.invitationDeclined',
           companyId,
-          actorUserId: auth.user.id,
+          auth,
           entityType: 'User',
           entityId: auth.user.id,
           data: { role: invitation.role },
-          ip: auth.ip,
         },
         tx,
       );

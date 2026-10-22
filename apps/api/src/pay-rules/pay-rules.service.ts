@@ -88,7 +88,7 @@ export class PayRulesService {
         {
           action: 'payRules.set',
           companyId,
-          actorUserId: auth.user.id,
+          auth,
           entityType: 'PayrollRuleSet',
           entityId: set.id,
           data: {
@@ -97,7 +97,6 @@ export class PayRulesService {
             before: before ? (toPayRules(before) as unknown as Prisma.InputJsonObject) : null,
             after: rules as unknown as Prisma.InputJsonObject,
           },
-          ip: auth.ip,
         },
         tx,
       );
@@ -120,7 +119,7 @@ export class PayRulesService {
         {
           action: 'payRules.delete',
           companyId,
-          actorUserId: auth.user.id,
+          auth,
           entityType: 'PayrollRuleSet',
           entityId: set.id,
           data: {
@@ -128,7 +127,6 @@ export class PayRulesService {
             fromMonth: from.month,
             before: toPayRules(row) as unknown as Prisma.InputJsonObject,
           },
-          ip: auth.ip,
         },
         tx,
       );

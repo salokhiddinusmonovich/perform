@@ -113,7 +113,7 @@ export class WorkingDaysService {
         {
           action: 'workingDays.override',
           companyId,
-          actorUserId: auth.user.id,
+          auth,
           entityType: 'WorkingDaysOverride',
           entityId: row.id,
           data: {
@@ -124,7 +124,6 @@ export class WorkingDaysService {
             to: input.workingDays,
             reason: input.reason,
           },
-          ip: auth.ip,
         },
         tx,
       );

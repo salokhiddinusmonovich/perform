@@ -21,7 +21,9 @@
     "workingDays": "İş günleri",
     "organisation": "Organizasyon",
     "sites": "Şantiyeler",
-    "workers": "İşçiler"
+    "workers": "İşçiler",
+    "platformUsers": "Tüm kullanıcılar",
+    "plans": "Paketler"
   },
   "settings": {
     "language": "Dil",
@@ -218,21 +220,33 @@
         "title": "Şirket aktifleştirilsin mi?",
         "description": "{{name}} kullanıcıları şirkette yeniden çalışabilecek.",
         "button": "Aktifleştir"
-      },
-      "timesheetOn": {
-        "title": "Puantaj modülü açılsın mı?",
-        "description": "{{name}} uygulamada günlük saat girebilecek. Bordro bunları bir sonraki açık aydan itibaren kullanır.",
-        "button": "Aç"
-      },
-      "timesheetOff": {
-        "title": "Puantaj modülü kapatılsın mı?",
-        "description": "{{name}} artık günlük saat girmeyecek. Girilmiş saatler korunur. Bir sonraki açık aydan itibaren saatler Excel aktarımından veya aylık toplamlardan gelir.",
-        "button": "Kapat"
       }
     },
     "modules": "Modüller",
-    "timesheetOn": "Puantaj modülünü aç",
-    "timesheetOff": "Puantaj modülünü kapat"
+    "edit": "Şirketi düzenle",
+    "editDescription": "Ad, para birimi, saat dilimi ve paket.",
+    "plan": "Paket",
+    "choosePlan": "Paket seçin",
+    "planOption": "{{name}} — {{price}}, en fazla {{limit}} işçi",
+    "noPlan": "Paket yok",
+    "activeWorkers": "Bu ay işçi: {{active}} / {{limit}}",
+    "subscription": "Abonelik",
+    "paidUntil": "{{date}} tarihine kadar ödendi",
+    "graceUntil": "Ödenmedi, {{date}} tarihinden sonra salt okunur",
+    "readOnlySince": "{{date}} tarihinden beri salt okunur",
+    "noPaidUntil": "Bitiş tarihi yok",
+    "firstPaidUntil": "Ödemenin geçerli olduğu son gün",
+    "firstPaidUntilHint": "İlk ödenen dönemin veya deneme süresinin sonu.",
+    "payments": "Ödemeler",
+    "recordPayment": "Ödemeyi kaydet",
+    "paymentRecorded": "Ödeme kaydedildi",
+    "amount": "Tutar",
+    "amountSom": "Tutar, som",
+    "amountHint": "Ücretsiz uzatma için 0",
+    "paidOn": "Ödeme tarihi",
+    "newPaidUntil": "Ödemenin geçerli olduğu son gün",
+    "note": "Not",
+    "noPayments": "Henüz kayıtlı ödeme yok"
   },
   "validation": {
     "required": "Zorunlu alan",
@@ -260,7 +274,9 @@
     "pinflInvalid": "PINFL 14 rakamdan oluşur",
     "placementBeforeCurrent": "Mevcut şantiyedeki ilk günden sonra olmalı",
     "leaveBeforeStart": "İlk iş gününden önce olamaz",
-    "teamNotOnSite": "Bu ekip seçilen şantiyede değil"
+    "teamNotOnSite": "Bu ekip seçilen şantiyede değil",
+    "amountRange": "0 veya daha fazla olmalı",
+    "workerLimitRange": "1 ile 1 000 000 arası"
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -288,7 +304,9 @@
       "invitationNotAccepted": "Bu kişi daveti henüz kabul etmedi. Şifresini yalnızca kendisi yönetir."
     },
     "user": {
-      "contactsBelongToDifferentPeople": "Bu telefon ve bu e-posta iki farklı kişiye ait. Yalnızca birini girin."
+      "contactsBelongToDifferentPeople": "Bu telefon ve bu e-posta iki farklı kişiye ait. Yalnızca birini girin.",
+      "contactTaken": "Bu telefon veya e-posta başka bir hesap tarafından kullanılıyor.",
+      "notFound": "Böyle bir hesap yok."
     },
     "invitation": {
       "notFound": "Bu davet artık geçerli değil."
@@ -334,6 +352,24 @@
       "notFound": "Bu işçi yok ya da onu göremiyorsunuz.",
       "pinflTaken": "Bu PINFL ile bir işçi zaten var.",
       "hasLaterEntries": "Bu tarihten sonra puantaj günleri var. Önce onları değiştirin veya silin."
+    },
+    "impersonation": {
+      "inactiveUser": "Bu hesap pasif, bu kişi olarak giriş yapılamaz.",
+      "notActive": "Başka bir kullanıcı olarak giriş yapmadınız.",
+      "notAllowed": "Bunu yalnızca kişinin kendisi yapabilir, onun yerine giriş yapan biri yapamaz.",
+      "platformAdmin": "Başka bir platform yöneticisi olarak giriş yapamazsınız."
+    },
+    "plan": {
+      "archived": "Bu paket arşivde, bir şirkete verilemez.",
+      "nameTaken": "Bu adda bir paket zaten var.",
+      "notFound": "Böyle bir paket yok.",
+      "workerLimitReached": "Paketiniz ayda {{limit}} aktif işçiye izin veriyor ve bu bir işçi daha ekler. Sistem operatöründen daha büyük bir paket isteyin."
+    },
+    "platform": {
+      "cannotChangeSelf": "Bunu kendi hesabınıza yapamazsınız."
+    },
+    "subscription": {
+      "expired": "Şirketinizin aboneliği sona erdi, değişiklikler kaydedilemez. Görüntüleme ve dışa aktarma yapılabilir."
     }
   },
   "payRules": {
@@ -608,5 +644,100 @@
     "changeLastDay": "Son iş gününü değiştir",
     "leaveHint": "Çalıştığı son gün. Sonraki günler artık ona ait değildir.",
     "lastDay": "Son iş günü"
+  },
+  "impersonation": {
+    "banner": "{{name}} olarak giriş yaptınız.",
+    "bannerDetails": "Yaptığınız her şey {{by}} tarafından onun adına yapılmış olarak kaydedilir. Saat {{time}} sona erer.",
+    "end": "Kendi hesabıma dön"
+  },
+  "subscription": {
+    "graceTitle": "Abonelik {{date}} tarihinde sona erdi",
+    "graceDescription": "Her şey {{date}} tarihine kadar çalışır. Sonrasında ödeme alınana kadar şirket yalnızca görüntülenebilir. Ödeme için sistem operatörüyle iletişime geçin.",
+    "readOnlyTitle": "Yalnızca görüntüleme: abonelik sona erdi",
+    "readOnlyOwner": "Her şeyi görüntüleyip dışa aktarabilirsiniz ama hiçbir şey değiştirilemez. Ödeme için sistem operatörüyle iletişime geçin.",
+    "readOnlyMember": "Her şeyi görüntüleyip dışa aktarabilirsiniz ama şirketiniz aboneliğini yenileyene kadar hiçbir şey değiştirilemez."
+  },
+  "platformUsers": {
+    "title": "Tüm kullanıcılar",
+    "description": "Platformdaki tüm hesaplar, tüm şirketlerde",
+    "create": "Yeni hesap",
+    "createDescription": "Geçici şifreli bir hesap oluşturulur. Sonra kişiyi bir şirkete ekleyin.",
+    "edit": "Bilgileri düzenle",
+    "editDescription": "Ad, telefon ve e-posta. Kişi telefon veya e-posta ile giriş yapar.",
+    "companies": "Şirketler",
+    "noCompany": "Şirket yok",
+    "platformAdmin": "Platform yöneticisi",
+    "membership": "Şirket ve rol",
+    "membershipDescription": "{{name}} kişisini bir şirkete bir rolle ekleyin veya oradaki rolünü ya da erişimini değiştirin.",
+    "membershipIncomplete": "Bir şirket ve bir rol seçin.",
+    "chooseCompany": "Şirket seçin",
+    "hasAccess": "Bu şirkete erişimi var",
+    "impersonate": "Bu kullanıcı olarak giriş yap",
+    "grantAdmin": "Platform yöneticisi yap",
+    "revokeAdmin": "Platform yöneticiliğini kaldır",
+    "confirm": {
+      "deactivate": {
+        "title": "Hesap pasifleştirilsin mi?",
+        "description": "{{name}} her yerden çıkış yaptırılır ve hesap yeniden aktifleştirilene kadar giriş yapamaz. Hiçbir veri silinmez.",
+        "button": "Pasifleştir"
+      },
+      "activate": {
+        "title": "Hesap aktifleştirilsin mi?",
+        "description": "{{name}} yeniden giriş yapabilecek.",
+        "button": "Aktifleştir"
+      },
+      "reset": {
+        "title": "Şifre sıfırlansın mı?",
+        "description": "{{name}} her yerden çıkış yaptırılır ve yeni bir geçici şifre alır; şifreyi yalnızca bir kez görürsünüz.",
+        "button": "Şifreyi sıfırla"
+      },
+      "impersonate": {
+        "title": "Bu kullanıcı olarak giriş yapılsın mı?",
+        "description": "En fazla bir saat boyunca {{name}} ne görüp yapabiliyorsa tam olarak onu görüp yapacaksınız. Yaptığınız her şey iki adınızla da kaydedilir.",
+        "button": "Giriş yap"
+      },
+      "grantAdmin": {
+        "title": "Platform yöneticisi yapılsın mı?",
+        "description": "{{name}} tüm şirketleri, hesapları ve paketleri yönetebilecek.",
+        "button": "Yönetici yap"
+      },
+      "revokeAdmin": {
+        "title": "Platform yöneticiliği kaldırılsın mı?",
+        "description": "{{name}} artık şirketleri, hesapları ve paketleri yönetemeyecek.",
+        "button": "Kaldır"
+      }
+    }
+  },
+  "plans": {
+    "title": "Paketler",
+    "description": "Şirketlerin ödediği: aktif işçi sınırı ve dahil modüller",
+    "create": "Yeni paket",
+    "createDescription": "Kullanıcılar ve şantiyeler sınırlanmaz, yalnızca aktif işçiler.",
+    "edit": "Paketi düzenle",
+    "editDescription": "Bu paketteki şirketler: {{companies}}. Değişiklikler hepsine uygulanır.",
+    "name": "Ad",
+    "monthlyPrice": "Aylık fiyat",
+    "monthlyPriceSom": "Aylık fiyat, som",
+    "maxActiveWorkers": "Aktif işçi",
+    "maxActiveWorkersHint": "Bir ayda görevlendirmesi olan işçiler. Bunun üstünde yeni işçi eklenemez.",
+    "includesTimesheet": "Puantaj modülünü içerir",
+    "companies": "Şirketler",
+    "offered": "Sunuluyor",
+    "archived": "Arşivde",
+    "archive": "Arşivle",
+    "restore": "Yeniden sun",
+    "empty": "Henüz paket yok",
+    "confirm": {
+      "archive": {
+        "title": "Paket arşivlensin mi?",
+        "description": "{{name}} artık sunulmayacak. Bu pakete sahip şirketler onu korur.",
+        "button": "Arşivle"
+      },
+      "restore": {
+        "title": "Paket yeniden sunulsun mu?",
+        "description": "{{name}} yeniden şirketlere verilebilecek.",
+        "button": "Yeniden sun"
+      }
+    }
   }
 }

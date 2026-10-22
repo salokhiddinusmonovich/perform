@@ -1,5 +1,5 @@
 import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
-import { Auth, type AuthContext } from '../auth/auth.context';
+import { Auth, NotWhileImpersonating, type AuthContext } from '../auth/auth.context';
 import { InvitationsService, type InvitationView } from './invitations.service';
 
 /** The logged-in person's own invitations to join companies. */
@@ -12,12 +12,14 @@ export class InvitationsController {
     return this.invitations.list(auth);
   }
 
+  @NotWhileImpersonating()
   @Post(':companyId/accept')
   @HttpCode(204)
   accept(@Auth() auth: AuthContext, @Param('companyId', ParseUUIDPipe) companyId: string): Promise<void> {
     return this.invitations.accept(auth, companyId);
   }
 
+  @NotWhileImpersonating()
   @Post(':companyId/decline')
   @HttpCode(204)
   decline(@Auth() auth: AuthContext, @Param('companyId', ParseUUIDPipe) companyId: string): Promise<void> {

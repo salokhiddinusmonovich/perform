@@ -2,7 +2,7 @@ import { Controller, Get, Post } from '@nestjs/common';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ForModule, Roles } from '../src/auth/auth.context';
-import { addMember, createUser, loginAs, memberOfNewCompany, PASSWORD, resetDb, startApp, type TestContext } from './helpers';
+import { addMember, createPlan, createUser, loginAs, memberOfNewCompany, PASSWORD, resetDb, startApp, type TestContext } from './helpers';
 
 /** Test-only routes: one per module, and one that forgot to declare its module. */
 @Controller('test-probe')
@@ -115,7 +115,8 @@ describe('modules', () => {
     const off = await agent.get('/api/test-probe/timesheet').expect(403);
     expect(off.body.code).toBe('module.disabled');
 
-    await ctx.prisma.company.update({ where: { id: company.id }, data: { timesheetModule: true } });
+    const plan = await createPlan(ctx.prisma, { timesheetModule: true });
+    await ctx.prisma.company.update({ where: { id: company.id }, data: { planId: plan.id } });
     await agent.get('/api/test-probe/timesheet').expect(200);
     expect((await agent.get('/api/auth/me').expect(200)).body.activeCompany.modules).toEqual(['PAYROLL', 'TIMESHEET']);
   });
@@ -125,18 +126,19 @@ describe('modules', () => {
     await agent.get('/api/test-probe/undeclared').expect(500);
   });
 
-  it('lets only the platform admin turn the Timesheet module on or off, with an audit record', async () => {
+  it('takes modules from the plan, which only the platform admin assigns, with an audit record', async () => {
     const owner = await memberOfNewCompany(ctx, 'OWNER');
-    await owner.agent.patch(`/api/platform/companies/${owner.company.id}`).send({ timesheetModule: true }).expect(403);
+    const plan = await createPlan(ctx.prisma, { timesheetModule: true });
+    await owner.agent.patch(`/api/platform/companies/${owner.company.id}`).send({ planId: plan.id }).expect(403);
 
     const admin = await createUser(ctx.prisma, { isPlatformAdmin: true });
     const platform = await loginAs(ctx.app, admin.email!);
-    await platform.patch(`/api/platform/companies/${owner.company.id}`).send({ timesheetModule: true }).expect(204);
-    const company = await ctx.prisma.company.findUniqueOrThrow({ where: { id: owner.company.id } });
-    expect(company.timesheetModule).toBe(true);
+    await platform.patch(`/api/platform/companies/${owner.company.id}`).send({ planId: plan.id }).expect(204);
+    await owner.agent.get('/api/test-probe/timesheet').expect(200);
     const list = (await platform.get('/api/platform/companies').expect(200)).body;
-    expect(list[0]).toMatchObject({ timesheetModule: true, isActive: true });
-    expect(await ctx.prisma.auditLog.count({ where: { action: 'company.timesheetModuleOn', companyId: company.id } })).toBe(1);
+    expect(list[0]).toMatchObject({ plan: { id: plan.id, timesheetModule: true }, isActive: true });
+    const log = await ctx.prisma.auditLog.findFirstOrThrow({ where: { action: 'company.planChange', companyId: owner.company.id } });
+    expect(log).toMatchObject({ actorUserId: admin.id, data: { from: null, to: plan.id } });
   });
 });
 

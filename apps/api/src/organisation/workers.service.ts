@@ -8,6 +8,7 @@ import { dayToDate, isoDay, monthOfDay, previousDay } from '../common/dates';
 import { assertMonthsOpen } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertManagesSite, seesPersonalData, seesPlacement } from './access';
+import { withinWorkerLimit } from './worker-limit';
 
 export interface PlacementView {
   id: string;
@@ -101,8 +102,11 @@ export class WorkersService {
       await this.checkPlace(tx, companyId, placement);
       await this.assertPinflFree(tx, companyId, details.pinfl, null);
       await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
-      const worker = await tx.worker.create({ data: { companyId, ...toColumns(details) } });
-      const assignment = await tx.assignment.create({ data: placementColumns(companyId, worker.id, placement) });
+      const { worker, assignment } = await withinWorkerLimit(tx, companyId, null, placement.from, async () => {
+        const worker = await tx.worker.create({ data: { companyId, ...toColumns(details) } });
+        const assignment = await tx.assignment.create({ data: placementColumns(companyId, worker.id, placement) });
+        return { worker, assignment };
+      });
       await this.record(tx, auth, 'worker.create', worker.id, {
         name: fullName(details),
         placement: { assignmentId: assignment.id, ...placement },
@@ -144,16 +148,18 @@ export class WorkersService {
       await this.checkPlace(tx, companyId, placement);
 
       const stillThere = current.leftOn === null || isoDay(current.leftOn) >= placement.from;
-      if (stillThere) {
-        if (placement.from <= isoDay(current.hiredOn)) {
-          throw badRequest('validation', { issues: [{ path: 'from', message: 'validation.placementBeforeCurrent' }] });
+      const created = await withinWorkerLimit(tx, companyId, id, placement.from, async () => {
+        if (stillThere) {
+          if (placement.from <= isoDay(current.hiredOn)) {
+            throw badRequest('validation', { issues: [{ path: 'from', message: 'validation.placementBeforeCurrent' }] });
+          }
+          const lastDay = previousDay(placement.from);
+          await this.endPlacement(tx, companyId, current.id, lastDay);
+        } else {
+          await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
         }
-        const lastDay = previousDay(placement.from);
-        await this.endPlacement(tx, companyId, current.id, lastDay);
-      } else {
-        await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
-      }
-      const created = await tx.assignment.create({ data: placementColumns(companyId, id, placement) });
+        return tx.assignment.create({ data: placementColumns(companyId, id, placement) });
+      });
       await this.record(tx, auth, 'worker.place', id, {
         assignmentId: created.id,
         ...placement,
@@ -259,7 +265,7 @@ export class WorkersService {
 
   private record(tx: Tx, auth: CompanyAuthContext, action: string, workerId: string, data: Prisma.InputJsonObject) {
     return this.audit.record(
-      { action, companyId: auth.company.id, actorUserId: auth.user.id, entityType: 'Worker', entityId: workerId, data, ip: auth.ip },
+      { action, companyId: auth.company.id, auth, entityType: 'Worker', entityId: workerId, data },
       tx,
     );
   }

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { parseIdentifier, type ChangePasswordInput, type LoginInput } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { SessionKind } from '@prisma/client';
-import { badRequest, forbidden, notFound, tooManyRequests, unauthorized } from '../common/api-error';
+import { badRequest, conflict, forbidden, notFound, tooManyRequests, unauthorized } from '../common/api-error';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthContext } from './auth.context';
 import { LoginRateLimiter } from './login-rate-limiter';
@@ -26,6 +26,8 @@ export interface Me {
   user: AuthContext['user'];
   activeCompany: AuthContext['company'];
   companies: { id: string; name: string; role: string }[];
+  /** Set while a platform admin is logged in as this user */
+  impersonation: { by: string; endsAt: Date } | null;
 }
 
 @Injectable()
@@ -105,6 +107,7 @@ export class AuthService {
       user: auth.user,
       activeCompany: auth.company,
       companies: memberships.map((m) => ({ id: m.company.id, name: m.company.name, role: m.role })),
+      impersonation: auth.impersonator ? { by: auth.impersonator.fullName, endsAt: auth.impersonator.endsAt } : null,
     };
   }
 
@@ -123,7 +126,7 @@ export class AuthService {
       });
       await tx.session.deleteMany({ where: { userId: user.id, id: { not: auth.sessionId } } });
       await this.audit.record(
-        { action: 'auth.passwordChanged', actorUserId: user.id, entityType: 'User', entityId: user.id, ip: auth.ip },
+        { action: 'auth.passwordChanged', auth, entityType: 'User', entityId: user.id },
         tx,
       );
     });
@@ -152,10 +155,9 @@ export class AuthService {
     if (count === 0) throw notFound('session.notFound');
     await this.audit.record({
       action: 'auth.sessionRevoked',
-      actorUserId: auth.user.id,
+      auth,
       entityType: 'Session',
       entityId: sessionId,
-      ip: auth.ip,
     });
   }
 
@@ -164,6 +166,14 @@ export class AuthService {
       where: { userId: auth.user.id, companyId, ...USABLE_MEMBERSHIP },
     });
     if (!membership) throw forbidden('company.notMember');
-    await this.sessions.setActiveCompany(auth.sessionId, companyId);
+    await this.sessions.setActiveCompany(auth.sessionId, companyId, auth.impersonator !== null);
+  }
+
+  async endImpersonation(auth: AuthContext) {
+    if (!auth.impersonator) throw conflict('impersonation.notActive');
+    await this.prisma.$transaction(async (tx) => {
+      await this.sessions.endImpersonation(auth.sessionId, tx);
+      await this.audit.record({ action: 'impersonation.end', auth, entityType: 'User', entityId: auth.user.id }, tx);
+    });
   }
 }

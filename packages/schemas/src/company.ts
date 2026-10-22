@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { contactSchema } from './contact.js';
+import { isoDateSchema } from './pay-rules.js';
 
 /** Mirrors the Role enum in apps/api/prisma/schema.prisma. */
 export const ROLES = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER', 'TIMEKEEPER', 'FOREMAN'] as const;
@@ -35,21 +36,26 @@ export const companySettingsSchema = z.object({
 export type CompanySettingsInput = z.input<typeof companySettingsSchema>;
 export type CompanySettings = z.output<typeof companySettingsSchema>;
 
+/** A new company (platform admin): its plan and first paid-until date (e.g. the trial's end) are required. */
 export const createCompanySchema = companySettingsSchema.extend({
   owner: contactSchema,
+  planId: z.uuid({ error: 'validation.required' }),
+  paidUntil: isoDateSchema,
 });
 export type CreateCompanyInput = z.input<typeof createCompanySchema>;
 export type CreateCompany = z.output<typeof createCompanySchema>;
 
-/** What the platform admin changes on a company: active or not, and its optional modules. */
-export const updatePlatformCompanySchema = z
-  .object({
+/** What the platform admin changes on a company: its settings, plan, or whether it is active. */
+export const updatePlatformCompanySchema = companySettingsSchema
+  .partial()
+  .extend({
     isActive: z.boolean().optional(),
-    timesheetModule: z.boolean().optional(),
+    planId: z.uuid({ error: 'validation.required' }).optional(),
   })
-  .refine((v) => v.isActive !== undefined || v.timesheetModule !== undefined, {
+  .refine((v) => Object.values(v).some((value) => value !== undefined), {
     error: 'validation.nothingToUpdate',
   });
+export type UpdatePlatformCompanyInput = z.input<typeof updatePlatformCompanySchema>;
 export type UpdatePlatformCompany = z.output<typeof updatePlatformCompanySchema>;
 
 export const createMemberSchema = contactSchema.and(

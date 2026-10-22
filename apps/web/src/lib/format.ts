@@ -88,6 +88,13 @@ export function formatDate(value: string | Date, lang: Language): string {
   }).format(date);
 }
 
+/** Time of day of a moment, in the viewer's time zone, e.g. "14:05" / "2:05 PM". */
+export function formatTime(value: string | Date, lang: Language): string {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (lang === 'uz') return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  return new Intl.DateTimeFormat(localeOf(lang), { timeStyle: 'short' }).format(date);
+}
+
 /** Month heading, e.g. "sentabr, 2026" / "September 2026". `month` is 1-based. */
 export function formatMonth(year: number, month: number, lang: Language): string {
   if (lang === 'uz') return `${UZ_MONTHS[month - 1]}, ${year}`;
@@ -132,4 +139,10 @@ export function formatMonthName(month: number, lang: Language): string {
 export function isoWeekday(day: string): number {
   const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
   return weekday === 0 ? 7 : weekday;
+}
+
+/** Today on the viewer's calendar, "YYYY-MM-DD". */
+export function today(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

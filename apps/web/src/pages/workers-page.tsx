@@ -42,6 +42,7 @@ import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { canManageWorkers, inCompany, seesPersonalData, useMe, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
+import { today } from '@/lib/format';
 import {
   useRefreshOrganisation,
   useSites,
@@ -53,12 +54,6 @@ import {
 
 type Status = 'working' | 'left' | 'all';
 const ALL = 'all';
-
-/** Today on the viewer's calendar, "YYYY-MM-DD". */
-function today(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 const hasLeft = (w: WorkerItem) => w.placement?.until != null && w.placement.until < today();
 

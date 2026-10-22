@@ -89,10 +89,13 @@ export function UserMenu({ me }: { me: Me }) {
         )}
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => navigate('/change-password')}>
-          <KeyRound aria-hidden />
-          {t('nav.changePassword')}
-        </DropdownMenuItem>
+        {/* Only the real person changes their password, not a platform admin acting as them. */}
+        {!me.impersonation && (
+          <DropdownMenuItem onSelect={() => navigate('/change-password')}>
+            <KeyRound aria-hidden />
+            {t('nav.changePassword')}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={() => logout.mutate()} disabled={logout.isPending}>
           <LogOut aria-hidden />
           {t('nav.logout')}

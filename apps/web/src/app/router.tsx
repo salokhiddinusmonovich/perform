@@ -62,6 +62,14 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: 'platform/users',
+        lazy: async () => ({ Component: (await import('@/pages/platform-users-page')).PlatformUsersPage }),
+      },
+      {
+        path: 'platform/plans',
+        lazy: async () => ({ Component: (await import('@/pages/platform-plans-page')).PlatformPlansPage }),
+      },
+      {
         path: '*',
         lazy: async () => ({ Component: (await import('@/pages/not-found-page')).NotFoundPage }),
       },

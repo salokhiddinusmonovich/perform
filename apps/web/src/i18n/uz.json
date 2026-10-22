@@ -21,7 +21,9 @@
     "workingDays": "Ish kunlari",
     "organisation": "Tashkilot",
     "sites": "Obyektlar",
-    "workers": "Ishchilar"
+    "workers": "Ishchilar",
+    "platformUsers": "Barcha foydalanuvchilar",
+    "plans": "Tariflar"
   },
   "settings": {
     "language": "Til",
@@ -218,21 +220,33 @@
         "title": "Kompaniyani faollashtirasizmi?",
         "description": "{{name}} foydalanuvchilari unda yana ishlay oladi.",
         "button": "Faollashtirish"
-      },
-      "timesheetOn": {
-        "title": "Tabel moduli yoqilsinmi?",
-        "description": "{{name}} ilovada kunlik soatlarni kirita oladi. Ish haqi ularni keyingi ochiq oydan boshlab ishlatadi.",
-        "button": "Yoqish"
-      },
-      "timesheetOff": {
-        "title": "Tabel moduli oʻchirilsinmi?",
-        "description": "{{name}} endi kunlik soatlarni kiritmaydi. Kiritilgan soatlar saqlanadi. Keyingi ochiq oydan soatlar Excel importi yoki oylik jamlardan olinadi.",
-        "button": "Oʻchirish"
       }
     },
     "modules": "Modullar",
-    "timesheetOn": "Tabel modulini yoqish",
-    "timesheetOff": "Tabel modulini oʻchirish"
+    "edit": "Kompaniyani tahrirlash",
+    "editDescription": "Nomi, valyuta, vaqt mintaqasi va tarif.",
+    "plan": "Tarif",
+    "choosePlan": "Tarifni tanlang",
+    "planOption": "{{name}} — {{price}}, {{limit}} tagacha ishchi",
+    "noPlan": "Tarif yoʻq",
+    "activeWorkers": "Bu oy ishchilar: {{active}} / {{limit}}",
+    "subscription": "Obuna",
+    "paidUntil": "{{date}} gacha toʻlangan",
+    "graceUntil": "Toʻlanmagan, {{date}} dan keyin faqat koʻrish",
+    "readOnlySince": "{{date}} dan beri faqat koʻrish",
+    "noPaidUntil": "Muddatsiz",
+    "firstPaidUntil": "Qaysi sanagacha toʻlangan",
+    "firstPaidUntilHint": "Birinchi toʻlangan davr yoki sinov muddatining oxiri.",
+    "payments": "Toʻlovlar",
+    "recordPayment": "Toʻlovni yozish",
+    "paymentRecorded": "Toʻlov yozildi",
+    "amount": "Summa",
+    "amountSom": "Summa, soʻm",
+    "amountHint": "Bepul uzaytirish uchun 0",
+    "paidOn": "Toʻlov sanasi",
+    "newPaidUntil": "Qaysi sanagacha toʻlangan",
+    "note": "Izoh",
+    "noPayments": "Hozircha toʻlovlar yoʻq"
   },
   "validation": {
     "required": "Majburiy maydon",
@@ -260,7 +274,9 @@
     "pinflInvalid": "JShShIR 14 ta raqamdan iborat",
     "placementBeforeCurrent": "Hozirgi obyektdagi birinchi kundan keyin boʻlishi kerak",
     "leaveBeforeStart": "Birinchi ish kunidan oldin boʻlishi mumkin emas",
-    "teamNotOnSite": "Bu brigada tanlangan obyektda emas"
+    "teamNotOnSite": "Bu brigada tanlangan obyektda emas",
+    "amountRange": "0 yoki undan koʻp boʻlishi kerak",
+    "workerLimitRange": "1 dan 1 000 000 gacha"
   },
   "errors": {
     "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
@@ -288,7 +304,9 @@
       "invitationNotAccepted": "Bu odam hali taklifni qabul qilmagan. Parolini faqat oʻzi boshqaradi."
     },
     "user": {
-      "contactsBelongToDifferentPeople": "Bu telefon va bu email ikki xil odamga tegishli. Ulardan faqat bittasini kiriting."
+      "contactsBelongToDifferentPeople": "Bu telefon va bu email ikki xil odamga tegishli. Ulardan faqat bittasini kiriting.",
+      "contactTaken": "Bu telefon yoki email boshqa hisobda ishlatilgan.",
+      "notFound": "Bunday hisob yoʻq."
     },
     "invitation": {
       "notFound": "Bu taklif endi amal qilmaydi."
@@ -334,6 +352,24 @@
       "notFound": "Bu ishchi mavjud emas yoki siz uni koʻrmaysiz.",
       "pinflTaken": "Bu JShShIRli ishchi allaqachon bor.",
       "hasLaterEntries": "Bu sanadan keyin tabel kunlari bor. Avval ularni oʻzgartiring yoki oʻchiring."
+    },
+    "impersonation": {
+      "inactiveUser": "Bu hisob oʻchirilgan, shu odam nomidan kirib boʻlmaydi.",
+      "notActive": "Siz boshqa foydalanuvchi nomidan kirmagansiz.",
+      "notAllowed": "Buni faqat odamning oʻzi qila oladi, uning nomidan kirgan kishi emas.",
+      "platformAdmin": "Boshqa platforma administratori nomidan kirib boʻlmaydi."
+    },
+    "plan": {
+      "archived": "Bu tarif arxivda, uni kompaniyaga berib boʻlmaydi.",
+      "nameTaken": "Bunday nomli tarif allaqachon bor.",
+      "notFound": "Bunday tarif yoʻq.",
+      "workerLimitReached": "Tarifingiz oyiga {{limit}} ta faol ishchiga ruxsat beradi, bu esa yana bittasini qoʻshadi. Tizim operatoridan kattaroq tarif soʻrang."
+    },
+    "platform": {
+      "cannotChangeSelf": "Buni oʻz hisobingizga qilib boʻlmaydi."
+    },
+    "subscription": {
+      "expired": "Kompaniyangiz obunasi tugagan, oʻzgarishlar saqlanmaydi. Koʻrish va eksport qilish mumkin."
     }
   },
   "payRules": {
@@ -608,5 +644,100 @@
     "changeLastDay": "Oxirgi ish kunini oʻzgartirish",
     "leaveHint": "Oxirgi ishlagan kuni. Undan keyingi kunlar endi unga tegishli emas.",
     "lastDay": "Oxirgi ish kuni"
+  },
+  "impersonation": {
+    "banner": "Siz {{name}} nomidan kirgansiz.",
+    "bannerDetails": "Qilgan har bir ishingiz {{by}} tomonidan uning nomidan qilingan deb yoziladi. {{time}} da tugaydi.",
+    "end": "Oʻz hisobimga qaytish"
+  },
+  "subscription": {
+    "graceTitle": "Obuna {{date}} da tugagan",
+    "graceDescription": "{{date}} gacha hammasi ishlaydi. Shundan keyin toʻlov kelguncha kompaniya faqat koʻrish rejimida boʻladi. Toʻlash uchun tizim operatoriga murojaat qiling.",
+    "readOnlyTitle": "Faqat koʻrish: obuna tugagan",
+    "readOnlyOwner": "Hammasini koʻrish va eksport qilish mumkin, lekin hech narsani oʻzgartirib boʻlmaydi. Toʻlash uchun tizim operatoriga murojaat qiling.",
+    "readOnlyMember": "Hammasini koʻrish va eksport qilish mumkin, lekin kompaniya obunani uzaytirmaguncha hech narsani oʻzgartirib boʻlmaydi."
+  },
+  "platformUsers": {
+    "title": "Barcha foydalanuvchilar",
+    "description": "Platformadagi barcha hisoblar, barcha kompaniyalarda",
+    "create": "Yangi hisob",
+    "createDescription": "Vaqtinchalik parolli hisob yaratiladi. Keyin odamni kompaniyaga qoʻshing.",
+    "edit": "Maʼlumotlarni tahrirlash",
+    "editDescription": "Ism, telefon va email. Odam telefon yoki email bilan kiradi.",
+    "companies": "Kompaniyalar",
+    "noCompany": "Kompaniyasiz",
+    "platformAdmin": "Platforma administratori",
+    "membership": "Kompaniya va rol",
+    "membershipDescription": "{{name}}ni kompaniyaga rol bilan qoʻshing yoki u yerdagi rolini yoki kirish huquqini oʻzgartiring.",
+    "membershipIncomplete": "Kompaniya va rolni tanlang.",
+    "chooseCompany": "Kompaniyani tanlang",
+    "hasAccess": "Bu kompaniyaga kira oladi",
+    "impersonate": "Shu foydalanuvchi nomidan kirish",
+    "grantAdmin": "Platforma administratori qilish",
+    "revokeAdmin": "Platforma administratorligini olib tashlash",
+    "confirm": {
+      "deactivate": {
+        "title": "Hisobni oʻchirasizmi?",
+        "description": "{{name}} barcha qurilmalardan chiqariladi va hisob qayta faollashtirilmaguncha kira olmaydi. Hech qanday maʼlumot oʻchirilmaydi.",
+        "button": "Oʻchirish"
+      },
+      "activate": {
+        "title": "Hisobni faollashtirasizmi?",
+        "description": "{{name}} yana kira oladi.",
+        "button": "Faollashtirish"
+      },
+      "reset": {
+        "title": "Parolni tiklaysizmi?",
+        "description": "{{name}} barcha qurilmalardan chiqariladi va yangi vaqtinchalik parol oladi. Uni faqat bir marta koʻrasiz.",
+        "button": "Parolni tiklash"
+      },
+      "impersonate": {
+        "title": "Shu foydalanuvchi nomidan kirasizmi?",
+        "description": "Bir soatgacha {{name}} nimani koʻra va qila olsa, aynan shuni koʻrasiz va qilasiz. Qilgan har bir ishingiz ikkala ismingiz bilan yoziladi.",
+        "button": "Kirish"
+      },
+      "grantAdmin": {
+        "title": "Platforma administratori qilasizmi?",
+        "description": "{{name}} barcha kompaniyalar, hisoblar va tariflarni boshqara oladi.",
+        "button": "Administrator qilish"
+      },
+      "revokeAdmin": {
+        "title": "Platforma administratorligini olib tashlaysizmi?",
+        "description": "{{name}} endi kompaniyalar, hisoblar va tariflarni boshqarmaydi.",
+        "button": "Olib tashlash"
+      }
+    }
+  },
+  "plans": {
+    "title": "Tariflar",
+    "description": "Kompaniyalar nima uchun toʻlaydi: faol ishchilar chegarasi va kiritilgan modullar",
+    "create": "Yangi tarif",
+    "createDescription": "Foydalanuvchilar va obyektlar cheklanmaydi, faqat faol ishchilar.",
+    "edit": "Tarifni tahrirlash",
+    "editDescription": "Shu tarifdagi kompaniyalar: {{companies}}. Oʻzgarishlar hammasiga tegishli.",
+    "name": "Nomi",
+    "monthlyPrice": "Oylik narx",
+    "monthlyPriceSom": "Oylik narx, soʻm",
+    "maxActiveWorkers": "Faol ishchilar",
+    "maxActiveWorkersHint": "Oy davomida biriktirilgan ishchilar. Bundan oshsa, yangi ishchi qoʻshib boʻlmaydi.",
+    "includesTimesheet": "Tabel moduli kiritilgan",
+    "companies": "Kompaniyalar",
+    "offered": "Taklif qilinadi",
+    "archived": "Arxivda",
+    "archive": "Arxivlash",
+    "restore": "Yana taklif qilish",
+    "empty": "Hozircha tariflar yoʻq",
+    "confirm": {
+      "archive": {
+        "title": "Tarifni arxivlaysizmi?",
+        "description": "{{name}} endi taklif qilinmaydi. Unga ega kompaniyalarda u saqlanib qoladi.",
+        "button": "Arxivlash"
+      },
+      "restore": {
+        "title": "Tarifni yana taklif qilasizmi?",
+        "description": "{{name}} yana kompaniyalarga berilishi mumkin boʻladi.",
+        "button": "Yana taklif qilish"
+      }
+    }
   }
 }

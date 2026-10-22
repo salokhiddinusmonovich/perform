@@ -15,20 +15,25 @@ datasource db {
 // ---------- Tenancy & access ----------
 
 model Company {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
   name      String
-  slug      String   @unique
+  slug      String    @unique
   /// ISO 4217, e.g. "UZS"
-  currency  String   @default("UZS")
+  currency  String    @default("UZS")
   /// IANA zone used to interpret timesheet dates
-  timezone  String   @default("Asia/Tashkent")
+  timezone  String    @default("Asia/Tashkent")
   /// Deactivated companies can't be used by their members
-  isActive  Boolean  @default(true)
-  /// Optional Timesheet module (daily hour entry); only the platform admin turns it
-  /// on or off. Payroll is every company's module and has no flag.
-  timesheetModule Boolean @default(false)
-  createdAt DateTime @default(now())
+  isActive  Boolean   @default(true)
+  /// Its plan: active-worker limit and modules. null only for companies created before
+  /// plans existed (no limits, no expiry, Payroll only) until one is assigned.
+  planId    String?   @db.Uuid
+  /// Last day paid for; then a 14-day grace period, then the company is read-only.
+  /// Set at creation, then by each SubscriptionPayment.
+  paidUntil DateTime? @db.Date
+  createdAt DateTime  @default(now())
 
+  plan           Plan?                 @relation(fields: [planId], references: [id], onDelete: NoAction)
+  payments       SubscriptionPayment[]
   memberships    Membership[]
   sites          Site[]
   teams          Team[]
@@ -39,6 +44,42 @@ model Company {
   auditLogs      AuditLog[]
   travelRoutes   TravelRoute[]
   timesheetCodes TimesheetCode[]
+}
+
+/// What a company pays for: a limit of active workers (workers with a placement
+/// overlapping a month) and the modules it includes. Platform-level, no companyId.
+/// An archived plan (isActive false) isn't offered any more but stays where it is used.
+model Plan {
+  id               String   @id @default(uuid()) @db.Uuid
+  name             String   @unique
+  /// In soʻm
+  monthlyPrice     Decimal  @db.Decimal(14, 2)
+  maxActiveWorkers Int
+  timesheetModule  Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  companies Company[]
+}
+
+/// A payment the platform admin recorded (paid outside the app). Only ever added; each
+/// one sets the company's paidUntil. A free extension (e.g. a trial) has amount 0.
+model SubscriptionPayment {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String   @db.Uuid
+  /// In soʻm
+  amount       Decimal  @db.Decimal(14, 2)
+  paidOn       DateTime @db.Date
+  /// The company's new paid-until date
+  paidUntil    DateTime @db.Date
+  note         String?
+  recordedById String   @db.Uuid
+  createdAt    DateTime @default(now())
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  recordedBy User    @relation(fields: [recordedById], references: [id], onDelete: NoAction)
+
+  @@index([companyId, createdAt])
 }
 
 /// A person who can log in. Logs in with email or phone (at least one is set,
@@ -62,8 +103,12 @@ model User {
   createdAt          DateTime  @default(now())
 
   memberships Membership[]
-  sessions    Session[]
-  auditLogs   AuditLog[]
+  sessions    Session[]    @relation("SessionUser")
+  auditLogs   AuditLog[]   @relation("AuditActor")
+
+  impersonatedIn   Session[]             @relation("SessionImpersonated")
+  impersonatorIn   AuditLog[]            @relation("AuditImpersonator")
+  recordedPayments SubscriptionPayment[]
 
   lockedPeriods        PayrollPeriod[]
   workingDaysOverrides WorkingDaysOverride[]
@@ -81,21 +126,29 @@ enum SessionKind {
 /// Server-side login session. The client holds a random token (cookie or bearer);
 /// only its SHA-256 hash is stored here.
 model Session {
-  id              String      @id @default(uuid()) @db.Uuid
-  tokenHash       String      @unique
-  kind            SessionKind @default(BROWSER)
+  id                    String      @id @default(uuid()) @db.Uuid
+  tokenHash             String      @unique
+  kind                  SessionKind @default(BROWSER)
   /// Name the app gave its device (APP sessions), shown when listing and revoking them
-  deviceName      String?
-  userId          String      @db.Uuid
+  deviceName            String?
+  userId                String      @db.Uuid
   /// Company the user is currently working in (one of their memberships)
-  activeCompanyId String?  @db.Uuid
-  ip              String?
-  userAgent       String?
-  createdAt       DateTime @default(now())
-  lastSeenAt      DateTime @default(now())
-  expiresAt       DateTime
+  activeCompanyId       String?     @db.Uuid
+  ip                    String?
+  userAgent             String?
+  createdAt             DateTime    @default(now())
+  lastSeenAt            DateTime    @default(now())
+  expiresAt             DateTime
+  /// Set while this session's user, a platform admin, is logged in as someone else.
+  /// Requests act as that user until impersonationEndsAt (at most 1 hour, never
+  /// extended). Ending it clears these fields and the admin is themselves again.
+  impersonatedUserId    String?     @db.Uuid
+  /// The impersonated user's company being worked in (their activeCompanyId)
+  impersonatedCompanyId String?     @db.Uuid
+  impersonationEndsAt   DateTime?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User  @relation("SessionUser", fields: [userId], references: [id], onDelete: Cascade)
+  impersonatedUser User? @relation("SessionImpersonated", fields: [impersonatedUserId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
@@ -103,22 +156,25 @@ model Session {
 
 /// Who changed what, when. Never updated or deleted by the app.
 model AuditLog {
-  id          String   @id @default(uuid()) @db.Uuid
+  id                 String   @id @default(uuid()) @db.Uuid
   /// null for platform-level actions (e.g. creating a company)
-  companyId   String?  @db.Uuid
+  companyId          String?  @db.Uuid
   /// null for actions not done by a logged-in user (e.g. CLI bootstrap)
-  actorUserId String?  @db.Uuid
+  actorUserId        String?  @db.Uuid
+  /// The platform admin who acted while logged in as actorUserId (impersonation)
+  impersonatorUserId String?  @db.Uuid
   /// e.g. "auth.login", "member.create", "company.update"
-  action      String
-  entityType  String?
-  entityId    String?
+  action             String
+  entityType         String?
+  entityId           String?
   /// Changed fields (before/after) or other details. Never contains passwords.
-  data        Json     @default("{}")
-  ip          String?
-  createdAt   DateTime @default(now())
+  data               Json     @default("{}")
+  ip                 String?
+  createdAt          DateTime @default(now())
 
-  company Company? @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  actor   User?    @relation(fields: [actorUserId], references: [id], onDelete: NoAction)
+  company      Company? @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  actor        User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: NoAction)
+  impersonator User?    @relation("AuditImpersonator", fields: [impersonatorUserId], references: [id], onDelete: NoAction)
 
   @@index([companyId, createdAt])
   @@index([entityType, entityId])
@@ -224,8 +280,8 @@ model Team {
   foremanName String?
   isActive    Boolean @default(true)
 
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  site        Site         @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  site        Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
   assignments Assignment[]
   entries     TimesheetEntry[]
   foremen     MemberTeam[]

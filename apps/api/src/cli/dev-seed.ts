@@ -11,6 +11,7 @@ import { PrismaClient, type Role } from '@prisma/client';
 import { hashPassword } from '../auth/passwords';
 
 const DEMO_DOMAIN = 'demo.puantaj.test';
+const DEMO_PLAN = 'Demo plan';
 
 async function main() {
   if (process.env.NODE_ENV === 'production') {
@@ -43,8 +44,14 @@ async function main() {
 
     await user('platform', 'Platform Admin', { isPlatformAdmin: true });
 
-    const demo = await prisma.company.create({ data: { name: 'Demo MEP', slug: 'demo-mep' } });
-    const other = await prisma.company.create({ data: { name: 'Other Construction', slug: 'demo-other' } });
+    const plan = await prisma.plan.create({
+      data: { name: DEMO_PLAN, monthlyPrice: '1500000', maxActiveWorkers: 200, timesheetModule: true },
+    });
+    const paidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const company = (name: string, slug: string) =>
+      prisma.company.create({ data: { name, slug, planId: plan.id, paidUntil } });
+    const demo = await company('Demo MEP', 'demo-mep');
+    const other = await company('Other Construction', 'demo-other');
 
     const members: [string, string, Role, string?][] = [
       ['owner', 'Demo Owner', 'OWNER', '+998900000001'],
@@ -105,7 +112,10 @@ async function removeDemoData(prisma: PrismaClient) {
   );
   const inCompany = { companyId: { in: companyIds } };
   await prisma.$transaction([
-    prisma.auditLog.deleteMany({ where: { OR: [inCompany, { actorUserId: { in: userIds } }] } }),
+    prisma.auditLog.deleteMany({
+      where: { OR: [inCompany, { actorUserId: { in: userIds } }, { impersonatorUserId: { in: userIds } }] },
+    }),
+    prisma.subscriptionPayment.deleteMany({ where: { OR: [inCompany, { recordedById: { in: userIds } }] } }),
     prisma.adjustment.deleteMany({ where: inCompany }),
     prisma.timesheetEntry.deleteMany({ where: inCompany }),
     prisma.salary.deleteMany({ where: inCompany }),
@@ -126,6 +136,7 @@ async function removeDemoData(prisma: PrismaClient) {
     prisma.session.deleteMany({ where: { userId: { in: userIds } } }),
     prisma.user.deleteMany({ where: { id: { in: userIds } } }),
     prisma.company.deleteMany({ where: { id: { in: companyIds } } }),
+    prisma.plan.deleteMany({ where: { name: DEMO_PLAN } }),
   ]);
 }
 

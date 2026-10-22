@@ -29,11 +29,22 @@ Multi-company web app for construction **timesheets and payroll** ("puantaj" in 
   - **Framework: React Native with Expo** (decided 2026-10-20). It reuses the shared TypeScript packages. The app will live in `apps/mobile`.
 - **Modules (decided 2026-10-20):** one app for everyone, with modules enabled per company. There is no separate build.
   - Two modules: **Payroll**, which every company has, and **Timesheet**, which is optional. A timesheet-only company isn't offered.
-  - **Only the platform admin** turns the Timesheet module on or off.
+  - A company's modules come from its **plan** (see Platform admin). Only the platform admin assigns plans, so only they turn the Timesheet module on or off.
   - The API refuses routes of a disabled module with a stable error code. Every route declares its module through a guard, as with `@Roles`. Navigation, Settings and the mobile app show only enabled modules.
   - **Where hours come from** in a company without the Timesheet module: an **Excel import of the daily grid**, or **monthly totals per worker** entered by the accountant (normal, overtime, rest-day and holiday hours, plus absence days). Both feed the same payroll engine. Every pay result shows which source its hours came from.
   - **Modules only switch features on or off.** They don't restrict anything else: a company with the Timesheet module can also use Excel import and monthly totals.
   - Turning the Timesheet module on or off takes effect from the **next open month**, so one month never mixes sources because of the switch.
+- **Platform admin (decided 2026-10-22):** the product operator can do anything on the platform. Every action is audited.
+  - **Companies:** create, edit name, currency and time zone, activate and deactivate, assign a plan, record payments.
+  - **Users:** list all accounts, create accounts, edit name, phone and email, activate and deactivate, reset passwords (a one-time temporary password), grant or remove platform admin, and add people to companies or change their role there. A platform admin can't deactivate themselves or remove their own platform admin flag, so there is always one left. Users are never deleted.
+  - **Log in as a user ("impersonation"):** full access to whatever that user can do, for at most **1 hour**, never extended. Every action is audited under both names (the user, and the platform admin acting as them). The app shows a banner with an "End" button. Not allowed: impersonating another platform admin or a deactivated account, and, while impersonating, changing the user's password, managing their sessions, or accepting or declining invitations for them.
+  - **Plans:** a plan has a name, a monthly price in soʻm, a **limit of active workers**, and the modules it includes. There are no limits on users or sites. A plan can be archived (not offered to new companies) but stays on companies that have it.
+    - **Active workers** in a month = workers with a placement overlapping that month. Adding a worker or a placement that would take that month over the limit is refused (`plan.workerLimitReached`), checked for the month the placement starts, or the current month if it started earlier. Existing workers, timesheets and payroll are never blocked.
+  - **Subscriptions:** each company has a **paid-until date**. Payments are made outside the app (bank transfer, invoice). The platform admin records each payment (amount, date paid, new paid-until date, note); records are only ever added. A free extension (e.g. a trial) is a payment of 0.
+    - After the paid-until date there is a **14-day grace period**: owners see a warning banner. After it the company is **read-only**: everyone can view and export, but no change is accepted (`subscription.expired`) until the platform admin records a payment.
+    - Open: a plan change applies at once. Once hours can be entered, a change that adds or removes the Timesheet module must apply from the next open month (see Modules), which needs a plan history per month.
+    - Companies created before plans existed have no plan: no limits, no expiry, Payroll only. The platform admin's company list marks them so a plan can be assigned.
+
 - **Roles (decided 2026-10-20, partly open, see `docs/ideas.md` idea 3):**
   - **Accountant: add and view only, never edit or delete.** Corrections are made by adding a new record (e.g. a new salary from a date, an adjustment), never by changing an old one.
     - The accountant adds salaries, adjustments, monthly travel amounts and working-day overrides, and can lock a month.
@@ -126,7 +137,8 @@ Before finishing a change, run `npm test`, `npm run typecheck` and `npm run buil
   - Access is declared with `@Roles(...)` and `@PlatformAdminOnly()`. Every route with `@Roles` also declares its module with `@ForModule('PAYROLL' | 'TIMESHEET')`; the guard fails loudly (500) if it's missing and refuses a disabled module with `module.disabled`.
   - Site and team scope: project managers and timekeepers work on the sites in `MemberSite`, foremen on the teams in `MemberTeam`. Who sees and manages what is decided only in `apps/api/src/organisation/access.ts`. Combine its filters with `AND`, never by spreading.
   - Company routes take `@CompanyAuth() auth` and scope every query by `auth.company.id`.
-  - Roles: OWNER, ADMIN, ACCOUNTANT, PROJECT_MANAGER, TIMEKEEPER, FOREMAN. Changing a member's role clears their site and team assignments. Platform admin is a separate user flag for the product operator, who creates companies.
+  - Roles: OWNER, ADMIN, ACCOUNTANT, PROJECT_MANAGER, TIMEKEEPER, FOREMAN. Changing a member's role clears their site and team assignments. Platform admin is a separate user flag for the product operator, whose routes are under `/platform` with `@PlatformAdminOnly()`.
+  - Impersonation lives on the platform admin's own session (`Session.impersonatedUserId`). While it runs, `auth.user` is the impersonated user and `auth.impersonator` the platform admin. Routes that only the real person may use are marked `@NotWhileImpersonating()`. Audit entries take `auth` and record both users, so audit calls never pass `actorUserId` themselves for logged-in actions.
   - Temporary passwords are returned once to the admin and never stored or logged in readable form. `mustChangePassword` locks the account to me/logout/change-password.
   - A company admin can reset only passwords of accounts that belong to their company alone.
   - Data-changing cookie requests are checked for same-site Origin (`SameOriginGuard`); bearer requests are not.

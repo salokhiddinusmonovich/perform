@@ -28,7 +28,7 @@ export async function startApp(controllers: Type[] = []): Promise<TestContext> {
 /** Empties every table except the migration history. */
 export async function resetDb(prisma: PrismaService) {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "Session", "MemberSite", "MemberTeam", "Membership", "Salary", "TimesheetEntry", "Adjustment", "PayrollPeriod", "WorkingDaysOverride", "PayrollRules", "PayrollRuleSet", "Holiday", "TimesheetCode", "Assignment", "TravelRoute", "Worker", "Team", "Site", "User", "Company" CASCADE',
+    'TRUNCATE "AuditLog", "Session", "SubscriptionPayment", "MemberSite", "MemberTeam", "Membership", "Salary", "TimesheetEntry", "Adjustment", "PayrollPeriod", "WorkingDaysOverride", "PayrollRules", "PayrollRuleSet", "Holiday", "TimesheetCode", "Assignment", "TravelRoute", "Worker", "Team", "Site", "User", "Company", "Plan" CASCADE',
   );
 }
 
@@ -54,6 +54,21 @@ export async function createUser(
 
 export async function createCompany(prisma: PrismaService, name = `Company ${++counter}`) {
   return prisma.company.create({ data: { name, slug: `c-${counter}-${Date.now()}` } });
+}
+
+export async function createPlan(
+  prisma: PrismaService,
+  data: { maxActiveWorkers?: number; timesheetModule?: boolean; isActive?: boolean } = {},
+) {
+  return prisma.plan.create({
+    data: {
+      name: `Plan ${++counter}`,
+      monthlyPrice: '1000000',
+      maxActiveWorkers: data.maxActiveWorkers ?? 100,
+      timesheetModule: data.timesheetModule ?? false,
+      isActive: data.isActive ?? true,
+    },
+  });
 }
 
 export async function addMember(prisma: PrismaService, userId: string, companyId: string, role: Role) {
