@@ -3,7 +3,7 @@ import { buildMonthCalendar, countWorkdays, workingDays } from './calendar';
 import { divRound, fromUnits, toUnits } from './decimal';
 import { normalizeCode, parseCell, type CodeMap, type DayEntry } from './entry';
 import { missingMovingHolidays, uzbekistanFixedHolidays } from './holidays';
-import { calculatePay, type PaySettings } from './pay';
+import { calculatePay, type PaySettings, type TravelInput } from './pay';
 import { summarizeMonth } from './summary';
 
 // September 2026: Sept 1 (Tue) is Independence Day, Sundays are 6/13/20/27.
@@ -21,15 +21,29 @@ const codes: CodeMap = new Map([
   [normalizeCode('-'), 'NOT_EMPLOYED'],
 ]);
 
-const worked = (date: string, hours: string): DayEntry => ({ date, status: 'WORKED', hours });
-const status = (date: string, s: DayEntry['status']): DayEntry => ({ date, status: s, hours: '0' });
+/** Entries at Site A unless a test says otherwise; seq only matters for days worked at several places. */
+const worked = (date: string, hours: string, place = 'Site A', seq = 1): DayEntry => ({
+  date,
+  place,
+  seq,
+  status: 'WORKED',
+  hours,
+});
+const status = (date: string, s: DayEntry['status'], place = 'Site A'): DayEntry => ({
+  date,
+  place,
+  seq: 1,
+  status: s,
+  hours: '0',
+});
 
-/** Every working day at `hours`, everything else OFF; `overrides` replace single days. */
+/** Every working day at `hours`, everything else OFF; `overrides` replace whole days. */
 function month(hours: string, overrides: DayEntry[] = []): DayEntry[] {
-  const byDate = new Map(overrides.map((e) => [e.date, e]));
-  return september.map(
-    (d) => byDate.get(d.date) ?? (d.kind === 'WORKDAY' ? worked(d.date, hours) : status(d.date, 'OFF')),
-  );
+  return september.flatMap((d) => {
+    const replaced = overrides.filter((e) => e.date === d.date);
+    if (replaced.length > 0) return replaced;
+    return [d.kind === 'WORKDAY' ? worked(d.date, hours) : status(d.date, 'OFF')];
+  });
 }
 
 const settings: PaySettings = {
@@ -192,6 +206,7 @@ describe('summarizeMonth', () => {
       holidayHours: '4.00',
       daysWorked: 26,
       workdaysWorked: 24,
+      splitDays: 0,
       absentDays: 1,
       leaveDays: 0,
       sickDays: 0,
@@ -227,7 +242,7 @@ describe('summarizeMonth', () => {
     );
     expect(() => summarizeMonth(september, [worked('2026-09-02', '0')], '9')).toThrow(RangeError);
     expect(() => summarizeMonth(september, [worked('2026-09-02', '24.5')], '9')).toThrow(RangeError);
-    expect(() => summarizeMonth(september, [{ date: '2026-09-02', status: 'SICK', hours: '8' }], '9')).toThrow(
+    expect(() => summarizeMonth(september, [{ ...status('2026-09-02', 'SICK'), hours: '8' }], '9')).toThrow(
       /has hours/,
     );
   });
@@ -246,7 +261,7 @@ describe('calculatePay', () => {
     const result = calculatePay({ ...base, entries: month('9') });
     expect(result.total).toBe('7500000.00');
     expect(result.lines).toEqual([
-      { type: 'HOURS', kind: 'NORMAL', hours: '225.00', multiplier: '1.00', amount: '7500000.00' },
+      { type: 'HOURS', place: 'Site A', kind: 'NORMAL', hours: '225.00', multiplier: '1.00', amount: '7500000.00' },
     ]);
     expect(result.hourlyRate).toEqual({
       monthlySalary: '7500000.00',
@@ -265,7 +280,7 @@ describe('calculatePay', () => {
   it('pays exact hours: a 4-hour day pays 4 hours', () => {
     const result = calculatePay({ ...base, entries: [worked('2026-09-02', '4')] });
     expect(result.lines).toEqual([
-      { type: 'HOURS', kind: 'NORMAL', hours: '4.00', multiplier: '1.00', amount: '133333.33' },
+      { type: 'HOURS', place: 'Site A', kind: 'NORMAL', hours: '4.00', multiplier: '1.00', amount: '133333.33' },
       { type: 'ROUNDING', step: '1000.00', amount: '-333.33' },
     ]);
     expect(result.total).toBe('133000.00');
@@ -285,17 +300,18 @@ describe('calculatePay', () => {
     const result = calculatePay({
       ...base,
       entries,
-      travel: { kind: 'PER_DAY_WORKED', route: 'Route A', amountPerDay: '20000' },
+      travel: { kind: 'PER_DAY_WORKED', routes: { 'Site A': { route: 'Route A', amountPerDay: '20000' } } },
     });
 
     // Rate = 7 500 000 ÷ (25 × 9) = 33 333.33…
     expect(result.lines).toEqual([
-      { type: 'HOURS', kind: 'NORMAL', hours: '193.00', multiplier: '1.00', amount: '6433333.33' },
-      { type: 'HOURS', kind: 'OVERTIME', hours: '2.00', multiplier: '1.50', amount: '100000.00' },
-      { type: 'HOURS', kind: 'REST_DAY', hours: '8.00', multiplier: '2.00', amount: '533333.33' },
-      { type: 'HOURS', kind: 'HOLIDAY', hours: '4.00', multiplier: '2.00', amount: '266666.67' },
+      { type: 'HOURS', place: 'Site A', kind: 'NORMAL', hours: '193.00', multiplier: '1.00', amount: '6433333.33' },
+      { type: 'HOURS', place: 'Site A', kind: 'OVERTIME', hours: '2.00', multiplier: '1.50', amount: '100000.00' },
+      { type: 'HOURS', place: 'Site A', kind: 'REST_DAY', hours: '8.00', multiplier: '2.00', amount: '533333.33' },
+      { type: 'HOURS', place: 'Site A', kind: 'HOLIDAY', hours: '4.00', multiplier: '2.00', amount: '266666.67' },
       {
         type: 'ABSENCE',
+        place: 'Site A',
         absence: 'LEAVE',
         days: 1,
         paid: true,
@@ -306,6 +322,7 @@ describe('calculatePay', () => {
       },
       {
         type: 'ABSENCE',
+        place: 'Site A',
         absence: 'SICK',
         days: 1,
         paid: true,
@@ -316,6 +333,7 @@ describe('calculatePay', () => {
       },
       {
         type: 'ABSENCE',
+        place: 'Site A',
         absence: 'TRAVEL',
         days: 1,
         paid: false,
@@ -325,7 +343,7 @@ describe('calculatePay', () => {
         amount: '0.00',
       },
       // Working days only: the holiday and the Sunday worked don't count.
-      { type: 'TRAVEL_PER_DAY', route: 'Route A', days: 22, amountPerDay: '20000.00', amount: '440000.00' },
+      { type: 'TRAVEL_PER_DAY', place: 'Site A', route: 'Route A', days: 22, amountPerDay: '20000.00', amount: '440000.00' },
     ]);
     expect(result.summary.absencesOnDaysOff).toBe(1);
     expect(result.total).toBe('8340000.00');
@@ -347,7 +365,7 @@ describe('calculatePay', () => {
     // Sept 16–30 has 13 working days.
     const result = calculatePay({ ...base, entries });
     expect(result.lines).toEqual([
-      { type: 'HOURS', kind: 'NORMAL', hours: '117.00', multiplier: '1.00', amount: '3900000.00' },
+      { type: 'HOURS', place: 'Site A', kind: 'NORMAL', hours: '117.00', multiplier: '1.00', amount: '3900000.00' },
     ]);
   });
 
@@ -385,5 +403,136 @@ describe('calculatePay', () => {
     expect(() => calculatePay({ ...base, entries, settings: { ...settings, normalHoursPerDay: '0' } })).toThrow(
       RangeError,
     );
+  });
+});
+
+describe('a day worked at several places', () => {
+  const base = {
+    monthlySalary: '7500000',
+    workingDays: workingDays(september),
+    calendar: september,
+    settings,
+    travel: null,
+  };
+  /** Hours lines as [place, kind, hours], to check what each place is charged with. */
+  const hoursLines = (entries: DayEntry[]) =>
+    calculatePay({ ...base, entries }).lines.flatMap((l) => (l.type === 'HOURS' ? [[l.place, l.kind, l.hours]] : []));
+
+  it('applies the normal hours to the day total and charges overtime to the place entered later', () => {
+    // Wednesday 2026-09-02: 6 h at Site A, then 5 h at Site B. 11 h = 9 normal + 2 overtime.
+    const entries = [worked('2026-09-02', '6', 'Site A', 1), worked('2026-09-02', '5', 'Site B', 2)];
+    expect(summarizeMonth(september, entries, '9')).toMatchObject({
+      normalHours: '9.00',
+      overtimeHours: '2.00',
+      daysWorked: 1,
+      workdaysWorked: 1,
+      splitDays: 1,
+    });
+    expect(hoursLines(entries)).toEqual([
+      ['Site A', 'NORMAL', '6.00'],
+      ['Site B', 'NORMAL', '3.00'],
+      ['Site B', 'OVERTIME', '2.00'],
+    ]);
+    // The order of entry is seq, not the order the caller lists them in.
+    expect(hoursLines([...entries].reverse())).toEqual(hoursLines(entries));
+    // Site A entered later: Site A gets the overtime.
+    expect(hoursLines([worked('2026-09-02', '6', 'Site A', 2), worked('2026-09-02', '5', 'Site B', 1)])).toEqual([
+      ['Site A', 'NORMAL', '4.00'],
+      ['Site B', 'NORMAL', '5.00'],
+      ['Site A', 'OVERTIME', '2.00'],
+    ]);
+  });
+
+  it('charges overtime the later place did not work to the place before it', () => {
+    // 10 h at Site A, then 2 h at Site B: 3 h overtime, but Site B has only 2.
+    expect(hoursLines([worked('2026-09-02', '10', 'Site A', 1), worked('2026-09-02', '2', 'Site B', 2)])).toEqual([
+      ['Site A', 'NORMAL', '9.00'],
+      ['Site A', 'OVERTIME', '1.00'],
+      ['Site B', 'OVERTIME', '2.00'],
+    ]);
+  });
+
+  it('charges each place its own hours on rest days and holidays', () => {
+    const entries = [
+      worked('2026-09-06', '5', 'Site A', 1), // Sunday
+      worked('2026-09-06', '6', 'Site B', 2),
+      worked('2026-09-01', '3', 'Site B', 7), // holiday
+      worked('2026-09-01', '2', 'Site A', 8),
+    ];
+    expect(hoursLines(entries)).toEqual([
+      ['Site A', 'REST_DAY', '5.00'],
+      ['Site B', 'REST_DAY', '6.00'],
+      ['Site A', 'HOLIDAY', '2.00'],
+      ['Site B', 'HOLIDAY', '3.00'],
+    ]);
+    expect(summarizeMonth(september, entries, '9')).toMatchObject({ daysWorked: 2, workdaysWorked: 0, splitDays: 2 });
+  });
+
+  it('pays a full month split across sites like any other month, explaining each site share', () => {
+    const entries = month('9', [worked('2026-09-02', '4', 'Site A', 1), worked('2026-09-02', '7', 'Site B', 2)]);
+    const result = calculatePay({ ...base, entries });
+    expect(result.lines).toEqual([
+      { type: 'HOURS', place: 'Site A', kind: 'NORMAL', hours: '220.00', multiplier: '1.00', amount: '7333333.33' },
+      { type: 'HOURS', place: 'Site B', kind: 'NORMAL', hours: '5.00', multiplier: '1.00', amount: '166666.67' },
+      { type: 'HOURS', place: 'Site B', kind: 'OVERTIME', hours: '2.00', multiplier: '1.50', amount: '100000.00' },
+    ]);
+    expect(result.total).toBe('7600000.00');
+  });
+
+  it('counts a split day once for travel pay, at the route of the place entered later', () => {
+    const entries = [
+      worked('2026-09-02', '4', 'Site A', 1),
+      worked('2026-09-02', '5', 'Site B', 2),
+      worked('2026-09-03', '9', 'Site A', 3),
+      worked('2026-09-06', '4', 'Site A', 4), // Sunday: no travel pay
+      worked('2026-09-06', '4', 'Site B', 5),
+    ];
+    const routes = {
+      'Site A': { route: 'Route A', amountPerDay: '20000' },
+      'Site B': { route: 'Route B', amountPerDay: '30000' },
+    };
+    const travelLines = (travel: TravelInput) =>
+      calculatePay({ ...base, entries, travel }).lines.filter((l) => l.type === 'TRAVEL_PER_DAY');
+
+    expect(travelLines({ kind: 'PER_DAY_WORKED', routes })).toEqual([
+      { type: 'TRAVEL_PER_DAY', place: 'Site A', route: 'Route A', days: 1, amountPerDay: '20000.00', amount: '20000.00' },
+      { type: 'TRAVEL_PER_DAY', place: 'Site B', route: 'Route B', days: 1, amountPerDay: '30000.00', amount: '30000.00' },
+    ]);
+    // No route at the later site: the day is shown and pays nothing.
+    expect(travelLines({ kind: 'PER_DAY_WORKED', routes: { ...routes, 'Site B': null } })[1]).toEqual({
+      type: 'TRAVEL_PER_DAY',
+      place: 'Site B',
+      route: null,
+      days: 1,
+      amountPerDay: '0.00',
+      amount: '0.00',
+    });
+    expect(() => travelLines({ kind: 'PER_DAY_WORKED', routes: { 'Site A': routes['Site A'] } })).toThrow(
+      /No travel route given for Site B/,
+    );
+  });
+
+  it('charges an absence to the place it was recorded at', () => {
+    const result = calculatePay({ ...base, entries: [status('2026-09-02', 'SICK', 'Site B')] });
+    expect(result.lines[0]).toMatchObject({ type: 'ABSENCE', place: 'Site B', absence: 'SICK', days: 1 });
+  });
+
+  it('rejects days that cannot be split', () => {
+    const summarize = (entries: DayEntry[]) => () => summarizeMonth(september, entries, '9');
+    expect(summarize([worked('2026-09-02', '4', 'Site A', 1), worked('2026-09-02', '5', 'Site A', 2)])).toThrow(
+      /Two entries for 2026-09-02 at Site A/,
+    );
+    expect(summarize([worked('2026-09-02', '4', 'Site A', 1), worked('2026-09-02', '5', 'Site B', 1)])).toThrow(
+      /same seq/,
+    );
+    // An absence or a day off is the whole day.
+    const sick = { ...status('2026-09-02', 'SICK', 'Site B'), seq: 2 };
+    expect(summarize([worked('2026-09-02', '4', 'Site A', 1), sick])).toThrow(/not all of them are hours worked/);
+    expect(summarize([worked('2026-09-02', '20', 'Site A', 1), worked('2026-09-02', '4.01', 'Site B', 2)])).toThrow(
+      /More than 24 hours on 2026-09-02/,
+    );
+    expect(summarize([worked('2026-09-02', '20', 'Site A', 1), worked('2026-09-02', '4', 'Site B', 2)])).not.toThrow();
+    expect(summarize([worked('2026-09-02', '4', '', 1)])).toThrow(/no place/);
+    expect(summarize([worked('2026-09-02', '4', 'Site A', 1.5)])).toThrow(/invalid seq/);
   });
 });

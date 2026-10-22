@@ -24,17 +24,32 @@ export const DAY_STATUSES: readonly DayStatus[] = [
   'NOT_EMPLOYED',
 ];
 
-/** One worker's record for one calendar day. */
+/**
+ * One worker's record for one calendar day at one place (site or team). A
+ * worker who works at several places on one day has one entry per place; any
+ * other status is the worker's whole day, so it is the day's only entry.
+ */
 export interface DayEntry {
   /** ISO date, e.g. "2026-09-01". */
   date: string;
+  /**
+   * Where the entry was made: the caller's key for the site/team. Pay lines
+   * are charged to it.
+   */
+  place: string;
+  /**
+   * Order the entries were created in (not edited in): of one worker's entries
+   * for a day, the higher seq was entered later. Overtime and travel pay of a
+   * split day go to the place entered later.
+   */
+  seq: number;
   status: DayStatus;
   /** Hours worked as a decimal string ("9", "7.5"); "0" unless status is WORKED. */
   hours: string;
 }
 
-/** A timesheet cell after parsing; the importer adds the date. */
-export type ParsedCell = Omit<DayEntry, 'date'>;
+/** A timesheet cell after parsing; the importer adds the date, place and seq. */
+export type ParsedCell = Pick<DayEntry, 'status' | 'hours'>;
 
 /**
  * A company's timesheet codes, keyed by normalizeCode(code). Codes are never

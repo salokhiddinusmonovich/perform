@@ -15,12 +15,46 @@ Multi-company web app for construction **timesheets and payroll** ("puantaj" in 
   - **Normal hours per day** is a Settings value (e.g. 9).
   - **Absence pay** is set per type (leave, sick, travel/transfer) in Settings: paid or unpaid, plus **hours paid per absence day** (pay = those hours × hourly rate). All three are **paid by default**. Default for **sick: 8 hours**. Default for leave and travel/transfer: the normal hours per day, following it if it changes (confirmed 2026-10-20). Absences recorded on rest days or holidays are **not paid** (nobody was due at work), so a full month never pays more than the salary.
   - **Travel pay** is configured in Settings: fixed amount per day worked per route, or a monthly amount entered by the accountant. "Per day worked" counts **working days only**: rest days and holidays worked don't earn travel pay.
-  - **Working days per month (decided: option D):** calculated automatically from the rest weekdays and the holiday list, with a per-month admin override. The app shows the calculated and overridden values side by side and records who changed them (audit trail). The app ships Uzbekistan's fixed-date public holidays per year. Moving holidays (Ramazon Hayit, Qurbon Hayit) and company days off are entered by an admin, and the app warns when a year's holidays are missing. Government day-off swaps are entered as both halves: the extra day off, and the rest weekday that becomes a working day (holiday kind `WORKING_DAY`).
+  - **Working days per month (decided: option D):** calculated automatically from the rest weekdays and the holiday list, with a per-month override (by owner, admin or accountant). The app shows the calculated and overridden values side by side and records who changed them (audit trail). The app ships Uzbekistan's fixed-date public holidays per year. Moving holidays (Ramazon Hayit, Qurbon Hayit) and company days off are entered by an admin, and the app warns when a year's holidays are missing. Government day-off swaps are entered as both halves: the extra day off, and the rest weekday that becomes a working day (holiday kind `WORKING_DAY`).
   - **Final pay is rounded to the nearest 1000 soʻm** (halves up), a Settings value. The difference shows as its own rounding line.
   - **Per-site settings:** a site may have its own rule set (rest weekdays and pay settings) that overrides the company default. Working-days overrides are per rule set.
   - Open: mid-month hire/exit (the hour model already prorates).
   - The overtime, rest-day and holiday multipliers have **no default**: the admin enters them when setting up the company.
   - Uzbek legal minimums (overtime, holiday pay) are deliberately out of scope for now. Don't enforce or assume them until the user raises it.
+- **Mobile app (decided 2026-10-20): a native app for foremen and timekeepers**, alongside the web app. Workers don't use it and don't have accounts. Timesheet entry must **work offline** on site and sync later. Photo and GPS check-in at the site will come later. It isn't built yet, but every API built from now on must already work for it:
+  - **Auth:** the API accepts the same server-side session either as the browser cookie or as a bearer token (`Authorization` header) for the app. The token is random and only its hash is stored. Each app session has a device name and can be revoked. The same-site Origin check applies to cookie requests only.
+  - **Offline-safe writes:** the client may create record IDs (UUIDs). Writes that the app syncs are idempotent, so a retry never creates duplicates. They also carry a version, so stale data from a phone is rejected instead of silently overwriting newer data. Syncing into a locked month is rejected with a clear error code.
+  - **Old app versions keep working:** API changes are backward compatible. When that's impossible, the API reports a minimum supported app version and older apps ask the user to update.
+  - Code meant for both web and mobile (schemas, payroll, translations) lives in shared packages, not inside `apps/web`.
+  - **Framework: React Native with Expo** (decided 2026-10-20). It reuses the shared TypeScript packages. The app will live in `apps/mobile`.
+- **Modules (decided 2026-10-20):** one app for everyone, with modules enabled per company. There is no separate build.
+  - Two modules: **Payroll**, which every company has, and **Timesheet**, which is optional. A timesheet-only company isn't offered.
+  - **Only the platform admin** turns the Timesheet module on or off.
+  - The API refuses routes of a disabled module with a stable error code. Every route declares its module through a guard, as with `@Roles`. Navigation, Settings and the mobile app show only enabled modules.
+  - **Where hours come from** in a company without the Timesheet module: an **Excel import of the daily grid**, or **monthly totals per worker** entered by the accountant (normal, overtime, rest-day and holiday hours, plus absence days). Both feed the same payroll engine. Every pay result shows which source its hours came from.
+  - **Modules only switch features on or off.** They don't restrict anything else: a company with the Timesheet module can also use Excel import and monthly totals.
+  - Turning the Timesheet module on or off takes effect from the **next open month**, so one month never mixes sources because of the switch.
+- **Roles (decided 2026-10-20, partly open, see `docs/ideas.md` idea 3):**
+  - **Accountant: add and view only, never edit or delete.** Corrections are made by adding a new record (e.g. a new salary from a date, an adjustment), never by changing an old one.
+    - The accountant adds salaries, adjustments, monthly travel amounts and working-day overrides, and can lock a month.
+  - **Locking a month:** owner, admin or accountant. **Unlocking: owner only**, with a required reason and an audit record.
+  - **Timekeepers and foremen never see salaries or pay amounts.** The API doesn't send these fields to them at all; hiding them in the UI isn't enough.
+  - **Only an owner or admin can change pay rules in Settings.**
+  - **New role: project manager.** Code `PROJECT_MANAGER`. Names: uz *Loyiha boshligʻi*, ru *Начальник проекта*, tr *Şantiye şefi*, en *Project manager*.
+    - Works only on the sites they are assigned to. An owner or admin assigns them.
+    - Manages workers and teams on those sites, and assigns foremen and timekeepers there.
+    - Can't create sites: only an owner or admin can.
+    - Sees salaries (for now).
+    - **Approves hours but doesn't enter them.** They're one of the roles a company can pick as approver.
+- **Hour entry (decided 2026-10-20): one flow, configured per company** in Settings. There are no separate flows per company.
+  - Settings choose which roles may enter hours (timekeeper, foreman, or both), whether entries need approval, and who approves. **Default for a new company: the timekeeper enters hours, and approval is off.**
+  - Who can see and enter what is scoped: a foreman to their own team(s), a timekeeper to their assigned site(s). Admins and owners see everything. The API enforces this, like company scoping.
+  - Each entry records who entered it and, when approval is on, who approved it. Payroll uses only approved hours when approval is on.
+  - **Only an admin or owner can change hours after approval**, and the change is audited. A locked month can't be changed by anyone.
+  - **A worker can work on two or more sites or teams on the same day**, with the hours split between them. Hours are stored per worker, day and site/team. Two people editing the same entry are protected by the version check (see Mobile app).
+    - Normal hours per day apply to the worker's **total** for the day, across all sites. Overtime above that is charged to the **site entered later**: the entry created last for that worker and day, by creation time, not by edit time.
+    - **Travel pay counts a split day once**, not once per site, at the route amount of the **site entered later** (same rule as overtime).
+  - **Entry deadline: reminders only, never a block.** Late entries are always accepted. For now reminders go to foremen and timekeepers, each only for their own teams or sites, as mobile push notifications. Each company sets its own deadline in Settings. The default is 10:00 the next morning, in the company's local time.
 - UI languages: `uz` (default), `ru`, `tr`, `en`. Every user-facing string goes through i18n in all four files.
 
 ## Principles
@@ -169,7 +203,9 @@ shadcn does **not** keep the UI consistent by itself. These rules do:
 
 ## Data integrity
 
-- **Locked months are final.** Once a payroll period is locked, its timesheets and amounts can't change. Corrections go into the next open period as adjustments.
+- **Locked months are final.** Once a payroll period is locked, its timesheets and amounts can't change. Corrections go into the next open period as adjustments. The one exception: an **owner can unlock a month**, giving a reason that is stored in the audit log. Unlocking is rare and never silent.
+  - **Every lock saves a snapshot** of the month's results. When the month is locked again, the app shows the differences from the previous lock, per worker.
+  - Differences are **not** carried into the next month automatically. The accountant decides and adds adjustments if needed.
 - **No silent data loss.** Workers, sites and teams are deactivated, not deleted, once they have timesheet or payroll history. Relations use `onDelete: NoAction` (not `Cascade`/`SetNull`, and not `Restrict`, whose Postgres error Prisma doesn't map to P2003), so a stray delete fails instead of taking history with it. Only `Session` cascades from `User`.
 - **Audit trail:** who changed what and when is recorded for timesheet entries, salaries, adjustments and period locks.
 - **Imports never write half a file.** An import validates first, shows every problem row, and then commits all-or-nothing in one transaction.

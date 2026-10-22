@@ -161,6 +161,7 @@ model Site {
   assignments Assignment[]
   memberships Membership[]
   ruleSets    PayrollRuleSet[]
+  entries     TimesheetEntry[]
 
   @@unique([companyId, name])
   /// Target of composite foreign keys that keep children in the same company
@@ -181,9 +182,12 @@ model Team {
   company     Company      @relation(fields: [companyId], references: [id], onDelete: NoAction)
   site        Site         @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
   assignments Assignment[]
+  entries     TimesheetEntry[]
 
   @@unique([siteId, name])
   @@unique([id, companyId])
+  /// Target of TimesheetEntry's foreign key, which also checks the team is on the entry's site
+  @@unique([id, siteId, companyId])
   @@index([companyId])
 }
 
@@ -424,22 +428,40 @@ enum DayStatus {
   NOT_EMPLOYED
 }
 
-/// companyId must match both the period's and the assignment's (composite foreign keys).
+/// One worker's day at one site/team. A worker who works at several sites or teams on
+/// one day has one entry per site/team, with the hours split between them; any other
+/// status is the whole day, so it is the day's only entry (checked by @puantaj/payroll
+/// and the API, as it spans rows).
+/// One entry per assignment, date, site and team: a unique index with NULLS NOT
+/// DISTINCT, added by hand in its migration because Prisma can't express it.
+/// companyId must match the period's, assignment's, site's and team's (composite foreign keys).
 model TimesheetEntry {
   id           String    @id @default(uuid()) @db.Uuid
   companyId    String    @db.Uuid
   periodId     String    @db.Uuid
+  /// The worker's employment (salary, travel route); the hours may be worked at another site
   assignmentId String    @db.Uuid
+  /// Where the hours were worked
+  siteId       String    @db.Uuid
+  /// null = no team. A team must be on siteId (composite foreign key).
+  teamId       String?   @db.Uuid
   date         DateTime  @db.Date
   status       DayStatus
   hours        Decimal   @default(0) @db.Decimal(4, 2)
   note         String?
+  /// Creation order, never changed by edits: of one worker's entries for a day, the
+  /// higher seq was entered later, and gets the day's overtime and travel pay
+  /// (DayEntry.seq in @puantaj/payroll). Unlike createdAt it never ties.
+  seq          BigInt    @unique @default(autoincrement())
+  createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   period     PayrollPeriod @relation(fields: [periodId, companyId], references: [id, companyId], onDelete: NoAction)
   assignment Assignment    @relation(fields: [assignmentId, companyId], references: [id, companyId], onDelete: NoAction)
+  site       Site          @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  team       Team?         @relation(fields: [teamId, siteId, companyId], references: [id, siteId, companyId], onDelete: NoAction)
 
-  @@unique([assignmentId, date])
+  @@index([assignmentId, date])
   @@index([periodId])
 }
 

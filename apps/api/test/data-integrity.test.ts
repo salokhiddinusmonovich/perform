@@ -33,6 +33,8 @@ async function workerWithHistory() {
       companyId: company.id,
       periodId: period.id,
       assignmentId: assignment.id,
+      siteId: site.id,
+      teamId: team.id,
       date: new Date('2026-09-01'),
       status: 'WORKED',
       hours: 9,
@@ -227,7 +229,13 @@ describe('rows never mix two companies', () => {
     const a = await workerWithHistory();
     const other = await createCompany(prisma);
     const otherPeriod = await prisma.payrollPeriod.create({ data: { companyId: other.id, year: 2026, month: 9 } });
-    const day = { assignmentId: a.assignment.id, date: new Date('2026-09-02'), status: 'WORKED' as const, hours: 9 };
+    const day = {
+      assignmentId: a.assignment.id,
+      siteId: a.site.id,
+      date: new Date('2026-09-02'),
+      status: 'WORKED' as const,
+      hours: 9,
+    };
 
     for (const companyId of [a.company.id, other.id]) {
       await expect(
@@ -282,8 +290,8 @@ describe('payroll periods and timesheet days', () => {
 
   it('allows hours only on worked days, up to 24', async () => {
     const { prisma } = ctx;
-    const { company, period, assignment } = await workerWithHistory();
-    const day = { companyId: company.id, periodId: period.id, assignmentId: assignment.id };
+    const { company, site, period, assignment } = await workerWithHistory();
+    const day = { companyId: company.id, periodId: period.id, assignmentId: assignment.id, siteId: site.id };
     const bad = [
       { date: new Date('2026-09-02'), status: 'WORKED' as const, hours: 0 },
       { date: new Date('2026-09-03'), status: 'WORKED' as const, hours: 24.5 },
@@ -295,5 +303,87 @@ describe('payroll periods and timesheet days', () => {
       );
     }
     await prisma.timesheetEntry.create({ data: { ...day, date: new Date('2026-09-05'), status: 'SICK' } });
+  });
+});
+
+describe('a day worked at several sites or teams', () => {
+  it('stores one entry per worker, day, site and team', async () => {
+    const { prisma } = ctx;
+    const { company, site, team, period, assignment } = await workerWithHistory();
+    const siteB = await prisma.site.create({ data: { companyId: company.id, name: 'Site B' } });
+    const teamA2 = await prisma.team.create({ data: { companyId: company.id, siteId: site.id, name: 'Team A2' } });
+    // workerWithHistory has 9 h at Site A / Team A on 2026-09-01.
+    const day = {
+      companyId: company.id,
+      periodId: period.id,
+      assignmentId: assignment.id,
+      date: new Date('2026-09-01'),
+      status: 'WORKED' as const,
+      hours: 2,
+    };
+
+    await prisma.timesheetEntry.create({ data: { ...day, siteId: site.id, teamId: teamA2.id } });
+    await prisma.timesheetEntry.create({ data: { ...day, siteId: siteB.id } });
+    await expect(
+      prisma.timesheetEntry.create({ data: { ...day, siteId: site.id, teamId: team.id } }),
+    ).rejects.toMatchObject(UNIQUE_VIOLATION);
+    // Without a team, a second entry for the same site still collides.
+    await expect(prisma.timesheetEntry.create({ data: { ...day, siteId: siteB.id } })).rejects.toMatchObject(
+      UNIQUE_VIOLATION,
+    );
+    expect(await prisma.timesheetEntry.count({ where: { assignmentId: assignment.id } })).toBe(3);
+
+    // A site or team with timesheet history can't be deleted, even with no assignment on it.
+    await expect(prisma.site.delete({ where: { id: siteB.id } })).rejects.toMatchObject(STILL_REFERENCED);
+    await expect(prisma.team.delete({ where: { id: teamA2.id } })).rejects.toMatchObject(STILL_REFERENCED);
+  });
+
+  it('records the order entries were created in, which edits do not change', async () => {
+    const { prisma } = ctx;
+    const { company, site, period, assignment } = await workerWithHistory();
+    const siteB = await prisma.site.create({ data: { companyId: company.id, name: 'Site B' } });
+    const day = {
+      companyId: company.id,
+      periodId: period.id,
+      assignmentId: assignment.id,
+      date: new Date('2026-09-02'),
+      status: 'WORKED' as const,
+    };
+    const first = await prisma.timesheetEntry.create({ data: { ...day, siteId: site.id, hours: 6 } });
+    const later = await prisma.timesheetEntry.create({ data: { ...day, siteId: siteB.id, hours: 5 } });
+    expect(later.seq).toBeGreaterThan(first.seq);
+
+    const edited = await prisma.timesheetEntry.update({ where: { id: first.id }, data: { hours: 7 } });
+    expect(edited.seq).toBe(first.seq);
+    expect(edited.createdAt).toEqual(first.createdAt);
+  });
+
+  it("refuses a team that is not on the entry's site, and a site or team from another company", async () => {
+    const { prisma } = ctx;
+    const a = await workerWithHistory();
+    const siteB = await prisma.site.create({ data: { companyId: a.company.id, name: 'Site B' } });
+    const other = await createCompany(prisma);
+    const otherSite = await prisma.site.create({ data: { companyId: other.id, name: 'Site X' } });
+    const otherTeam = await prisma.team.create({ data: { companyId: other.id, siteId: otherSite.id, name: 'Team X' } });
+    const day = {
+      companyId: a.company.id,
+      periodId: a.period.id,
+      assignmentId: a.assignment.id,
+      date: new Date('2026-09-03'),
+      status: 'WORKED' as const,
+      hours: 4,
+    };
+
+    for (const place of [
+      { siteId: siteB.id, teamId: a.team.id }, // Team A is on Site A
+      { siteId: otherSite.id },
+      { siteId: otherSite.id, teamId: otherTeam.id },
+      { siteId: a.site.id, teamId: otherTeam.id },
+    ]) {
+      await expect(prisma.timesheetEntry.create({ data: { ...day, ...place } })).rejects.toMatchObject(
+        STILL_REFERENCED,
+      );
+    }
+    await prisma.timesheetEntry.create({ data: { ...day, siteId: siteB.id } });
   });
 });
