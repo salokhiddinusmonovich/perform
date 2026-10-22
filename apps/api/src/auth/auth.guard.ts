@@ -9,18 +9,26 @@ import {
   IS_PUBLIC,
   OPTIONAL_AUTH,
   PLATFORM_ADMIN_ONLY,
+  MODULE,
   ROLES,
   type ActiveCompany,
+  type CompanyModule,
   type AuthedRequest,
 } from './auth.context';
-import { USABLE_MEMBERSHIP } from './memberships';
-import { SESSION_COOKIE, sessionCookieOptions, SessionService } from './session.service';
+import { SITE_SCOPED, USABLE_MEMBERSHIP } from './memberships';
+
+const SCOPE_INCLUDE = {
+  company: true,
+  sites: { select: { siteId: true } },
+  teams: { select: { teamId: true } },
+} as const;
+import { bearerToken, SESSION_COOKIE, sessionCookieOptions, SessionService } from './session.service';
 
 /**
  * Runs on every request (registered as APP_GUARD). Everything requires a login
  * unless marked @Public() (never looks at the session) or @OptionalAuth() (runs
  * either way, with the user if there is one). Then it applies, in order:
- * temporary-password lock, @PlatformAdminOnly(), @Roles().
+ * temporary-password lock, @PlatformAdminOnly(), @ForModule() and @Roles().
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -36,12 +44,16 @@ export class AuthGuard implements CanActivate {
 
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
     const res = ctx.switchToHttp().getResponse<Response>();
-    const token: unknown = req.cookies?.[SESSION_COOKIE];
-    const session = typeof token === 'string' && token ? await this.sessions.findValid(token) : null;
+    // The app sends its token as a bearer header; the browser as a cookie. A request
+    // with a bearer header is authenticated by it alone.
+    const bearer = bearerToken(req);
+    const cookie: unknown = req.cookies?.[SESSION_COOKIE];
+    const token = bearer ?? (typeof cookie === 'string' && cookie ? cookie : null);
+    const session = token ? await this.sessions.findValid(token, bearer ? 'APP' : 'BROWSER') : null;
 
     if (!session || !session.user.isActive) {
       if (session) await this.sessions.delete(session.id);
-      if (token) res.clearCookie(SESSION_COOKIE, { ...sessionCookieOptions(), maxAge: undefined });
+      if (!bearer && token) res.clearCookie(SESSION_COOKIE, { ...sessionCookieOptions(), maxAge: undefined });
       if (this.reflector.getAllAndOverride<boolean>(OPTIONAL_AUTH, targets)) return true;
       throw unauthorized();
     }
@@ -71,7 +83,11 @@ export class AuthGuard implements CanActivate {
     }
     const roles = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES, targets);
     if (roles) {
+      const module = this.reflector.getAllAndOverride<CompanyModule | undefined>(MODULE, targets);
+      // A programming mistake, not a user error: fail loudly so tests catch it.
+      if (!module) throw new Error(`${ctx.getClass().name}.${ctx.getHandler().name} has @Roles() but no @ForModule()`);
       if (!company) throw forbidden('company.required');
+      if (!company.modules.includes(module)) throw forbidden('module.disabled');
       if (!roles.includes(company.role)) throw forbidden();
     }
     return true;
@@ -91,11 +107,11 @@ export class AuthGuard implements CanActivate {
       (activeCompanyId &&
         (await this.prisma.membership.findFirst({
           where: { ...usable, companyId: activeCompanyId },
-          include: { company: true },
+          include: SCOPE_INCLUDE,
         }))) ||
       (await this.prisma.membership.findFirst({
         where: usable,
-        include: { company: true },
+        include: SCOPE_INCLUDE,
         orderBy: { createdAt: 'asc' },
       }));
 
@@ -110,7 +126,9 @@ export class AuthGuard implements CanActivate {
       currency: company.currency,
       timezone: company.timezone,
       role: membership.role,
-      siteId: membership.siteId,
+      modules: company.timesheetModule ? ['PAYROLL', 'TIMESHEET'] : ['PAYROLL'],
+      siteIds: SITE_SCOPED.includes(membership.role) ? membership.sites.map((s) => s.siteId) : null,
+      teamIds: membership.role === 'FOREMAN' ? membership.teams.map((t) => t.teamId) : null,
     };
   }
 }

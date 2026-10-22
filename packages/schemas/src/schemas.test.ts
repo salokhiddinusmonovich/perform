@@ -4,11 +4,14 @@ import {
   companySettingsSchema,
   contactSchema,
   createMemberSchema,
+  createWorkerSchema,
   holidaySchema,
   NEW_PAY_RULES,
   normalizePhone,
   parseIdentifier,
   payRulesSchema,
+  siteSchema,
+  workerSchema,
   workingDaysOverrideSchema,
 } from './index.js';
 
@@ -197,5 +200,37 @@ describe('the API accepts what a form sends', () => {
       const once = schema.parse(input);
       expect(schema.parse(JSON.parse(JSON.stringify(once)))).toEqual(once);
     }
+  });
+});
+
+describe('worker and placement schemas', () => {
+  const worker = {
+    lastName: ' Testov ',
+    firstName: 'Test',
+    patronymic: '',
+    position: '',
+    employmentType: 'DIRECT',
+    pinfl: '1234 5678 9012 34',
+    birthDate: '1985-02-28',
+    nationality: '',
+    passportSeries: 'ab',
+    passportNumber: '',
+    phone: '',
+  } as const;
+
+  it('normalizes a worker and accepts its own output', () => {
+    const once = createWorkerSchema.parse({
+      worker,
+      placement: { siteId: '7c9e6679-7425-40de-944b-e07fc1f90ae7', teamId: '', from: '2026-09-01', shift: 'DAY' },
+    });
+    expect(once.worker).toMatchObject({ lastName: 'Testov', pinfl: '12345678901234', passportSeries: 'AB', phone: null, patronymic: null });
+    expect(once.placement.teamId).toBeNull();
+    expect(createWorkerSchema.parse(JSON.parse(JSON.stringify(once)))).toEqual(once);
+  });
+
+  it('checks PINFL and dates', () => {
+    expect(messages(workerSchema.safeParse({ ...worker, pinfl: '123' }))).toEqual(['validation.pinflInvalid']);
+    expect(messages(workerSchema.safeParse({ ...worker, birthDate: '1985-02-30' }))).toEqual(['validation.dateInvalid']);
+    expect(messages(siteSchema.safeParse({ name: ' ' }))).toEqual(['validation.required']);
   });
 });

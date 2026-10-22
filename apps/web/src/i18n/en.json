@@ -18,7 +18,10 @@
     "logout": "Log out",
     "payRules": "Pay rules",
     "holidays": "Holidays",
-    "workingDays": "Working days"
+    "workingDays": "Working days",
+    "organisation": "Organisation",
+    "sites": "Sites",
+    "workers": "Workers"
   },
   "settings": {
     "language": "Language",
@@ -178,8 +181,10 @@
       "ADMIN": "Manages company settings and users (except owners)",
       "ACCOUNTANT": "Works with payroll",
       "TIMEKEEPER": "Enters and checks timesheets",
-      "FOREMAN": "Enters timesheets for their team"
-    }
+      "FOREMAN": "Enters timesheets for their team",
+      "PROJECT_MANAGER": "Manages workers, teams, timekeepers and foremen on their own sites; approves hours"
+    },
+    "PROJECT_MANAGER": "Project manager"
   },
   "tempPassword": {
     "title": "Temporary password",
@@ -213,8 +218,21 @@
         "title": "Activate company?",
         "description": "Users of {{name}} will be able to work in it again.",
         "button": "Activate"
+      },
+      "timesheetOn": {
+        "title": "Turn on the Timesheet module?",
+        "description": "{{name}} will be able to enter daily hours in the app. Payroll uses them from the next open month.",
+        "button": "Turn on"
+      },
+      "timesheetOff": {
+        "title": "Turn off the Timesheet module?",
+        "description": "{{name}} will no longer enter daily hours. Entered hours are kept. From the next open month, hours come from Excel import or monthly totals.",
+        "button": "Turn off"
       }
-    }
+    },
+    "modules": "Modules",
+    "timesheetOn": "Turn on Timesheet module",
+    "timesheetOff": "Turn off Timesheet module"
   },
   "validation": {
     "required": "Required",
@@ -238,7 +256,11 @@
     "roundingStepRange": "Must be more than 0",
     "restWeekdaysAllWeek": "At least one day of the week must be a working day",
     "dateInvalid": "Enter a valid date",
-    "workingDaysRange": "From 1 to the number of days in the month"
+    "workingDaysRange": "From 1 to the number of days in the month",
+    "pinflInvalid": "PINFL is 14 digits",
+    "placementBeforeCurrent": "Must be after the first day at the current site",
+    "leaveBeforeStart": "Can't be before the first working day",
+    "teamNotOnSite": "This team isn't on the chosen site"
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -286,6 +308,32 @@
     },
     "workingDays": {
       "unchanged": "That is already the value in use."
+    },
+    "module": {
+      "disabled": "Your company doesn't have this module. Ask the system operator to turn it on."
+    },
+    "session": {
+      "notFound": "This login no longer exists."
+    },
+    "site": {
+      "notFound": "This site doesn't exist or you don't work on it.",
+      "nameTaken": "A site with this name already exists.",
+      "hasWorkers": "Workers still work on this site. Move them or record their leaving first.",
+      "inactive": "This site is closed."
+    },
+    "team": {
+      "notFound": "This team doesn't exist or you don't work with it.",
+      "nameTaken": "This site already has a team with this name.",
+      "hasWorkers": "Workers are still in this team. Move them first.",
+      "inactive": "This team is closed."
+    },
+    "staff": {
+      "wrongRole": "This person's role isn't assigned here."
+    },
+    "worker": {
+      "notFound": "This worker doesn't exist or you don't see them.",
+      "pinflTaken": "A worker with this PINFL already exists.",
+      "hasLaterEntries": "There are timesheet days after this date. Change or remove them first."
     }
   },
   "payRules": {
@@ -435,5 +483,130 @@
     "historySet": "Set to {{count}}",
     "historyBackToCalculated": "Back to the calculated value",
     "lockedHint": "This month is locked. Its working days can't be changed."
+  },
+  "modules": {
+    "PAYROLL": "Payroll",
+    "TIMESHEET": "Timesheet"
+  },
+  "sites": {
+    "title": "Sites",
+    "description": "Construction sites, their teams and who works on them",
+    "add": "Add site",
+    "edit": "Edit site",
+    "name": "Site name",
+    "code": "Code",
+    "codeHint": "Optional short code, e.g. from your accounting",
+    "address": "Address",
+    "teams": "Teams",
+    "workers": "Workers",
+    "status": "Status",
+    "active": "Active",
+    "closed": "Closed",
+    "close": "Close site",
+    "reopen": "Reopen site",
+    "emptyTitle": "No sites yet",
+    "emptyDescription": "Add your first site, then its teams and workers.",
+    "emptyDescriptionNotAssigned": "You aren't assigned to a site yet. Ask your company's administrator.",
+    "notFoundDescription": "This site doesn't exist or you don't work on it.",
+    "backToSites": "All sites",
+    "staff": "Project managers and timekeepers",
+    "staffHint": "They see and work only on the sites they are assigned to.",
+    "manageStaff": "Assign people",
+    "staffDialogHint": "Project managers and timekeepers who work on {{site}}.",
+    "nobodyAssigned": "Nobody is assigned yet.",
+    "addPerson": "Add a person",
+    "choosePerson": "Choose a person",
+    "noCandidates": "Everyone who can be assigned is already here. Add users with this role first.",
+    "assign": "Assign",
+    "removePerson": "Remove {{name}}",
+    "confirmClose": {
+      "title": "Close site?",
+      "description": "{{name}} will be closed: no new teams or workers can be added there. Its history stays."
+    },
+    "confirmReopen": {
+      "title": "Reopen site?",
+      "description": "{{name}} will be open for teams and workers again."
+    }
+  },
+  "teams": {
+    "add": "Add team",
+    "edit": "Edit team",
+    "name": "Team name",
+    "department": "Department",
+    "departmentHint": "Optional, e.g. Electrical or Mechanical",
+    "foremen": "Foremen",
+    "manageForemen": "Foremen",
+    "foremenDialogHint": "Foremen who lead {{team}}. They see and work only with their own teams.",
+    "closed": "Closed",
+    "close": "Close team",
+    "reopen": "Reopen team",
+    "emptyTitle": "No teams on this site yet",
+    "emptyDescription": "Add teams to group workers and give them a foreman.",
+    "confirmClose": {
+      "title": "Close team?",
+      "description": "{{name}} will be closed: no workers can be placed in it. Its history stays."
+    },
+    "confirmReopen": {
+      "title": "Reopen team?",
+      "description": "{{name}} will be open for workers again."
+    }
+  },
+  "workers": {
+    "title": "Workers",
+    "description": "People who work on your sites, and where they work",
+    "add": "Add worker",
+    "addDescription": "The worker’s details and where they start. Salary is entered separately by the accountant.",
+    "edit": "Edit worker",
+    "name": "Name",
+    "site": "Site",
+    "team": "Team",
+    "noTeam": "No team",
+    "since": "Since",
+    "status": "Status",
+    "working": "Working",
+    "leftOn": "Left {{date}}",
+    "leavesOn": "Leaves {{date}}",
+    "allSites": "All sites",
+    "filterWorking": "Working",
+    "filterLeft": "Left",
+    "filterAll": "All",
+    "emptyTitle": "No workers here",
+    "emptyDescription": "Add workers with the button above.",
+    "lastName": "Last name",
+    "firstName": "First name",
+    "patronymic": "Patronymic",
+    "position": "Position",
+    "employmentType": "Employment",
+    "chooseEmploymentType": "Choose",
+    "employment": {
+      "DIRECT": "Direct",
+      "INDIRECT": "Indirect"
+    },
+    "personalData": "Personal data",
+    "personalDataHint": "Not shown to timekeepers and foremen.",
+    "pinfl": "PINFL",
+    "pinflHint": "14 digits, from the passport",
+    "birthDate": "Date of birth",
+    "passportSeries": "Passport series",
+    "passportNumber": "Passport number",
+    "nationality": "Nationality",
+    "phone": "Phone",
+    "placement": "Where they work",
+    "chooseSite": "Choose a site",
+    "firstDay": "First working day",
+    "firstDayThere": "First day there",
+    "shift": "Shift",
+    "shiftName": {
+      "DAY": "Day",
+      "NIGHT": "Night"
+    },
+    "move": "Move to another site or team",
+    "moveHint": "Their current placement ends the day before. Earlier days stay where they were.",
+    "rehire": "Hire again",
+    "rehireHint": "They start again from the day you choose.",
+    "leave": "Record leaving",
+    "changeLastDay": "Change last working day",
+    "leaveHint": "The last day they work. Days after it are not theirs any more.",
+    "lastDay": "Last working day"
   }
 }

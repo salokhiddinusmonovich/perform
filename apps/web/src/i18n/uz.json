@@ -18,7 +18,10 @@
     "logout": "Chiqish",
     "payRules": "Ish haqi qoidalari",
     "holidays": "Bayram kunlari",
-    "workingDays": "Ish kunlari"
+    "workingDays": "Ish kunlari",
+    "organisation": "Tashkilot",
+    "sites": "Obyektlar",
+    "workers": "Ishchilar"
   },
   "settings": {
     "language": "Til",
@@ -178,8 +181,10 @@
       "ADMIN": "Kompaniya sozlamalari va foydalanuvchilarni boshqaradi (egalardan tashqari)",
       "ACCOUNTANT": "Ish haqi hisob-kitobi bilan ishlaydi",
       "TIMEKEEPER": "Tabelni kiritadi va tekshiradi",
-      "FOREMAN": "Oʻz brigadasi tabelini kiritadi"
-    }
+      "FOREMAN": "Oʻz brigadasi tabelini kiritadi",
+      "PROJECT_MANAGER": "Oʻz obyektlarida ishchilar, brigadalar, tabelchilar va brigadirlarni boshqaradi; soatlarni tasdiqlaydi"
+    },
+    "PROJECT_MANAGER": "Loyiha boshligʻi"
   },
   "tempPassword": {
     "title": "Vaqtinchalik parol",
@@ -213,8 +218,21 @@
         "title": "Kompaniyani faollashtirasizmi?",
         "description": "{{name}} foydalanuvchilari unda yana ishlay oladi.",
         "button": "Faollashtirish"
+      },
+      "timesheetOn": {
+        "title": "Tabel moduli yoqilsinmi?",
+        "description": "{{name}} ilovada kunlik soatlarni kirita oladi. Ish haqi ularni keyingi ochiq oydan boshlab ishlatadi.",
+        "button": "Yoqish"
+      },
+      "timesheetOff": {
+        "title": "Tabel moduli oʻchirilsinmi?",
+        "description": "{{name}} endi kunlik soatlarni kiritmaydi. Kiritilgan soatlar saqlanadi. Keyingi ochiq oydan soatlar Excel importi yoki oylik jamlardan olinadi.",
+        "button": "Oʻchirish"
       }
-    }
+    },
+    "modules": "Modullar",
+    "timesheetOn": "Tabel modulini yoqish",
+    "timesheetOff": "Tabel modulini oʻchirish"
   },
   "validation": {
     "required": "Majburiy maydon",
@@ -238,7 +256,11 @@
     "roundingStepRange": "0 dan katta boʻlishi kerak",
     "restWeekdaysAllWeek": "Haftaning kamida bir kuni ish kuni boʻlishi kerak",
     "dateInvalid": "Toʻgʻri sana kiriting",
-    "workingDaysRange": "1 dan oydagi kunlar sonigacha"
+    "workingDaysRange": "1 dan oydagi kunlar sonigacha",
+    "pinflInvalid": "JShShIR 14 ta raqamdan iborat",
+    "placementBeforeCurrent": "Hozirgi obyektdagi birinchi kundan keyin boʻlishi kerak",
+    "leaveBeforeStart": "Birinchi ish kunidan oldin boʻlishi mumkin emas",
+    "teamNotOnSite": "Bu brigada tanlangan obyektda emas"
   },
   "errors": {
     "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
@@ -286,6 +308,32 @@
     },
     "workingDays": {
       "unchanged": "Bu qiymat allaqachon ishlatilmoqda."
+    },
+    "module": {
+      "disabled": "Kompaniyangizda bu modul yoʻq. Uni yoqishni tizim operatoridan soʻrang."
+    },
+    "session": {
+      "notFound": "Bu kirish endi mavjud emas."
+    },
+    "site": {
+      "notFound": "Bu obyekt mavjud emas yoki siz unda ishlamaysiz.",
+      "nameTaken": "Bu nomli obyekt allaqachon bor.",
+      "hasWorkers": "Bu obyektda hali ishchilar ishlayapti. Avval ularni oʻtkazing yoki ketganini qayd eting.",
+      "inactive": "Bu obyekt yopilgan."
+    },
+    "team": {
+      "notFound": "Bu brigada mavjud emas yoki siz u bilan ishlamaysiz.",
+      "nameTaken": "Bu obyektda shu nomli brigada allaqachon bor.",
+      "hasWorkers": "Bu brigadada hali ishchilar bor. Avval ularni oʻtkazing.",
+      "inactive": "Bu brigada yopilgan."
+    },
+    "staff": {
+      "wrongRole": "Bu odamning roli bu yerga biriktirilmaydi."
+    },
+    "worker": {
+      "notFound": "Bu ishchi mavjud emas yoki siz uni koʻrmaysiz.",
+      "pinflTaken": "Bu JShShIRli ishchi allaqachon bor.",
+      "hasLaterEntries": "Bu sanadan keyin tabel kunlari bor. Avval ularni oʻzgartiring yoki oʻchiring."
     }
   },
   "payRules": {
@@ -435,5 +483,130 @@
     "historySet": "Belgilandi: {{count}}",
     "historyBackToCalculated": "Hisoblangan qiymatga qaytarildi",
     "lockedHint": "Bu oy yopilgan. Uning ish kunlarini oʻzgartirib boʻlmaydi."
+  },
+  "modules": {
+    "PAYROLL": "Ish haqi",
+    "TIMESHEET": "Tabel"
+  },
+  "sites": {
+    "title": "Obyektlar",
+    "description": "Qurilish obyektlari, ularning brigadalari va kim qayerda ishlashi",
+    "add": "Obyekt qoʻshish",
+    "edit": "Obyektni tahrirlash",
+    "name": "Obyekt nomi",
+    "code": "Kod",
+    "codeHint": "Ixtiyoriy qisqa kod, masalan buxgalteriyadagi",
+    "address": "Manzil",
+    "teams": "Brigadalar",
+    "workers": "Ishchilar",
+    "status": "Holati",
+    "active": "Faol",
+    "closed": "Yopilgan",
+    "close": "Obyektni yopish",
+    "reopen": "Obyektni qayta ochish",
+    "emptyTitle": "Hali obyektlar yoʻq",
+    "emptyDescription": "Birinchi obyektni, soʻng uning brigadalari va ishchilarini qoʻshing.",
+    "emptyDescriptionNotAssigned": "Siz hali hech qaysi obyektga biriktirilmagansiz. Kompaniya administratoriga murojaat qiling.",
+    "notFoundDescription": "Bu obyekt mavjud emas yoki siz unda ishlamaysiz.",
+    "backToSites": "Barcha obyektlar",
+    "staff": "Loyiha boshliqlari va tabelchilar",
+    "staffHint": "Ular faqat oʻzlari biriktirilgan obyektlarni koʻradi va ularda ishlaydi.",
+    "manageStaff": "Odamlarni biriktirish",
+    "staffDialogHint": "{{site}} obyektida ishlaydigan loyiha boshliqlari va tabelchilar.",
+    "nobodyAssigned": "Hali hech kim biriktirilmagan.",
+    "addPerson": "Odam qoʻshish",
+    "choosePerson": "Odamni tanlang",
+    "noCandidates": "Biriktirish mumkin boʻlgan hamma allaqachon shu yerda. Avval shu roldagi foydalanuvchilarni qoʻshing.",
+    "assign": "Biriktirish",
+    "removePerson": "{{name}}ni olib tashlash",
+    "confirmClose": {
+      "title": "Obyekt yopilsinmi?",
+      "description": "{{name}} yopiladi: unga yangi brigada yoki ishchi qoʻshib boʻlmaydi. Tarixi saqlanadi."
+    },
+    "confirmReopen": {
+      "title": "Obyekt qayta ochilsinmi?",
+      "description": "{{name}} brigadalar va ishchilar uchun yana ochiladi."
+    }
+  },
+  "teams": {
+    "add": "Brigada qoʻshish",
+    "edit": "Brigadani tahrirlash",
+    "name": "Brigada nomi",
+    "department": "Boʻlim",
+    "departmentHint": "Ixtiyoriy, masalan Elektr yoki Mexanika",
+    "foremen": "Brigadirlar",
+    "manageForemen": "Brigadirlar",
+    "foremenDialogHint": "{{team}} brigadasini boshqaradigan brigadirlar. Ular faqat oʻz brigadalarini koʻradi.",
+    "closed": "Yopilgan",
+    "close": "Brigadani yopish",
+    "reopen": "Brigadani qayta ochish",
+    "emptyTitle": "Bu obyektda hali brigadalar yoʻq",
+    "emptyDescription": "Ishchilarni guruhlash va ularga brigadir tayinlash uchun brigadalar qoʻshing.",
+    "confirmClose": {
+      "title": "Brigada yopilsinmi?",
+      "description": "{{name}} yopiladi: unga ishchi joylashtirib boʻlmaydi. Tarixi saqlanadi."
+    },
+    "confirmReopen": {
+      "title": "Brigada qayta ochilsinmi?",
+      "description": "{{name}} ishchilar uchun yana ochiladi."
+    }
+  },
+  "workers": {
+    "title": "Ishchilar",
+    "description": "Obyektlaringizda ishlaydigan odamlar va ular qayerda ishlashi",
+    "add": "Ishchi qoʻshish",
+    "addDescription": "Ishchi maʼlumotlari va qayerda ish boshlashi. Maoshni buxgalter alohida kiritadi.",
+    "edit": "Ishchini tahrirlash",
+    "name": "F.I.Sh.",
+    "site": "Obyekt",
+    "team": "Brigada",
+    "noTeam": "Brigadasiz",
+    "since": "Qachondan",
+    "status": "Holati",
+    "working": "Ishlamoqda",
+    "leftOn": "{{date}} da ketgan",
+    "leavesOn": "{{date}} da ketadi",
+    "allSites": "Barcha obyektlar",
+    "filterWorking": "Ishlayotganlar",
+    "filterLeft": "Ketganlar",
+    "filterAll": "Hammasi",
+    "emptyTitle": "Bu yerda ishchilar yoʻq",
+    "emptyDescription": "Yuqoridagi tugma bilan ishchilarni qoʻshing.",
+    "lastName": "Familiya",
+    "firstName": "Ism",
+    "patronymic": "Otasining ismi",
+    "position": "Lavozim",
+    "employmentType": "Ish turi",
+    "chooseEmploymentType": "Tanlang",
+    "employment": {
+      "DIRECT": "Toʻgʻridan-toʻgʻri",
+      "INDIRECT": "Bilvosita"
+    },
+    "personalData": "Shaxsiy maʼlumotlar",
+    "personalDataHint": "Tabelchilar va brigadirlarga koʻrsatilmaydi.",
+    "pinfl": "JShShIR (PINFL)",
+    "pinflHint": "14 ta raqam, pasportdan",
+    "birthDate": "Tugʻilgan sana",
+    "passportSeries": "Pasport seriyasi",
+    "passportNumber": "Pasport raqami",
+    "nationality": "Fuqaroligi",
+    "phone": "Telefon",
+    "placement": "Qayerda ishlaydi",
+    "chooseSite": "Obyektni tanlang",
+    "firstDay": "Birinchi ish kuni",
+    "firstDayThere": "U yerdagi birinchi kun",
+    "shift": "Smena",
+    "shiftName": {
+      "DAY": "Kunduzgi",
+      "NIGHT": "Tungi"
+    },
+    "move": "Boshqa obyekt yoki brigadaga oʻtkazish",
+    "moveHint": "Hozirgi joyi bir kun oldin tugaydi. Oldingi kunlar oʻz joyida qoladi.",
+    "rehire": "Qayta ishga olish",
+    "rehireHint": "Siz tanlagan kundan boshlab yana ishlaydi.",
+    "leave": "Ishdan ketishni qayd etish",
+    "changeLastDay": "Oxirgi ish kunini oʻzgartirish",
+    "leaveHint": "Oxirgi ishlagan kuni. Undan keyingi kunlar endi unga tegishli emas.",
+    "lastDay": "Oxirgi ish kuni"
   }
 }

@@ -1,11 +1,13 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
-import { createCompanySchema, type CreateCompany } from '@puantaj/schemas';
-import { z } from 'zod';
+import {
+  createCompanySchema,
+  updatePlatformCompanySchema,
+  type CreateCompany,
+  type UpdatePlatformCompany,
+} from '@puantaj/schemas';
 import { Auth, PlatformAdminOnly, type AuthContext } from '../auth/auth.context';
 import { ZodPipe } from '../common/zod.pipe';
 import { PlatformService, type CompanyListItem } from './platform.service';
-
-const setActiveSchema = z.object({ isActive: z.boolean() });
 
 @PlatformAdminOnly()
 @Controller('platform/companies')
@@ -24,11 +26,11 @@ export class PlatformController {
 
   @Patch(':id')
   @HttpCode(204)
-  setActive(
+  update(
     @Auth() auth: AuthContext,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodPipe(setActiveSchema)) body: { isActive: boolean },
+    @Body(new ZodPipe(updatePlatformCompanySchema)) body: UpdatePlatformCompany,
   ): Promise<void> {
-    return this.platform.setActive(auth, id, body.isActive);
+    return this.platform.update(auth, id, body);
   }
 }

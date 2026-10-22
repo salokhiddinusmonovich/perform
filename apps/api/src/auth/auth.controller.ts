@@ -1,8 +1,10 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Req, Res } from '@nestjs/common';
 import {
+  appLoginSchema,
   changePasswordSchema,
   loginSchema,
   switchCompanySchema,
+  type AppLoginInput,
   type ChangePasswordInput,
   type LoginInput,
 } from '@puantaj/schemas';
@@ -16,7 +18,7 @@ import {
   Public,
   type AuthContext,
 } from './auth.context';
-import { AuthService, type Me } from './auth.service';
+import { AuthService, type Me, type SessionView } from './auth.service';
 import { SESSION_COOKIE, sessionCookieOptions } from './session.service';
 
 @Controller('auth')
@@ -31,8 +33,38 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
-    const token = await this.auth.login(body, req.ip ?? '', req.get('user-agent'));
+    const token = await this.auth.login(body, { kind: 'BROWSER', ip: req.ip ?? '', userAgent: req.get('user-agent') });
     res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
+  }
+
+  /**
+   * The mobile app's login. Returns the token once; the app sends it as
+   * `Authorization: Bearer <token>` and the server keeps only its hash.
+   */
+  @Public()
+  @Post('token')
+  async token(@Body(new ZodPipe(appLoginSchema)) body: AppLoginInput, @Req() req: Request): Promise<{ token: string }> {
+    const { deviceName, ...login } = body;
+    const token = await this.auth.login(login, {
+      kind: 'APP',
+      deviceName,
+      ip: req.ip ?? '',
+      userAgent: req.get('user-agent'),
+    });
+    return { token };
+  }
+
+  @AllowTemporaryPassword()
+  @Get('sessions')
+  sessions(@Auth() auth: AuthContext): Promise<SessionView[]> {
+    return this.auth.listSessions(auth);
+  }
+
+  @AllowTemporaryPassword()
+  @Delete('sessions/:id')
+  @HttpCode(204)
+  revokeSession(@Auth() auth: AuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    return this.auth.revokeSession(auth, id);
   }
 
   @AllowTemporaryPassword()

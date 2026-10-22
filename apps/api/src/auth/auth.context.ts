@@ -19,9 +19,17 @@ export interface ActiveCompany {
   currency: string;
   timezone: string;
   role: Role;
-  /** Site the member is limited to (timekeepers/foremen); null = all sites */
-  siteId: string | null;
+  /** Modules this company has (Payroll always). */
+  modules: CompanyModule[];
+  /** Sites a project manager or timekeeper works on (MemberSite); null for other roles. */
+  siteIds: string[] | null;
+  /** Teams a foreman leads (MemberTeam); null for other roles. */
+  teamIds: string[] | null;
 }
+
+/** Feature modules (AGENTS.md: Modules). Every company has PAYROLL; TIMESHEET is optional. */
+export const COMPANY_MODULES = ['PAYROLL', 'TIMESHEET'] as const;
+export type CompanyModule = (typeof COMPANY_MODULES)[number];
 
 export interface AuthContext {
   sessionId: string;
@@ -42,6 +50,7 @@ export const OPTIONAL_AUTH = 'auth:optional';
 export const ALLOW_TEMPORARY_PASSWORD = 'auth:allowTemporaryPassword';
 export const PLATFORM_ADMIN_ONLY = 'auth:platformAdmin';
 export const ROLES = 'auth:roles';
+export const MODULE = 'auth:module';
 
 /** No login needed (health check, login itself). */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
@@ -53,6 +62,13 @@ export const AllowTemporaryPassword = () => SetMetadata(ALLOW_TEMPORARY_PASSWORD
 export const PlatformAdminOnly = () => SetMetadata(PLATFORM_ADMIN_ONLY, true);
 /** Needs an active company where the user has one of these roles. */
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES, roles);
+/**
+ * The module a company route belongs to (AGENTS.md: Modules). Required on every route
+ * with @Roles(); the route is refused with `module.disabled` when the company doesn't
+ * have the module. Payroll is every company's base module, so company settings and
+ * users belong to it too.
+ */
+export const ForModule = (module: CompanyModule) => SetMetadata(MODULE, module);
 
 /** The logged-in user's context. */
 export const Auth = createParamDecorator((_: unknown, ctx: ExecutionContext): AuthContext => {

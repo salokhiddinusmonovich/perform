@@ -1,4 +1,4 @@
-import type { INestApplication } from '@nestjs/common';
+import type { INestApplication, Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { Role } from '@prisma/client';
 import request from 'supertest';
@@ -16,9 +16,10 @@ export interface TestContext {
   prisma: PrismaService;
 }
 
-export async function startApp(): Promise<TestContext> {
+/** Starts the real app; `controllers` adds test-only routes (e.g. to probe a guard). */
+export async function startApp(controllers: Type[] = []): Promise<TestContext> {
   process.env.DATABASE_URL = inject('databaseUrl');
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule], controllers }).compile();
   const app = configureApp(moduleRef.createNestApplication());
   await app.init();
   return { app, prisma: app.get(PrismaService) };
@@ -27,7 +28,7 @@ export async function startApp(): Promise<TestContext> {
 /** Empties every table except the migration history. */
 export async function resetDb(prisma: PrismaService) {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "Session", "Membership", "TimesheetEntry", "Adjustment", "PayrollPeriod", "WorkingDaysOverride", "PayrollRules", "PayrollRuleSet", "Holiday", "TimesheetCode", "Assignment", "TravelRoute", "Worker", "Team", "Site", "User", "Company" CASCADE',
+    'TRUNCATE "AuditLog", "Session", "MemberSite", "MemberTeam", "Membership", "Salary", "TimesheetEntry", "Adjustment", "PayrollPeriod", "WorkingDaysOverride", "PayrollRules", "PayrollRuleSet", "Holiday", "TimesheetCode", "Assignment", "TravelRoute", "Worker", "Team", "Site", "User", "Company" CASCADE',
   );
 }
 

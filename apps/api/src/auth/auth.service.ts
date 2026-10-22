@@ -1,13 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { parseIdentifier, type ChangePasswordInput, type LoginInput } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
-import { badRequest, forbidden, tooManyRequests, unauthorized } from '../common/api-error';
+import type { SessionKind } from '@prisma/client';
+import { badRequest, forbidden, notFound, tooManyRequests, unauthorized } from '../common/api-error';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthContext } from './auth.context';
 import { LoginRateLimiter } from './login-rate-limiter';
 import { USABLE_MEMBERSHIP } from './memberships';
 import { hashPassword, verifyDummyPassword, verifyPassword } from './passwords';
 import { SessionService } from './session.service';
+
+export interface SessionView {
+  id: string;
+  kind: SessionKind;
+  deviceName: string | null;
+  userAgent: string | null;
+  createdAt: Date;
+  lastSeenAt: Date;
+  /** The session this request was made with */
+  current: boolean;
+}
 
 /** What the web app needs to know about the logged-in user. */
 export interface Me {
@@ -25,8 +37,15 @@ export class AuthService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Returns the session token to put in the cookie. */
-  async login(input: LoginInput, ip: string, userAgent?: string): Promise<string> {
+  /**
+   * Returns the new session's token: for the cookie (BROWSER) or for the app's bearer
+   * header (APP, with the device name the app sent).
+   */
+  async login(
+    input: LoginInput,
+    client: { kind: SessionKind; deviceName?: string; ip: string; userAgent?: string },
+  ): Promise<string> {
+    const { ip, userAgent } = client;
     const identifier = parseIdentifier(input.identifier);
     const key = identifier?.value ?? input.identifier.trim().toLowerCase();
 
@@ -55,11 +74,20 @@ export class AuthService {
     const token = await this.sessions.create({
       userId: user.id,
       activeCompanyId: firstCompany?.companyId ?? null,
+      kind: client.kind,
+      deviceName: client.deviceName,
       ip,
       userAgent,
     });
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-    await this.audit.record({ action: 'auth.login', actorUserId: user.id, entityType: 'User', entityId: user.id, ip });
+    await this.audit.record({
+      action: 'auth.login',
+      actorUserId: user.id,
+      entityType: 'User',
+      entityId: user.id,
+      data: client.kind === 'APP' ? { kind: 'APP', deviceName: client.deviceName ?? null } : {},
+      ip,
+    });
     return token;
   }
 
@@ -98,6 +126,36 @@ export class AuthService {
         { action: 'auth.passwordChanged', actorUserId: user.id, entityType: 'User', entityId: user.id, ip: auth.ip },
         tx,
       );
+    });
+  }
+
+  /** The user's own sessions (browsers and app devices), newest use first. */
+  async listSessions(auth: AuthContext): Promise<SessionView[]> {
+    const rows = await this.prisma.session.findMany({
+      where: { userId: auth.user.id, expiresAt: { gt: new Date() } },
+      orderBy: { lastSeenAt: 'desc' },
+    });
+    return rows.map((s) => ({
+      id: s.id,
+      kind: s.kind,
+      deviceName: s.deviceName,
+      userAgent: s.userAgent,
+      createdAt: s.createdAt,
+      lastSeenAt: s.lastSeenAt,
+      current: s.id === auth.sessionId,
+    }));
+  }
+
+  /** Logs out one of the user's own sessions, e.g. a lost phone. */
+  async revokeSession(auth: AuthContext, sessionId: string) {
+    const { count } = await this.prisma.session.deleteMany({ where: { id: sessionId, userId: auth.user.id } });
+    if (count === 0) throw notFound('session.notFound');
+    await this.audit.record({
+      action: 'auth.sessionRevoked',
+      actorUserId: auth.user.id,
+      entityType: 'Session',
+      entityId: sessionId,
+      ip: auth.ip,
     });
   }
 

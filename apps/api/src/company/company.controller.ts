@@ -8,12 +8,13 @@ import {
   type UpdateMember,
 } from '@puantaj/schemas';
 import { AuditService, diff } from '../audit/audit.service';
-import { CompanyAuth, Roles, type CompanyAuthContext } from '../auth/auth.context';
+import { CompanyAuth, ForModule, Roles, type CompanyAuthContext } from '../auth/auth.context';
 import { ZodPipe } from '../common/zod.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import { MembersService, type MemberView } from './members.service';
 
 /** The logged-in user's active company. Managing it is for owners and admins. */
+@ForModule('PAYROLL')
 @Roles('OWNER', 'ADMIN')
 @Controller('company')
 export class CompanyController {

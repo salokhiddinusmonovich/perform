@@ -1,5 +1,16 @@
-import { Building, Building2, CalendarCheck, CalendarDays, LayoutDashboard, Scale, Users, type LucideIcon } from 'lucide-react';
-import { canManageCompany, canViewPayRules, type Me } from '@/lib/auth';
+import {
+  Building,
+  Building2,
+  CalendarCheck,
+  CalendarDays,
+  HardHat,
+  LayoutDashboard,
+  MapPin,
+  Scale,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import { canManageCompany, canViewPayRules, inCompany, type Me } from '@/lib/auth';
 
 export interface NavItem {
   path: string;
@@ -20,6 +31,13 @@ export interface NavSection {
 export const NAV_SECTIONS: NavSection[] = [
   {
     items: [{ path: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard }],
+  },
+  {
+    titleKey: 'nav.organisation',
+    items: [
+      { path: '/sites', labelKey: 'nav.sites', icon: MapPin, visible: inCompany },
+      { path: '/workers', labelKey: 'nav.workers', icon: HardHat, visible: inCompany },
+    ],
   },
   {
     titleKey: 'nav.settings',

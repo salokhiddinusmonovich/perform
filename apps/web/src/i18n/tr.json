@@ -18,7 +18,10 @@
     "logout": "Çıkış yap",
     "payRules": "Ücret kuralları",
     "holidays": "Tatiller",
-    "workingDays": "İş günleri"
+    "workingDays": "İş günleri",
+    "organisation": "Organizasyon",
+    "sites": "Şantiyeler",
+    "workers": "İşçiler"
   },
   "settings": {
     "language": "Dil",
@@ -178,8 +181,10 @@
       "ADMIN": "Şirket ayarlarını ve kullanıcıları yönetir (sahipler hariç)",
       "ACCOUNTANT": "Bordro ile çalışır",
       "TIMEKEEPER": "Puantajı girer ve kontrol eder",
-      "FOREMAN": "Kendi ekibinin puantajını girer"
-    }
+      "FOREMAN": "Kendi ekibinin puantajını girer",
+      "PROJECT_MANAGER": "Kendi şantiyelerinde işçileri, ekipleri, puantörleri ve ekip başlarını yönetir; saatleri onaylar"
+    },
+    "PROJECT_MANAGER": "Şantiye şefi"
   },
   "tempPassword": {
     "title": "Geçici şifre",
@@ -213,8 +218,21 @@
         "title": "Şirket aktifleştirilsin mi?",
         "description": "{{name}} kullanıcıları şirkette yeniden çalışabilecek.",
         "button": "Aktifleştir"
+      },
+      "timesheetOn": {
+        "title": "Puantaj modülü açılsın mı?",
+        "description": "{{name}} uygulamada günlük saat girebilecek. Bordro bunları bir sonraki açık aydan itibaren kullanır.",
+        "button": "Aç"
+      },
+      "timesheetOff": {
+        "title": "Puantaj modülü kapatılsın mı?",
+        "description": "{{name}} artık günlük saat girmeyecek. Girilmiş saatler korunur. Bir sonraki açık aydan itibaren saatler Excel aktarımından veya aylık toplamlardan gelir.",
+        "button": "Kapat"
       }
-    }
+    },
+    "modules": "Modüller",
+    "timesheetOn": "Puantaj modülünü aç",
+    "timesheetOff": "Puantaj modülünü kapat"
   },
   "validation": {
     "required": "Zorunlu alan",
@@ -238,7 +256,11 @@
     "roundingStepRange": "0'dan büyük olmalı",
     "restWeekdaysAllWeek": "Haftanın en az bir günü iş günü olmalı",
     "dateInvalid": "Geçerli bir tarih girin",
-    "workingDaysRange": "1 ile aydaki gün sayısı arası"
+    "workingDaysRange": "1 ile aydaki gün sayısı arası",
+    "pinflInvalid": "PINFL 14 rakamdan oluşur",
+    "placementBeforeCurrent": "Mevcut şantiyedeki ilk günden sonra olmalı",
+    "leaveBeforeStart": "İlk iş gününden önce olamaz",
+    "teamNotOnSite": "Bu ekip seçilen şantiyede değil"
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -286,6 +308,32 @@
     },
     "workingDays": {
       "unchanged": "Bu değer zaten kullanılıyor."
+    },
+    "module": {
+      "disabled": "Şirketinizde bu modül yok. Açılması için sistem operatörüne başvurun."
+    },
+    "session": {
+      "notFound": "Bu oturum artık yok."
+    },
+    "site": {
+      "notFound": "Bu şantiye yok ya da siz burada çalışmıyorsunuz.",
+      "nameTaken": "Bu adla bir şantiye zaten var.",
+      "hasWorkers": "Bu şantiyede hâlâ çalışan işçiler var. Önce onları aktarın veya ayrılışlarını kaydedin.",
+      "inactive": "Bu şantiye kapalı."
+    },
+    "team": {
+      "notFound": "Bu ekip yok ya da siz bu ekiple çalışmıyorsunuz.",
+      "nameTaken": "Bu şantiyede bu adla bir ekip zaten var.",
+      "hasWorkers": "Bu ekipte hâlâ işçiler var. Önce onları aktarın.",
+      "inactive": "Bu ekip kapalı."
+    },
+    "staff": {
+      "wrongRole": "Bu kişinin rolü buraya atanmaz."
+    },
+    "worker": {
+      "notFound": "Bu işçi yok ya da onu göremiyorsunuz.",
+      "pinflTaken": "Bu PINFL ile bir işçi zaten var.",
+      "hasLaterEntries": "Bu tarihten sonra puantaj günleri var. Önce onları değiştirin veya silin."
     }
   },
   "payRules": {
@@ -435,5 +483,130 @@
     "historySet": "Girilen değer: {{count}}",
     "historyBackToCalculated": "Hesaplanan değere dönüldü",
     "lockedHint": "Bu ay kapatıldı. İş günleri değiştirilemez."
+  },
+  "modules": {
+    "PAYROLL": "Bordro",
+    "TIMESHEET": "Puantaj"
+  },
+  "sites": {
+    "title": "Şantiyeler",
+    "description": "İnşaat şantiyeleri, ekipleri ve kimin nerede çalıştığı",
+    "add": "Şantiye ekle",
+    "edit": "Şantiyeyi düzenle",
+    "name": "Şantiye adı",
+    "code": "Kod",
+    "codeHint": "İsteğe bağlı kısa kod, örn. muhasebedeki",
+    "address": "Adres",
+    "teams": "Ekipler",
+    "workers": "İşçiler",
+    "status": "Durum",
+    "active": "Aktif",
+    "closed": "Kapalı",
+    "close": "Şantiyeyi kapat",
+    "reopen": "Şantiyeyi yeniden aç",
+    "emptyTitle": "Henüz şantiye yok",
+    "emptyDescription": "İlk şantiyenizi, sonra ekiplerini ve işçilerini ekleyin.",
+    "emptyDescriptionNotAssigned": "Henüz hiçbir şantiyeye atanmadınız. Şirket yöneticinize başvurun.",
+    "notFoundDescription": "Bu şantiye yok ya da siz burada çalışmıyorsunuz.",
+    "backToSites": "Tüm şantiyeler",
+    "staff": "Şantiye şefleri ve puantörler",
+    "staffHint": "Yalnızca atandıkları şantiyeleri görür ve oralarda çalışırlar.",
+    "manageStaff": "Kişi ata",
+    "staffDialogHint": "{{site}} şantiyesinde çalışan şantiye şefleri ve puantörler.",
+    "nobodyAssigned": "Henüz kimse atanmadı.",
+    "addPerson": "Kişi ekle",
+    "choosePerson": "Kişi seçin",
+    "noCandidates": "Atanabilecek herkes zaten burada. Önce bu roldeki kullanıcıları ekleyin.",
+    "assign": "Ata",
+    "removePerson": "Çıkar: {{name}}",
+    "confirmClose": {
+      "title": "Şantiye kapatılsın mı?",
+      "description": "{{name}} kapatılacak: yeni ekip veya işçi eklenemez. Geçmişi korunur."
+    },
+    "confirmReopen": {
+      "title": "Şantiye yeniden açılsın mı?",
+      "description": "{{name}} ekipler ve işçiler için yeniden açılacak."
+    }
+  },
+  "teams": {
+    "add": "Ekip ekle",
+    "edit": "Ekibi düzenle",
+    "name": "Ekip adı",
+    "department": "Bölüm",
+    "departmentHint": "İsteğe bağlı, örn. Elektrik veya Mekanik",
+    "foremen": "Ekip başları",
+    "manageForemen": "Ekip başları",
+    "foremenDialogHint": "{{team}} ekibini yöneten ekip başları. Yalnızca kendi ekiplerini görürler.",
+    "closed": "Kapalı",
+    "close": "Ekibi kapat",
+    "reopen": "Ekibi yeniden aç",
+    "emptyTitle": "Bu şantiyede henüz ekip yok",
+    "emptyDescription": "İşçileri gruplamak ve onlara ekip başı atamak için ekip ekleyin.",
+    "confirmClose": {
+      "title": "Ekip kapatılsın mı?",
+      "description": "{{name}} kapatılacak: ekibe işçi yerleştirilemez. Geçmişi korunur."
+    },
+    "confirmReopen": {
+      "title": "Ekip yeniden açılsın mı?",
+      "description": "{{name}} işçiler için yeniden açılacak."
+    }
+  },
+  "workers": {
+    "title": "İşçiler",
+    "description": "Şantiyelerinizde çalışan kişiler ve nerede çalıştıkları",
+    "add": "İşçi ekle",
+    "addDescription": "İşçinin bilgileri ve nerede başladığı. Maaşı muhasebeci ayrıca girer.",
+    "edit": "İşçiyi düzenle",
+    "name": "Ad soyad",
+    "site": "Şantiye",
+    "team": "Ekip",
+    "noTeam": "Ekipsiz",
+    "since": "Başlangıç",
+    "status": "Durum",
+    "working": "Çalışıyor",
+    "leftOn": "{{date}} ayrıldı",
+    "leavesOn": "{{date}} ayrılıyor",
+    "allSites": "Tüm şantiyeler",
+    "filterWorking": "Çalışanlar",
+    "filterLeft": "Ayrılanlar",
+    "filterAll": "Tümü",
+    "emptyTitle": "Burada işçi yok",
+    "emptyDescription": "Yukarıdaki düğmeyle işçi ekleyin.",
+    "lastName": "Soyadı",
+    "firstName": "Adı",
+    "patronymic": "Baba adı",
+    "position": "Görevi",
+    "employmentType": "Çalışma türü",
+    "chooseEmploymentType": "Seçin",
+    "employment": {
+      "DIRECT": "Direkt",
+      "INDIRECT": "Endirekt"
+    },
+    "personalData": "Kişisel bilgiler",
+    "personalDataHint": "Puantörlere ve ekip başlarına gösterilmez.",
+    "pinfl": "PINFL",
+    "pinflHint": "14 rakam, pasaporttan",
+    "birthDate": "Doğum tarihi",
+    "passportSeries": "Pasaport serisi",
+    "passportNumber": "Pasaport numarası",
+    "nationality": "Uyruğu",
+    "phone": "Telefon",
+    "placement": "Nerede çalışıyor",
+    "chooseSite": "Şantiye seçin",
+    "firstDay": "İlk iş günü",
+    "firstDayThere": "Oradaki ilk gün",
+    "shift": "Vardiya",
+    "shiftName": {
+      "DAY": "Gündüz",
+      "NIGHT": "Gece"
+    },
+    "move": "Başka şantiyeye veya ekibe aktar",
+    "moveHint": "Mevcut yeri bir gün önce sona erer. Önceki günler oldukları yerde kalır.",
+    "rehire": "Yeniden işe al",
+    "rehireHint": "Seçtiğiniz günden itibaren yeniden çalışır.",
+    "leave": "Ayrılışı kaydet",
+    "changeLastDay": "Son iş gününü değiştir",
+    "leaveHint": "Çalıştığı son gün. Sonraki günler artık ona ait değildir.",
+    "lastDay": "Son iş günü"
   }
 }

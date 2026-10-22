@@ -128,26 +128,31 @@ export const HOLIDAY_KINDS = ['RAMAZON_HAYIT', 'QURBON_HAYIT', 'PUBLIC_EXTRA', '
 export type HolidayKind = (typeof HOLIDAY_KINDS)[number];
 
 /** A calendar day, "YYYY-MM-DD". */
-export const isoDateSchema = z
-  .string({ error: 'validation.required' })
-  .trim()
-  .min(1, { error: 'validation.required', abort: true })
-  .refine(
-    (value) => {
-      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-      if (!m) return false;
-      const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
-      const date = new Date(Date.UTC(year, month - 1, day));
-      return (
-        year >= MIN_YEAR &&
-        year <= MAX_YEAR &&
-        date.getUTCFullYear() === year &&
-        date.getUTCMonth() === month - 1 &&
-        date.getUTCDate() === day
-      );
-    },
-    { error: 'validation.dateInvalid' },
-  );
+/** A calendar day "YYYY-MM-DD" that exists, in a range of years. */
+export const calendarDaySchema = (minYear: number, maxYear: number) =>
+  z
+    .string({ error: 'validation.required' })
+    .trim()
+    .min(1, { error: 'validation.required', abort: true })
+    .refine(
+      (value) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+        if (!m) return false;
+        const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+        const date = new Date(Date.UTC(year, month - 1, day));
+        return (
+          year >= minYear &&
+          year <= maxYear &&
+          date.getUTCFullYear() === year &&
+          date.getUTCMonth() === month - 1 &&
+          date.getUTCDate() === day
+        );
+      },
+      { error: 'validation.dateInvalid' },
+    );
+
+/** A day the app works with (timesheets, holidays, placements). */
+export const isoDateSchema = calendarDaySchema(MIN_YEAR, MAX_YEAR);
 
 export const holidaySchema = z.object({
   date: isoDateSchema,

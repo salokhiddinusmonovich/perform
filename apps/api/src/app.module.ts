@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { CompanyModule } from './company/company.module';
 import { HealthModule } from './health/health.module';
 import { InvitationsModule } from './invitations/invitations.module';
+import { OrganisationModule } from './organisation/organisation.module';
 import { PayRulesModule } from './pay-rules/pay-rules.module';
 import { PlatformModule } from './platform/platform.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -20,6 +21,7 @@ import { PrismaModule } from './prisma/prisma.module';
     InvitationsModule,
     PlatformModule,
     PayRulesModule,
+    OrganisationModule,
   ],
 })
 export class AppModule {}

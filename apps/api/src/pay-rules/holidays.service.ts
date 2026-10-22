@@ -10,9 +10,10 @@ import type { Holiday } from '@puantaj/schemas';
 import { AuditService, diff } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict, notFound } from '../common/api-error';
+import { dayToDate, isoDay, monthOfDay } from '../common/dates';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertMonthsOpen } from './months';
-import { isoDay } from './pay-rules.service';
+
 
 export interface HolidayView {
   id: string;
@@ -33,8 +34,6 @@ export interface HolidayYearView {
 const MOVING: readonly HolidayKind[] = ['RAMAZON_HAYIT', 'QURBON_HAYIT'];
 
 const yearRange = (year: number) => ({ gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year + 1, 0, 1)) });
-const toDate = (day: string) => new Date(`${day}T00:00:00Z`);
-const monthOf = (day: string) => ({ year: Number(day.slice(0, 4)), month: Number(day.slice(5, 7)) });
 
 /**
  * Holidays the company enters (Settings): moving public holidays, extra days off,
@@ -67,7 +66,7 @@ export class HolidaysService {
     return this.prisma.$transaction(async (tx) => {
       await this.check(tx, companyId, input, null);
       const holiday = await tx.holiday.create({
-        data: { companyId, date: toDate(input.date), kind: input.kind, name: input.name },
+        data: { companyId, date: dayToDate(input.date), kind: input.kind, name: input.name },
       });
       await this.audit.record(
         {
@@ -91,11 +90,11 @@ export class HolidaysService {
       const before = await tx.holiday.findFirst({ where: { id, companyId } });
       if (!before) throw notFound('holiday.notFound');
       // Moving a holiday changes both months.
-      await assertMonthsOpen(tx, companyId, monthOf(isoDay(before.date)));
+      await assertMonthsOpen(tx, companyId, monthOfDay(isoDay(before.date)));
       await this.check(tx, companyId, input, id);
       await tx.holiday.update({
         where: { id },
-        data: { date: toDate(input.date), kind: input.kind, name: input.name },
+        data: { date: dayToDate(input.date), kind: input.kind, name: input.name },
       });
       await this.audit.record(
         {
@@ -117,7 +116,7 @@ export class HolidaysService {
     await this.prisma.$transaction(async (tx) => {
       const before = await tx.holiday.findFirst({ where: { id, companyId } });
       if (!before) throw notFound('holiday.notFound');
-      await assertMonthsOpen(tx, companyId, monthOf(isoDay(before.date)));
+      await assertMonthsOpen(tx, companyId, monthOfDay(isoDay(before.date)));
       await tx.holiday.delete({ where: { id } });
       await this.audit.record(
         {
@@ -141,17 +140,17 @@ export class HolidaysService {
     input: Holiday,
     id: string | null,
   ): Promise<void> {
-    await assertMonthsOpen(tx, companyId, monthOf(input.date));
+    await assertMonthsOpen(tx, companyId, monthOfDay(input.date));
     // A fixed holiday is already a day off, and can't be swapped into a working day here.
-    if (uzbekistanFixedHolidays(monthOf(input.date).year).some((h) => h.date === input.date)) {
+    if (uzbekistanFixedHolidays(monthOfDay(input.date).year).some((h) => h.date === input.date)) {
       throw conflict('holiday.fixedDate');
     }
-    const sameDay = await tx.holiday.findFirst({ where: { companyId, date: toDate(input.date), NOT: id ? { id } : undefined } });
+    const sameDay = await tx.holiday.findFirst({ where: { companyId, date: dayToDate(input.date), NOT: id ? { id } : undefined } });
     if (sameDay) throw conflict('holiday.dateTaken');
     // Ramazon Hayit and Qurbon Hayit are one day each a year; extra days off are PUBLIC_EXTRA.
     if (MOVING.includes(input.kind)) {
       const sameKind = await tx.holiday.findFirst({
-        where: { companyId, kind: input.kind, date: yearRange(monthOf(input.date).year), NOT: id ? { id } : undefined },
+        where: { companyId, kind: input.kind, date: yearRange(monthOfDay(input.date).year), NOT: id ? { id } : undefined },
       });
       if (sameKind) throw conflict('holiday.movingAlreadyEntered');
     }

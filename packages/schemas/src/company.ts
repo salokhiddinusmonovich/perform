@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { contactSchema } from './contact.js';
 
 /** Mirrors the Role enum in apps/api/prisma/schema.prisma. */
-export const ROLES = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'TIMEKEEPER', 'FOREMAN'] as const;
+export const ROLES = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER', 'TIMEKEEPER', 'FOREMAN'] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Roles that may manage company settings and users. */
@@ -40,6 +40,17 @@ export const createCompanySchema = companySettingsSchema.extend({
 });
 export type CreateCompanyInput = z.input<typeof createCompanySchema>;
 export type CreateCompany = z.output<typeof createCompanySchema>;
+
+/** What the platform admin changes on a company: active or not, and its optional modules. */
+export const updatePlatformCompanySchema = z
+  .object({
+    isActive: z.boolean().optional(),
+    timesheetModule: z.boolean().optional(),
+  })
+  .refine((v) => v.isActive !== undefined || v.timesheetModule !== undefined, {
+    error: 'validation.nothingToUpdate',
+  });
+export type UpdatePlatformCompany = z.output<typeof updatePlatformCompanySchema>;
 
 export const createMemberSchema = contactSchema.and(
   z.object({

@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { createCompanySchema, type CreateCompanyInput } from '@puantaj/schemas';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Building2, MoreHorizontal, Power } from 'lucide-react';
+import { Building2, ClipboardList, MoreHorizontal, Power } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -35,12 +35,21 @@ interface CompanyRow {
   currency: string;
   timezone: string;
   isActive: boolean;
+  timesheetModule: boolean;
   createdAt: string;
   memberCount: number;
   owners: { fullName: string; email: string | null; phone: string | null }[];
 }
 
 const COMPANIES_KEY = ['platform', 'companies'] as const;
+
+type CompanyAction = 'activate' | 'deactivate' | 'timesheetOn' | 'timesheetOff';
+const CHANGES: Record<CompanyAction, { isActive?: boolean; timesheetModule?: boolean }> = {
+  activate: { isActive: true },
+  deactivate: { isActive: false },
+  timesheetOn: { timesheetModule: true },
+  timesheetOff: { timesheetModule: false },
+};
 const isPlatformAdmin = (me: Me) => me.user.isPlatformAdmin;
 
 export function PlatformCompaniesPage() {
@@ -73,7 +82,7 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
   const format = useFormat();
   const queryClient = useQueryClient();
   const companies = useQuery({ queryKey: COMPANIES_KEY, queryFn: () => api.get<CompanyRow[]>('/platform/companies') });
-  const [toggling, setToggling] = useState<CompanyRow | null>(null);
+  const [confirm, setConfirm] = useState<{ company: CompanyRow; action: CompanyAction } | null>(null);
   const [tempPassword, setTempPassword] = useState<{ password: string; forWhom: string } | null>(null);
 
   const refresh = () =>
@@ -104,6 +113,17 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
       },
       { accessorKey: 'memberCount', header: t('platform.members') },
       {
+        id: 'modules',
+        header: t('platform.modules'),
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="flex flex-wrap gap-1">
+            <StatusBadge tone="info">{t('modules.PAYROLL')}</StatusBadge>
+            {row.original.timesheetModule && <StatusBadge tone="info">{t('modules.TIMESHEET')}</StatusBadge>}
+          </div>
+        ),
+      },
+      {
         accessorKey: 'isActive',
         header: t('users.status'),
         cell: ({ row }) =>
@@ -130,7 +150,17 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setToggling(row.original)}>
+              <DropdownMenuItem
+                onSelect={() =>
+                  setConfirm({ company: row.original, action: row.original.timesheetModule ? 'timesheetOff' : 'timesheetOn' })
+                }
+              >
+                <ClipboardList aria-hidden />
+                {row.original.timesheetModule ? t('platform.timesheetOff') : t('platform.timesheetOn')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setConfirm({ company: row.original, action: row.original.isActive ? 'deactivate' : 'activate' })}
+              >
                 <Power aria-hidden />
                 {row.original.isActive ? t('platform.deactivate') : t('platform.activate')}
               </DropdownMenuItem>
@@ -141,8 +171,6 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
     ],
     [t, format],
   );
-
-  const action = toggling?.isActive ? 'deactivate' : 'activate';
 
   return (
     <>
@@ -172,14 +200,15 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
         }}
       />
       <ConfirmDialog
-        open={toggling !== null}
-        onOpenChange={(open) => !open && setToggling(null)}
-        title={t(`platform.confirm.${action}.title`)}
-        description={toggling ? t(`platform.confirm.${action}.description`, { name: toggling.name }) : ''}
-        confirmLabel={t(`platform.confirm.${action}.button`)}
-        destructive={action === 'deactivate'}
+        open={confirm !== null}
+        onOpenChange={(open) => !open && setConfirm(null)}
+        title={confirm ? t(`platform.confirm.${confirm.action}.title`) : ''}
+        description={confirm ? t(`platform.confirm.${confirm.action}.description`, { name: confirm.company.name }) : ''}
+        confirmLabel={confirm ? t(`platform.confirm.${confirm.action}.button`) : ''}
+        destructive={confirm?.action === 'deactivate' || confirm?.action === 'timesheetOff'}
         onConfirm={async () => {
-          await api.patch(`/platform/companies/${toggling!.id}`, { isActive: action === 'activate' });
+          if (!confirm) return;
+          await api.patch(`/platform/companies/${confirm.company.id}`, CHANGES[confirm.action]);
           toast.success(t('common.saved'));
           await refresh();
         }}

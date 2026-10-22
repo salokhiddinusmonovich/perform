@@ -24,8 +24,11 @@ async function workerWithHistory() {
       siteId: site.id,
       teamId: team.id,
       hiredOn: new Date('2026-09-01'),
-      monthlySalary: '5000000',
     },
+  });
+  const user = await createUser(prisma);
+  await prisma.salary.create({
+    data: { companyId: company.id, assignmentId: assignment.id, fromDate: new Date('2026-09-01'), monthlySalary: '5000000', setById: user.id },
   });
   const period = await prisma.payrollPeriod.create({ data: { companyId: company.id, year: 2026, month: 9 } });
   await prisma.timesheetEntry.create({
@@ -58,20 +61,31 @@ describe('history is never deleted by accident', () => {
     await expect(prisma.site.delete({ where: { id: site.id } })).rejects.toMatchObject(STILL_REFERENCED);
     await expect(prisma.company.delete({ where: { id: company.id } })).rejects.toMatchObject(STILL_REFERENCED);
 
-    expect(await prisma.timesheetEntry.count()).toBe(1);
-    expect(await prisma.adjustment.count()).toBe(1);
+    expect(await prisma.salary.count()).toBe(1);
+
+    await prisma.timesheetEntry.deleteMany();
+    await prisma.adjustment.deleteMany();
+    // The salary history alone keeps the placement too.
+    await expect(prisma.assignment.delete({ where: { id: assignment.id } })).rejects.toMatchObject(STILL_REFERENCED);
   });
 
-  it("refuses to delete a site that limits a member's access, instead of widening it to all sites", async () => {
+  it("refuses to delete a site or team a member is assigned to, instead of silently dropping the assignment", async () => {
     const { prisma } = ctx;
     const company = await createCompany(prisma);
     const site = await prisma.site.create({ data: { companyId: company.id, name: 'Site A' } });
-    const user = await createUser(prisma);
-    await prisma.membership.create({ data: { userId: user.id, companyId: company.id, role: 'FOREMAN', siteId: site.id } });
+    const team = await prisma.team.create({ data: { companyId: company.id, siteId: site.id, name: 'Team A' } });
+    const timekeeper = await createUser(prisma);
+    const foreman = await createUser(prisma);
+    await prisma.membership.create({ data: { userId: timekeeper.id, companyId: company.id, role: 'TIMEKEEPER' } });
+    await prisma.membership.create({ data: { userId: foreman.id, companyId: company.id, role: 'FOREMAN' } });
+    await prisma.memberSite.create({ data: { userId: timekeeper.id, companyId: company.id, siteId: site.id } });
+    await prisma.memberTeam.create({ data: { userId: foreman.id, companyId: company.id, teamId: team.id } });
 
+    await expect(prisma.team.delete({ where: { id: team.id } })).rejects.toMatchObject(STILL_REFERENCED);
+    await prisma.memberTeam.deleteMany();
+    await prisma.team.delete({ where: { id: team.id } });
     await expect(prisma.site.delete({ where: { id: site.id } })).rejects.toMatchObject(STILL_REFERENCED);
-    const membership = await prisma.membership.findFirstOrThrow({ where: { userId: user.id } });
-    expect(membership.siteId).toBe(site.id);
+    expect(await prisma.memberSite.count()).toBe(1);
   });
 
   it('keeps audit records when someone tries to delete the user or company they mention', async () => {
@@ -207,7 +221,6 @@ describe('rows never mix two companies', () => {
       workerId: a.worker.id,
       siteId: a.site.id,
       hiredOn: new Date('2026-09-01'),
-      monthlySalary: '5000000',
     };
 
     for (const data of [
@@ -227,10 +240,16 @@ describe('rows never mix two companies', () => {
     ).rejects.toMatchObject(STILL_REFERENCED);
 
     const user = await createUser(prisma);
+    await prisma.membership.create({ data: { userId: user.id, companyId: a.company.id, role: 'TIMEKEEPER' } });
     await expect(
-      prisma.membership.create({
-        data: { userId: user.id, companyId: a.company.id, role: 'FOREMAN', siteId: otherSite.id },
-      }),
+      prisma.memberSite.create({ data: { userId: user.id, companyId: a.company.id, siteId: otherSite.id } }),
+    ).rejects.toMatchObject(STILL_REFERENCED);
+    await expect(
+      prisma.memberTeam.create({ data: { userId: user.id, companyId: a.company.id, teamId: otherTeam.id } }),
+    ).rejects.toMatchObject(STILL_REFERENCED);
+    // Not a member of the other company at all.
+    await expect(
+      prisma.memberSite.create({ data: { userId: user.id, companyId: other.id, siteId: otherSite.id } }),
     ).rejects.toMatchObject(STILL_REFERENCED);
   });
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { CreateCompany } from '@puantaj/schemas';
+import type { CreateCompany, UpdatePlatformCompany } from '@puantaj/schemas';
 import { randomBytes } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
 import type { AuthContext } from '../auth/auth.context';
@@ -14,6 +14,7 @@ export interface CompanyListItem {
   currency: string;
   timezone: string;
   isActive: boolean;
+  timesheetModule: boolean;
   createdAt: Date;
   memberCount: number;
   owners: { fullName: string; email: string | null; phone: string | null }[];
@@ -42,6 +43,7 @@ export class PlatformService {
       currency: c.currency,
       timezone: c.timezone,
       isActive: c.isActive,
+      timesheetModule: c.timesheetModule,
       createdAt: c.createdAt,
       memberCount: c._count.memberships,
       owners: c.memberships.map((m) => ({ fullName: m.user.fullName, email: m.user.email, phone: m.user.phone })),
@@ -80,22 +82,26 @@ export class PlatformService {
     });
   }
 
-  async setActive(auth: AuthContext, companyId: string, isActive: boolean) {
+  /**
+   * Activates or deactivates a company, or turns its Timesheet module on or off. Only the
+   * platform admin does this (AGENTS.md: Modules).
+   */
+  async update(auth: AuthContext, companyId: string, changes: UpdatePlatformCompany) {
     await this.prisma.$transaction(async (tx) => {
       const company = await tx.company.findUnique({ where: { id: companyId } });
       if (!company) throw notFound('company.notFound');
-      await tx.company.update({ where: { id: companyId }, data: { isActive } });
-      await this.audit.record(
-        {
-          action: isActive ? 'company.activate' : 'company.deactivate',
-          companyId,
-          actorUserId: auth.user.id,
-          entityType: 'Company',
-          entityId: companyId,
-          ip: auth.ip,
-        },
-        tx,
-      );
+      await tx.company.update({ where: { id: companyId }, data: changes });
+      const record = (action: string) =>
+        this.audit.record(
+          { action, companyId, actorUserId: auth.user.id, entityType: 'Company', entityId: companyId, ip: auth.ip },
+          tx,
+        );
+      if (changes.isActive !== undefined && changes.isActive !== company.isActive) {
+        await record(changes.isActive ? 'company.activate' : 'company.deactivate');
+      }
+      if (changes.timesheetModule !== undefined && changes.timesheetModule !== company.timesheetModule) {
+        await record(changes.timesheetModule ? 'company.timesheetModuleOn' : 'company.timesheetModuleOff');
+      }
     });
   }
 }

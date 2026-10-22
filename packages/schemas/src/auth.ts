@@ -13,6 +13,16 @@ export const loginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
+/** The mobile app's login: also names the device, so its session can be told apart and revoked. */
+export const appLoginSchema = loginSchema.extend({
+  deviceName: z
+    .string({ error: 'validation.required' })
+    .trim()
+    .min(1, { error: 'validation.required' })
+    .max(100, { error: 'validation.tooLong' }),
+});
+export type AppLoginInput = z.infer<typeof appLoginSchema>;
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, { error: 'validation.required' }),

@@ -1,0 +1,708 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  createWorkerSchema,
+  EMPLOYMENT_TYPES,
+  leaveSchema,
+  placementSchema,
+  SHIFTS,
+  workerSchema,
+  type CreateWorker,
+  type CreateWorkerInput,
+  type Leave,
+  type LeaveInput,
+  type Placement,
+  type PlacementInput,
+  type Worker,
+  type WorkerInput,
+} from '@puantaj/schemas';
+import { useMutation } from '@tanstack/react-query';
+import type { ColumnDef } from '@tanstack/react-table';
+import { ArrowRightLeft, LogOut, MoreHorizontal, Pencil, UserPlus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Controller, useForm, type Control, type FieldErrors, type FieldPath, type FieldValues } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+import { DataTable } from '@/components/data-table';
+import { DatePicker } from '@/components/date-picker';
+import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
+import { PageHeader } from '@/components/page-header';
+import { RequireAccess } from '@/components/require-access';
+import { StatusBadge } from '@/components/status-badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useFormat } from '@/hooks/use-format';
+import { api } from '@/lib/api';
+import { canManageWorkers, inCompany, seesPersonalData, useMe, type Me } from '@/lib/auth';
+import { applyFieldErrors, errorMessage } from '@/lib/errors';
+import {
+  useRefreshOrganisation,
+  useSites,
+  useWorkers,
+  workerName,
+  type SiteItem,
+  type WorkerItem,
+} from '@/lib/organisation';
+
+type Status = 'working' | 'left' | 'all';
+const ALL = 'all';
+
+/** Today on the viewer's calendar, "YYYY-MM-DD". */
+function today(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const hasLeft = (w: WorkerItem) => w.placement?.until != null && w.placement.until < today();
+
+export function WorkersPage() {
+  const { t } = useTranslation();
+  const me = useMe().data;
+  const [adding, setAdding] = useState(false);
+  return (
+    <>
+      <PageHeader
+        title={t('workers.title')}
+        description={t('workers.description')}
+        actions={
+          canManageWorkers(me) && (
+            <Button onClick={() => setAdding(true)}>
+              <UserPlus aria-hidden />
+              {t('workers.add')}
+            </Button>
+          )
+        }
+      />
+      <RequireAccess allowed={inCompany}>
+        {(verified) => <WorkersView me={verified} adding={adding} onAddingChange={setAdding} />}
+      </RequireAccess>
+    </>
+  );
+}
+
+type Action = { kind: 'edit' | 'move' | 'leave'; worker: WorkerItem };
+
+function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; onAddingChange: (open: boolean) => void }) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const workers = useWorkers();
+  const sites = useSites();
+  const refresh = useRefreshOrganisation();
+  const manage = canManageWorkers(me);
+  const personal = seesPersonalData(me);
+  const [siteFilter, setSiteFilter] = useState<string>(ALL);
+  const [status, setStatus] = useState<Status>('working');
+  const [action, setAction] = useState<Action | null>(null);
+
+  const rows = useMemo(
+    () =>
+      workers.data?.filter(
+        (w) =>
+          (siteFilter === ALL || w.placement?.siteId === siteFilter) &&
+          (status === 'all' || (status === 'left') === hasLeft(w)),
+      ),
+    [workers.data, siteFilter, status],
+  );
+
+  const columns = useMemo<ColumnDef<WorkerItem, unknown>[]>(
+    () => [
+      {
+        id: 'name',
+        accessorFn: (w) => workerName(w),
+        header: t('workers.name'),
+        cell: ({ row }) => (
+          <div className="min-w-44">
+            <div className="font-medium">{workerName(row.original)}</div>
+            {row.original.position && <div className="text-sm text-muted-foreground">{row.original.position}</div>}
+          </div>
+        ),
+      },
+      {
+        id: 'site',
+        accessorFn: (w) => w.placement?.siteName ?? '',
+        header: t('workers.site'),
+        cell: ({ row }) => {
+          const p = row.original.placement;
+          return p ? (
+            <div className="min-w-32">
+              <div>{p.siteName}</div>
+              {p.teamName && <div className="text-sm text-muted-foreground">{p.teamName}</div>}
+            </div>
+          ) : (
+            '—'
+          );
+        },
+      },
+      {
+        id: 'from',
+        accessorFn: (w) => w.placement?.from ?? '',
+        header: t('workers.since'),
+        cell: ({ row }) => (row.original.placement ? format.date(row.original.placement.from) : '—'),
+      },
+      ...(personal
+        ? [
+            {
+              id: 'pinfl',
+              header: t('workers.pinfl'),
+              enableSorting: false,
+              cell: ({ row }) => <span className="tabular-nums">{row.original.personal?.pinfl ?? '—'}</span>,
+            } satisfies ColumnDef<WorkerItem, unknown>,
+          ]
+        : []),
+      {
+        id: 'status',
+        header: t('workers.status'),
+        enableSorting: false,
+        cell: ({ row }) => {
+          const until = row.original.placement?.until;
+          if (!until) return <StatusBadge tone="success">{t('workers.working')}</StatusBadge>;
+          return hasLeft(row.original) ? (
+            <StatusBadge tone="neutral">{t('workers.leftOn', { date: format.date(until) })}</StatusBadge>
+          ) : (
+            <StatusBadge tone="warning">{t('workers.leavesOn', { date: format.date(until) })}</StatusBadge>
+          );
+        },
+      },
+      {
+        id: 'actions',
+        header: () => <span className="sr-only">{t('common.actions')}</span>,
+        enableSorting: false,
+        cell: ({ row }) =>
+          manage && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={t('common.actionsFor', { name: workerName(row.original) })}>
+                  <MoreHorizontal aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setAction({ kind: 'edit', worker: row.original })}>
+                  <Pencil aria-hidden />
+                  {t('workers.edit')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setAction({ kind: 'move', worker: row.original })}>
+                  <ArrowRightLeft aria-hidden />
+                  {hasLeft(row.original) ? t('workers.rehire') : t('workers.move')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setAction({ kind: 'leave', worker: row.original })}>
+                  <LogOut aria-hidden />
+                  {row.original.placement?.until ? t('workers.changeLastDay') : t('workers.leave')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ),
+      },
+    ],
+    [t, format, manage, personal],
+  );
+
+  const activeSites = (sites.data ?? []).filter((s) => s.isActive);
+  const done = async () => {
+    setAction(null);
+    onAddingChange(false);
+    toast.success(t('common.saved'));
+    await refresh();
+  };
+
+  return (
+    <>
+      <DataTable
+        columns={columns}
+        data={rows}
+        isLoading={workers.isPending}
+        isError={workers.isError}
+        onRetry={() => workers.refetch()}
+        searchable
+        searchText={(w) =>
+          [workerName(w), w.position, w.personal?.pinfl, w.placement?.siteName, w.placement?.teamName].filter(Boolean).join(' ')
+        }
+        toolbar={
+          <>
+            <Select value={siteFilter} onValueChange={setSiteFilter}>
+              <SelectTrigger className="w-full sm:w-48" aria-label={t('workers.site')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t('workers.allSites')}</SelectItem>
+                {(sites.data ?? []).map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
+              <SelectTrigger className="w-full sm:w-40" aria-label={t('workers.status')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="working">{t('workers.filterWorking')}</SelectItem>
+                <SelectItem value="left">{t('workers.filterLeft')}</SelectItem>
+                <SelectItem value="all">{t('workers.filterAll')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        }
+        emptyTitle={t('workers.emptyTitle')}
+        emptyDescription={manage ? t('workers.emptyDescription') : undefined}
+      />
+
+      {adding && <AddWorkerDialog sites={activeSites} onClose={() => onAddingChange(false)} onSaved={done} />}
+      {action?.kind === 'edit' && (
+        <EditWorkerDialog worker={action.worker} personal={personal} onClose={() => setAction(null)} onSaved={done} />
+      )}
+      {action?.kind === 'move' && (
+        <MoveDialog worker={action.worker} sites={activeSites} onClose={() => setAction(null)} onSaved={done} />
+      )}
+      {action?.kind === 'leave' && <LeaveDialog worker={action.worker} onClose={() => setAction(null)} onSaved={done} />}
+    </>
+  );
+}
+
+/** Empty worker form. Employment type has no default: the person adding chooses. */
+const EMPTY_WORKER = {
+  lastName: '',
+  firstName: '',
+  patronymic: '',
+  position: '',
+  employmentType: undefined,
+  pinfl: '',
+  birthDate: '',
+  nationality: '',
+  passportSeries: '',
+  passportNumber: '',
+  phone: '',
+};
+
+function toWorkerInput(w: WorkerItem): WorkerInput {
+  return {
+    lastName: w.lastName,
+    firstName: w.firstName,
+    patronymic: w.patronymic ?? '',
+    position: w.position ?? '',
+    employmentType: w.employmentType,
+    pinfl: w.personal?.pinfl ?? '',
+    birthDate: w.personal?.birthDate ?? '',
+    nationality: w.personal?.nationality ?? '',
+    passportSeries: w.personal?.passportSeries ?? '',
+    passportNumber: w.personal?.passportNumber ?? '',
+    phone: w.personal?.phone ?? '',
+  };
+}
+
+function AddWorkerDialog({ sites, onClose, onSaved }: { sites: SiteItem[]; onClose: () => void; onSaved: () => void }) {
+  const { t } = useTranslation();
+  const [formError, setFormError] = useState<string>();
+  const form = useForm<CreateWorkerInput, unknown, CreateWorker>({
+    resolver: zodResolver(createWorkerSchema),
+    defaultValues: {
+      worker: EMPTY_WORKER,
+      placement: { siteId: sites.length === 1 ? sites[0].id : '', teamId: '', from: today(), shift: 'DAY' },
+    },
+  });
+
+  const save = useMutation({
+    mutationFn: (values: CreateWorker) => api.post('/workers', values),
+    onSuccess: onSaved,
+    onError: (error) => {
+      if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{t('workers.add')}</DialogTitle>
+          <DialogDescription>{t('workers.addDescription')}</DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-6"
+          noValidate
+          onSubmit={form.handleSubmit((values) => {
+            setFormError(undefined);
+            save.mutate(values);
+          })}
+        >
+          <FormError message={formError} />
+          <WorkerFields control={form.control} prefix="worker." errors={form.formState.errors.worker} personal />
+          <section className="space-y-4 border-t pt-4">
+            <h3 className="font-semibold">{t('workers.placement')}</h3>
+            <PlacementFields control={form.control} prefix="placement." errors={form.formState.errors.placement} sites={sites} fromLabel={t('workers.firstDay')} />
+          </section>
+          <FormActions submitLabel={t('workers.add')} pending={save.isPending} onCancel={onClose} />
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditWorkerDialog({
+  worker,
+  personal,
+  onClose,
+  onSaved,
+}: {
+  worker: WorkerItem;
+  personal: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useTranslation();
+  const [formError, setFormError] = useState<string>();
+  const form = useForm<WorkerInput, unknown, Worker>({
+    resolver: zodResolver(workerSchema),
+    defaultValues: toWorkerInput(worker),
+  });
+
+  const save = useMutation({
+    mutationFn: (values: Worker) => api.patch(`/workers/${worker.id}`, values),
+    onSuccess: onSaved,
+    onError: (error) => {
+      if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{t('workers.edit')}</DialogTitle>
+          <DialogDescription>{workerName(worker)}</DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-6"
+          noValidate
+          onSubmit={form.handleSubmit((values) => {
+            setFormError(undefined);
+            save.mutate(values);
+          })}
+        >
+          <FormError message={formError} />
+          <WorkerFields control={form.control} prefix="" errors={form.formState.errors} personal={personal} />
+          <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MoveDialog({
+  worker,
+  sites,
+  onClose,
+  onSaved,
+}: {
+  worker: WorkerItem;
+  sites: SiteItem[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useTranslation();
+  const [formError, setFormError] = useState<string>();
+  const form = useForm<PlacementInput, unknown, Placement>({
+    resolver: zodResolver(placementSchema),
+    defaultValues: {
+      siteId: worker.placement?.siteId ?? '',
+      teamId: worker.placement?.teamId ?? '',
+      from: today(),
+      shift: worker.placement?.shift ?? 'DAY',
+    },
+  });
+  const rehire = hasLeft(worker);
+
+  const save = useMutation({
+    mutationFn: (values: Placement) => api.post(`/workers/${worker.id}/placements`, values),
+    onSuccess: onSaved,
+    onError: (error) => {
+      if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{rehire ? t('workers.rehire') : t('workers.move')}</DialogTitle>
+          <DialogDescription>
+            {workerName(worker)} · {rehire ? t('workers.rehireHint') : t('workers.moveHint')}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          noValidate
+          onSubmit={form.handleSubmit((values) => {
+            setFormError(undefined);
+            save.mutate(values);
+          })}
+        >
+          <FormError message={formError} />
+          <PlacementFields control={form.control} prefix="" errors={form.formState.errors} sites={sites} fromLabel={t('workers.firstDayThere')} />
+          <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LeaveDialog({ worker, onClose, onSaved }: { worker: WorkerItem; onClose: () => void; onSaved: () => void }) {
+  const { t } = useTranslation();
+  const [formError, setFormError] = useState<string>();
+  const form = useForm<LeaveInput, unknown, Leave>({
+    resolver: zodResolver(leaveSchema),
+    defaultValues: { date: worker.placement?.until ?? today() },
+  });
+
+  const save = useMutation({
+    mutationFn: (values: Leave) => api.post(`/workers/${worker.id}/leave`, values),
+    onSuccess: onSaved,
+    onError: (error) => {
+      if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{worker.placement?.until ? t('workers.changeLastDay') : t('workers.leave')}</DialogTitle>
+          <DialogDescription>
+            {workerName(worker)} · {t('workers.leaveHint')}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          noValidate
+          onSubmit={form.handleSubmit((values) => {
+            setFormError(undefined);
+            save.mutate(values);
+          })}
+        >
+          <FormError message={formError} />
+          <Controller
+            control={form.control}
+            name="date"
+            render={({ field, fieldState }) => (
+              <Field id="l-date" label={t('workers.lastDay')} error={fieldState.error}>
+                <DatePicker id="l-date" value={field.value} onChange={field.onChange} invalid={!!fieldState.error} />
+              </Field>
+            )}
+          />
+          <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Fields shared by the add and edit forms. `prefix` places them in a nested form
+// ("worker." in the add form); the casts tie the field names to that prefix.
+
+function WorkerFields<T extends FieldValues>({
+  control,
+  prefix,
+  errors,
+  personal,
+}: {
+  control: Control<T>;
+  prefix: '' | 'worker.';
+  errors: FieldErrors<WorkerInput> | undefined;
+  personal: boolean;
+}) {
+  const { t } = useTranslation();
+  const name = (field: keyof WorkerInput) => `${prefix}${field}` as FieldPath<T>;
+  const text = (field: keyof WorkerInput, label: string, extra: { hint?: string; inputMode?: 'numeric' | 'tel' } = {}) => (
+    <Controller
+      control={control}
+      name={name(field)}
+      render={({ field: f }) => {
+        const id = `w-${field}`;
+        const error = errors?.[field];
+        return (
+          <Field id={id} label={label} error={error} hint={extra.hint}>
+            <Input
+              {...fieldControlProps(id, error)}
+              name={f.name}
+              value={(f.value as string | null) ?? ''}
+              onChange={f.onChange}
+              onBlur={f.onBlur}
+              ref={f.ref}
+              inputMode={extra.inputMode}
+              autoComplete="off"
+            />
+          </Field>
+        );
+      }}
+    />
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        {text('lastName', t('workers.lastName'))}
+        {text('firstName', t('workers.firstName'))}
+        {text('patronymic', t('workers.patronymic'))}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {text('position', t('workers.position'))}
+        <Controller
+          control={control}
+          name={name('employmentType')}
+          render={({ field }) => (
+            <Field id="w-employmentType" label={t('workers.employmentType')} error={errors?.employmentType}>
+              <Select value={(field.value as string | undefined) ?? ''} onValueChange={field.onChange}>
+                <SelectTrigger id="w-employmentType" className="w-full" aria-invalid={errors?.employmentType ? true : undefined}>
+                  <SelectValue placeholder={t('workers.chooseEmploymentType')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {EMPLOYMENT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {t(`workers.employment.${type}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+        />
+      </div>
+      {personal && (
+        <section className="space-y-4 border-t pt-4">
+          <div>
+            <h3 className="font-semibold">{t('workers.personalData')}</h3>
+            <p className="text-sm text-muted-foreground">{t('workers.personalDataHint')}</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {text('pinfl', t('workers.pinfl'), { hint: t('workers.pinflHint'), inputMode: 'numeric' })}
+            <Controller
+              control={control}
+              name={name('birthDate')}
+              render={({ field }) => (
+                <Field id="w-birthDate" label={t('workers.birthDate')} error={errors?.birthDate}>
+                  <DatePicker
+                    id="w-birthDate"
+                    value={(field.value as string | null) ?? ''}
+                    onChange={field.onChange}
+                    invalid={!!errors?.birthDate}
+                    defaultMonth="1990-01-01"
+                  />
+                </Field>
+              )}
+            />
+            {text('passportSeries', t('workers.passportSeries'))}
+            {text('passportNumber', t('workers.passportNumber'))}
+            {text('nationality', t('workers.nationality'))}
+            {text('phone', t('workers.phone'), { inputMode: 'tel' })}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function PlacementFields<T extends FieldValues>({
+  control,
+  prefix,
+  errors,
+  sites,
+  fromLabel,
+}: {
+  control: Control<T>;
+  prefix: '' | 'placement.';
+  errors: FieldErrors<PlacementInput> | undefined;
+  sites: SiteItem[];
+  fromLabel: string;
+}) {
+  const { t } = useTranslation();
+  const name = (field: keyof PlacementInput) => `${prefix}${field}` as FieldPath<T>;
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Controller
+        control={control}
+        name={name('siteId')}
+        render={({ field: site }) => (
+          <>
+            <Field id="p-site" label={t('workers.site')} error={errors?.siteId}>
+              <Select value={(site.value as string) ?? ''} onValueChange={site.onChange}>
+                <SelectTrigger id="p-site" className="w-full" aria-invalid={errors?.siteId ? true : undefined}>
+                  <SelectValue placeholder={t('workers.chooseSite')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {sites.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Controller
+              control={control}
+              name={name('teamId')}
+              render={({ field: team }) => {
+                const teams = sites.find((s) => s.id === site.value)?.teams.filter((x) => x.isActive) ?? [];
+                const value = teams.some((x) => x.id === team.value) ? (team.value as string) : NO_TEAM;
+                return (
+                  <Field id="p-team" label={t('workers.team')} error={errors?.teamId}>
+                    <Select value={value} onValueChange={(v) => team.onChange(v === NO_TEAM ? '' : v)} disabled={!site.value}>
+                      <SelectTrigger id="p-team" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_TEAM}>{t('workers.noTeam')}</SelectItem>
+                        {teams.map((x) => (
+                          <SelectItem key={x.id} value={x.id}>
+                            {x.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                );
+              }}
+            />
+          </>
+        )}
+      />
+      <Controller
+        control={control}
+        name={name('from')}
+        render={({ field }) => (
+          <Field id="p-from" label={fromLabel} error={errors?.from}>
+            <DatePicker id="p-from" value={(field.value as string) ?? ''} onChange={field.onChange} invalid={!!errors?.from} />
+          </Field>
+        )}
+      />
+      <Controller
+        control={control}
+        name={name('shift')}
+        render={({ field }) => (
+          <Field id="p-shift" label={t('workers.shift')} error={errors?.shift}>
+            <Select value={(field.value as string) ?? ''} onValueChange={field.onChange}>
+              <SelectTrigger id="p-shift" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SHIFTS.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {t(`workers.shiftName.${s}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+      />
+    </div>
+  );
+}
+
+/** Radix Select can't hold an empty value, so "no team" has its own. */
+const NO_TEAM = 'none';

@@ -133,6 +133,19 @@ export class MembersService {
         if (owners <= 1) throw badRequest('member.lastOwner');
       }
 
+      // Site and team assignments mean something different for each role, so a new
+      // role starts without any; they are assigned again on the Sites page.
+      const roleChanged = input.role !== undefined && input.role !== member.role;
+      const cleared = roleChanged
+        ? {
+            siteIds: (await tx.memberSite.findMany({ where: { userId, companyId: auth.company.id } })).map((s) => s.siteId),
+            teamIds: (await tx.memberTeam.findMany({ where: { userId, companyId: auth.company.id } })).map((t) => t.teamId),
+          }
+        : null;
+      if (roleChanged) {
+        await tx.memberSite.deleteMany({ where: { userId, companyId: auth.company.id } });
+        await tx.memberTeam.deleteMany({ where: { userId, companyId: auth.company.id } });
+      }
       await tx.membership.update({
         where: { userId_companyId: { userId, companyId: auth.company.id } },
         data: { role: input.role, isActive: input.isActive },
@@ -151,7 +164,10 @@ export class MembersService {
           actorUserId: auth.user.id,
           entityType: 'User',
           entityId: userId,
-          data: diff({ role: member.role, isActive: member.isActive }, input),
+          data: {
+            ...diff({ role: member.role, isActive: member.isActive }, input),
+            ...(cleared && (cleared.siteIds.length || cleared.teamIds.length) ? { clearedScopes: cleared } : {}),
+          },
           ip: auth.ip,
         },
         tx,

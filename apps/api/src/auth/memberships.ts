@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, Role } from '@prisma/client';
 
 /**
  * A membership that gives access to its company: active, accepted (not a pending or
@@ -18,3 +18,6 @@ export const OPEN_INVITATION = {
   declinedAt: null,
   company: { isActive: true },
 } as const satisfies Prisma.MembershipWhereInput;
+
+/** Roles limited to the sites they are assigned to (MemberSite). Foremen are limited to teams. */
+export const SITE_SCOPED: readonly Role[] = ['PROJECT_MANAGER', 'TIMEKEEPER'];

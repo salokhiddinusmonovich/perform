@@ -50,12 +50,35 @@ async function main() {
       ['owner', 'Demo Owner', 'OWNER', '+998900000001'],
       ['admin', 'Demo Admin', 'ADMIN', '+998900000002'],
       ['accountant', 'Demo Accountant', 'ACCOUNTANT'],
+      ['pm', 'Demo Project Manager', 'PROJECT_MANAGER'],
       ['timekeeper', 'Demo Timekeeper', 'TIMEKEEPER'],
       ['foreman', 'Demo Foreman', 'FOREMAN', '+998900000005'],
     ];
+    const ids: Record<string, string> = {};
     for (const [local, name, role, phone] of members) {
       const u = await user(local, name, { phone });
+      ids[local] = u.id;
       await prisma.membership.create({ data: { userId: u.id, companyId: demo.id, role, acceptedAt: new Date() } });
+    }
+
+    // Two sites; the project manager and timekeeper work on the first, the foreman leads its team.
+    const north = await prisma.site.create({ data: { companyId: demo.id, name: 'North Tower', code: 'NT' } });
+    await prisma.site.create({ data: { companyId: demo.id, name: 'South Plant' } });
+    const electrical = await prisma.team.create({
+      data: { companyId: demo.id, siteId: north.id, name: 'Electrical 1', department: 'Electrical' },
+    });
+    await prisma.memberSite.createMany({
+      data: [ids.pm, ids.timekeeper].map((userId) => ({ userId, companyId: demo.id, siteId: north.id })),
+    });
+    await prisma.memberTeam.create({ data: { userId: ids.foreman, companyId: demo.id, teamId: electrical.id } });
+    for (const [lastName, firstName, position] of [
+      ['Demoev', 'Ali', 'Electrician'],
+      ['Testova', 'Malika', 'Cable installer'],
+    ]) {
+      const worker = await prisma.worker.create({ data: { companyId: demo.id, lastName, firstName, position } });
+      await prisma.assignment.create({
+        data: { companyId: demo.id, workerId: worker.id, siteId: north.id, teamId: electrical.id, hiredOn: new Date('2026-09-01') },
+      });
     }
     const otherOwner = await user('other-owner', 'Other Owner');
     await prisma.membership.create({ data: { userId: otherOwner.id, companyId: other.id, role: 'OWNER', acceptedAt: new Date() } });
@@ -64,7 +87,7 @@ async function main() {
       data: { userId: otherOwner.id, companyId: demo.id, role: 'FOREMAN', invitedName: 'Other Owner', invitedEmail: otherOwner.email },
     });
 
-    console.log(`Demo data ready. Log in as <role>@${DEMO_DOMAIN} (platform, owner, admin, accountant,`);
+    console.log(`Demo data ready. Log in as <role>@${DEMO_DOMAIN} (platform, owner, admin, accountant, pm,`);
     console.log('timekeeper, foreman, other-owner) with DEV_SEED_PASSWORD from apps/api/.env.');
   } finally {
     await prisma.$disconnect();
@@ -85,6 +108,7 @@ async function removeDemoData(prisma: PrismaClient) {
     prisma.auditLog.deleteMany({ where: { OR: [inCompany, { actorUserId: { in: userIds } }] } }),
     prisma.adjustment.deleteMany({ where: inCompany }),
     prisma.timesheetEntry.deleteMany({ where: inCompany }),
+    prisma.salary.deleteMany({ where: inCompany }),
     prisma.payrollPeriod.deleteMany({ where: inCompany }),
     prisma.workingDaysOverride.deleteMany({ where: inCompany }),
     prisma.payrollRules.deleteMany({ where: inCompany }),
@@ -93,6 +117,8 @@ async function removeDemoData(prisma: PrismaClient) {
     prisma.timesheetCode.deleteMany({ where: inCompany }),
     prisma.assignment.deleteMany({ where: inCompany }),
     prisma.travelRoute.deleteMany({ where: inCompany }),
+    prisma.memberSite.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),
+    prisma.memberTeam.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),
     prisma.membership.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),
     prisma.worker.deleteMany({ where: inCompany }),
     prisma.team.deleteMany({ where: inCompany }),

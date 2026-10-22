@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { SessionKind } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -22,16 +23,34 @@ export function sessionCookieOptions() {
   };
 }
 
+/** The token of an `Authorization: Bearer <token>` header, or null. */
+export function bearerToken(req: { get(name: string): string | undefined }): string | null {
+  const match = /^Bearer\s+(\S+)$/i.exec(req.get('authorization') ?? '');
+  return match ? match[1] : null;
+}
+
 @Injectable()
 export class SessionService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Creates a session and returns the raw token for the cookie (only its hash is stored). */
-  async create(params: { userId: string; activeCompanyId: string | null; ip?: string; userAgent?: string }) {
+  /**
+   * Creates a session and returns the raw token (only its hash is stored): for the
+   * cookie (BROWSER) or for the app's Authorization header (APP).
+   */
+  async create(params: {
+    userId: string;
+    activeCompanyId: string | null;
+    kind: SessionKind;
+    deviceName?: string;
+    ip?: string;
+    userAgent?: string;
+  }) {
     const token = randomBytes(32).toString('base64url');
     await this.prisma.session.create({
       data: {
         tokenHash: hashToken(token),
+        kind: params.kind,
+        deviceName: params.deviceName,
         userId: params.userId,
         activeCompanyId: params.activeCompanyId,
         ip: params.ip,
@@ -42,13 +61,17 @@ export class SessionService {
     return token;
   }
 
-  /** Finds a valid session for a cookie token, extending it while it's in use. */
-  async findValid(token: string) {
+  /**
+   * Finds a valid session for a token sent the given way, extending it while it's in
+   * use. A token only works the way it was issued: an app token in a cookie (or the
+   * other way round) is not a session.
+   */
+  async findValid(token: string, kind: SessionKind) {
     const session = await this.prisma.session.findUnique({
       where: { tokenHash: hashToken(token) },
       include: { user: true },
     });
-    if (!session) return null;
+    if (!session || session.kind !== kind) return null;
     if (session.expiresAt.getTime() <= Date.now()) {
       await this.prisma.session.delete({ where: { id: session.id } }).catch(() => undefined);
       return null;

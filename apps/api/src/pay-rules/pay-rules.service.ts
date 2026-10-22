@@ -11,6 +11,7 @@ import type { PayRules } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { notFound } from '../common/api-error';
+import { isoDay } from '../common/dates';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertMonthsOpen } from './months';
 
@@ -32,8 +33,6 @@ export interface MonthRules {
 
 type Db = Prisma.TransactionClient | PrismaService;
 
-/** "YYYY-MM-DD" of a @db.Date column. */
-export const isoDay = (date: Date) => date.toISOString().slice(0, 10);
 
 /**
  * Pay rules of the company default rule set (Settings), versioned by month: a

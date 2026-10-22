@@ -18,7 +18,12 @@ export interface Me {
     currency: string;
     timezone: string;
     role: Role;
-    siteId: string | null;
+    /** PAYROLL always; TIMESHEET when the company has it */
+    modules: ('PAYROLL' | 'TIMESHEET')[];
+    /** Sites a project manager or timekeeper works on; null for other roles */
+    siteIds: string[] | null;
+    /** Teams a foreman leads; null for other roles */
+    teamIds: string[] | null;
   } | null;
   companies: { id: string; name: string; role: Role }[];
 }
@@ -52,4 +57,21 @@ export function canManageCompany(me: Me | null | undefined): boolean {
 export function canViewPayRules(me: Me | null | undefined): boolean {
   const role = me?.activeCompany?.role;
   return role === 'OWNER' || role === 'ADMIN' || role === 'ACCOUNTANT';
+}
+
+/** Can add workers and change them, and manage teams (project managers: on their own sites; the API checks which). */
+export function canManageWorkers(me: Me | null | undefined): boolean {
+  const role = me?.activeCompany?.role;
+  return role === 'OWNER' || role === 'ADMIN' || role === 'PROJECT_MANAGER';
+}
+
+/** Sees workers' personal data. Timekeepers and foremen don't; the API never sends it to them. */
+export function seesPersonalData(me: Me | null | undefined): boolean {
+  const role = me?.activeCompany?.role;
+  return role !== undefined && role !== 'TIMEKEEPER' && role !== 'FOREMAN';
+}
+
+/** Any member of the active company (sites and workers are shown to everyone within their scope). */
+export function inCompany(me: Me | null | undefined): boolean {
+  return Boolean(me?.activeCompany);
 }

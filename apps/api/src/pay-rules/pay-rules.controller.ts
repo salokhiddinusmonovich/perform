@@ -11,7 +11,7 @@ import {
   type YearMonth,
   type YearQuery,
 } from '@puantaj/schemas';
-import { CompanyAuth, Roles, type CompanyAuthContext } from '../auth/auth.context';
+import { CompanyAuth, ForModule, Roles, type CompanyAuthContext } from '../auth/auth.context';
 import { ZodPipe } from '../common/zod.pipe';
 import { HolidaysService, type HolidayYearView } from './holidays.service';
 import { PayRulesService, type PayRulesVersionView } from './pay-rules.service';
@@ -21,6 +21,7 @@ import { WorkingDaysService, type WorkingDaysYearView } from './working-days.ser
 // Timekeepers and foremen never see pay settings.
 
 /** Pay rules of the company, versioned by the month they apply from. */
+@ForModule('PAYROLL')
 @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
 @Controller('pay-rules')
 export class PayRulesController {
@@ -51,6 +52,7 @@ export class PayRulesController {
 }
 
 /** Holidays the company enters; Uzbekistan's fixed-date holidays come with the app. */
+@ForModule('PAYROLL')
 @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
 @Controller('holidays')
 export class HolidaysController {
@@ -90,6 +92,7 @@ export class HolidaysController {
 }
 
 /** Working days per month: calculated, overridden, and the value pay uses. */
+@ForModule('PAYROLL')
 @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
 @Controller('working-days')
 export class WorkingDaysController {

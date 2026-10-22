@@ -92,7 +92,7 @@ npm run typecheck
 npm run build
 ```
 
-Demo accounts from `seed:dev` (local only, refuses to run in production): `platform@`, `owner@`, `admin@`, `accountant@`, `timekeeper@`, `foreman@` and `other-owner@demo.puantaj.test`, all with `DEV_SEED_PASSWORD` from `apps/api/.env`. Re-running resets them.
+Demo accounts from `seed:dev` (local only, refuses to run in production): `platform@`, `owner@`, `admin@`, `accountant@`, `pm@`, `timekeeper@`, `foreman@` and `other-owner@demo.puantaj.test`, all with `DEV_SEED_PASSWORD` from `apps/api/.env`. Re-running resets them.
 
 Before finishing a change, run `npm test`, `npm run typecheck` and `npm run build`.
 
@@ -121,14 +121,16 @@ Before finishing a change, run `npm test`, `npm run typecheck` and `npm run buil
 
 - **Tenancy:** every business table has `companyId` (directly or through its parent). Every query must be scoped to the caller's company. Never trust a `companyId` sent by the client. A child that points to another company-scoped row carries `companyId` too and uses a composite foreign key `(parentId, companyId) → (id, companyId)`, so the database refuses rows that mix two companies.
 - **Auth (API):**
-  - Server-side sessions: the httpOnly cookie holds a random token, and the DB stores only its hash. Passwords use Argon2id.
+  - Server-side sessions: the client holds a random token and the DB stores only its hash. The browser gets it as an httpOnly cookie (`POST /auth/login`), the mobile app as a bearer token (`POST /auth/token` with a device name). A token works only the way it was issued (`Session.kind`). Users list and revoke their own sessions (`/auth/sessions`). Passwords use Argon2id.
   - Every route needs a login unless marked `@Public()` (never reads the session) or `@OptionalAuth()` (runs either way).
-  - Access is declared with `@Roles(...)` and `@PlatformAdminOnly()`.
+  - Access is declared with `@Roles(...)` and `@PlatformAdminOnly()`. Every route with `@Roles` also declares its module with `@ForModule('PAYROLL' | 'TIMESHEET')`; the guard fails loudly (500) if it's missing and refuses a disabled module with `module.disabled`.
+  - Site and team scope: project managers and timekeepers work on the sites in `MemberSite`, foremen on the teams in `MemberTeam`. Who sees and manages what is decided only in `apps/api/src/organisation/access.ts`. Combine its filters with `AND`, never by spreading.
   - Company routes take `@CompanyAuth() auth` and scope every query by `auth.company.id`.
-  - Roles: OWNER, ADMIN, ACCOUNTANT, TIMEKEEPER, FOREMAN. Platform admin is a separate user flag for the product operator, who creates companies.
+  - Roles: OWNER, ADMIN, ACCOUNTANT, PROJECT_MANAGER, TIMEKEEPER, FOREMAN. Changing a member's role clears their site and team assignments. Platform admin is a separate user flag for the product operator, who creates companies.
   - Temporary passwords are returned once to the admin and never stored or logged in readable form. `mustChangePassword` locks the account to me/logout/change-password.
   - A company admin can reset only passwords of accounts that belong to their company alone.
-  - Data-changing requests are checked for same-site Origin (`SameOriginGuard`).
+  - Data-changing cookie requests are checked for same-site Origin (`SameOriginGuard`); bearer requests are not.
+  - Salaries live in `Salary`, not in the worker's placement (`Assignment`), and are only ever added. Placements are shown to timekeepers and foremen; salaries and workers' personal data never are.
 - **Errors:** throw the helpers in `apps/api/src/common/api-error.ts` with a stable `code` (e.g. `forbidden('member.lastOwner')`). Never send user-facing text from the API. The web shows `errors.<code>`. Validation errors carry per-field translation keys (`validation.*`) from the shared schemas. A web test fails if any code or key used in the API, schemas or web is missing from the translations.
 - **Validation:** request bodies go through `new ZodPipe(schema)` with a schema from `@puantaj/schemas`, and forms use the same schema via `zodResolver`. Schemas export `…Input` (form) and plain (validated) types.
 - **Audit:** every change to company data records an `AuditLog` row through `AuditService.record(entry, tx)`, inside the same transaction as the change. Never put passwords or tokens in audit data.

@@ -24,6 +24,9 @@ model Company {
   timezone  String   @default("Asia/Tashkent")
   /// Deactivated companies can't be used by their members
   isActive  Boolean  @default(true)
+  /// Optional Timesheet module (daily hour entry); only the platform admin turns it
+  /// on or off. Payroll is every company's module and has no flag.
+  timesheetModule Boolean @default(false)
   createdAt DateTime @default(now())
 
   memberships    Membership[]
@@ -65,14 +68,25 @@ model User {
   lockedPeriods        PayrollPeriod[]
   workingDaysOverrides WorkingDaysOverride[]
   payrollRules         PayrollRules[]
+  salaries             Salary[]
 }
 
-/// Server-side login session. The browser holds a random token in an httpOnly
-/// cookie; only its SHA-256 hash is stored here.
+/// How a session's token is sent: the browser's httpOnly cookie, or the mobile app's
+/// Authorization: Bearer header. A token only works the way it was issued.
+enum SessionKind {
+  BROWSER
+  APP
+}
+
+/// Server-side login session. The client holds a random token (cookie or bearer);
+/// only its SHA-256 hash is stored here.
 model Session {
-  id              String   @id @default(uuid()) @db.Uuid
-  tokenHash       String   @unique
-  userId          String   @db.Uuid
+  id              String      @id @default(uuid()) @db.Uuid
+  tokenHash       String      @unique
+  kind            SessionKind @default(BROWSER)
+  /// Name the app gave its device (APP sessions), shown when listing and revoking them
+  deviceName      String?
+  userId          String      @db.Uuid
   /// Company the user is currently working in (one of their memberships)
   activeCompanyId String?  @db.Uuid
   ip              String?
@@ -116,14 +130,15 @@ enum Role {
   ACCOUNTANT
   TIMEKEEPER
   FOREMAN
+  /// Works on the sites they are assigned to (MemberSite): manages workers and teams
+  /// there and assigns timekeepers and foremen
+  PROJECT_MANAGER
 }
 
 model Membership {
   userId    String   @db.Uuid
   companyId String   @db.Uuid
   role      Role
-  /// Limits TIMEKEEPER/FOREMAN to one site; null = all sites
-  siteId    String?  @db.Uuid
   /// Deactivated members lose access to this company; their history stays
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -140,11 +155,40 @@ model Membership {
   invitedEmail String?
   invitedPhone String?
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: NoAction)
-  company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  site    Site?   @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  user    User         @relation(fields: [userId], references: [id], onDelete: NoAction)
+  company Company      @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  sites   MemberSite[]
+  teams   MemberTeam[]
 
   @@id([userId, companyId])
+}
+
+/// Sites a PROJECT_MANAGER or TIMEKEEPER works on; they see and act only there.
+model MemberSite {
+  userId    String   @db.Uuid
+  companyId String   @db.Uuid
+  siteId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  membership Membership @relation(fields: [userId, companyId], references: [userId, companyId], onDelete: NoAction)
+  site       Site       @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+
+  @@id([userId, companyId, siteId])
+  @@index([companyId, siteId])
+}
+
+/// Teams a FOREMAN leads; they see and act only for these teams.
+model MemberTeam {
+  userId    String   @db.Uuid
+  companyId String   @db.Uuid
+  teamId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  membership Membership @relation(fields: [userId, companyId], references: [userId, companyId], onDelete: NoAction)
+  team       Team       @relation(fields: [teamId, companyId], references: [id, companyId], onDelete: NoAction)
+
+  @@id([userId, companyId, teamId])
+  @@index([companyId, teamId])
 }
 
 // ---------- Organisation ----------
@@ -160,7 +204,7 @@ model Site {
   company     Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
   teams       Team[]
   assignments Assignment[]
-  memberships Membership[]
+  members     MemberSite[]
   ruleSets    PayrollRuleSet[]
   entries     TimesheetEntry[]
 
@@ -184,6 +228,7 @@ model Team {
   site        Site         @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
   assignments Assignment[]
   entries     TimesheetEntry[]
+  foremen     MemberTeam[]
 
   @@unique([siteId, name])
   @@unique([id, companyId])
@@ -230,7 +275,9 @@ enum Shift {
   NIGHT
 }
 
-/// A worker's employment on a site for a span of time, with its salary.
+/// A worker's placement on a site (and team) for a span of time. Moving to another
+/// site ends one placement and starts the next. The salary is not here: it is in
+/// Salary, so people who see placements (timekeepers, foremen) never get it.
 /// companyId is the worker's company; the composite foreign keys make the database
 /// refuse a worker, site, team or travel route from another company.
 model Assignment {
@@ -243,8 +290,8 @@ model Assignment {
   travelRouteId String?   @db.Uuid
   hiredOn       DateTime  @db.Date
   leftOn        DateTime? @db.Date
-  monthlySalary Decimal   @db.Decimal(14, 2)
   shift         Shift     @default(DAY)
+  createdAt     DateTime  @default(now())
 
   worker      Worker           @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
   site        Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
@@ -252,11 +299,34 @@ model Assignment {
   travelRoute TravelRoute?     @relation(fields: [travelRouteId, companyId], references: [id, companyId], onDelete: NoAction)
   entries     TimesheetEntry[]
   adjustments Adjustment[]
+  salaries    Salary[]
 
   @@unique([id, companyId])
   @@index([companyId])
   @@index([siteId, hiredOn])
   @@index([workerId])
+}
+
+/// A placement's monthly salary from a date on. Salaries are only ever added (the
+/// accountant never edits): a raise or a correction is a newer row. On a given day the
+/// salary is the row with the latest fromDate on or before it, the newest (highest
+/// seq) if several share that date.
+model Salary {
+  id            String   @id @default(uuid()) @db.Uuid
+  companyId     String   @db.Uuid
+  assignmentId  String   @db.Uuid
+  fromDate      DateTime @db.Date
+  monthlySalary Decimal  @db.Decimal(14, 2)
+  reason        String?
+  seq           BigInt   @unique @default(autoincrement())
+  setById       String   @db.Uuid
+  setAt         DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId, companyId], references: [id, companyId], onDelete: NoAction)
+  setBy      User       @relation(fields: [setById], references: [id], onDelete: NoAction)
+
+  @@index([assignmentId, fromDate])
+  @@index([companyId])
 }
 
 // ---------- Calendar & rules ----------
