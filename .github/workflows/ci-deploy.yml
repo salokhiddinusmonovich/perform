@@ -19,7 +19,8 @@ jobs:
   check:
     name: Test, build, smoke-test
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Includes building both Docker images
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16-alpine
@@ -47,6 +48,10 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      # The server builds these images on deploy; build them here first, so an image that
+      # can't build (e.g. a workspace missing from a Dockerfile) fails CI, not the deploy.
+      - name: Build the production Docker images
+        run: DB_PASSWORD=ci docker compose build
       - name: Apply migrations to a fresh database
         run: npx -w @puantaj/api prisma migrate deploy
       - name: Start API and production web build
