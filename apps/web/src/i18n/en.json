@@ -23,7 +23,10 @@
     "sites": "Sites",
     "workers": "Workers",
     "platformUsers": "All users",
-    "plans": "Plans"
+    "plans": "Plans",
+    "payroll": "Payroll",
+    "monthlyHours": "Monthly hours",
+    "payrollRun": "Pay calculation"
   },
   "settings": {
     "language": "Language",
@@ -62,7 +65,10 @@
     "year": "Year",
     "month": "Month",
     "previousYear": "Previous year",
-    "nextYear": "Next year"
+    "nextYear": "Next year",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "corrected": "Corrected"
   },
   "states": {
     "emptyTitle": "Nothing here yet",
@@ -277,7 +283,14 @@
     "teamNotOnSite": "This team isn't on the chosen site",
     "amountRange": "Must be 0 or more",
     "workerLimitRange": "From 1 to 1 000 000",
-    "salaryRange": "Must be more than 0"
+    "salaryRange": "Must be more than 0",
+    "monthHoursRange": "Must be from 0 to 744",
+    "daysRange": "Must be from 0 to 31",
+    "normalAboveDaysWorked": "More than the working days worked × normal hours per day",
+    "workdayHoursAboveDaysWorked": "Hours on working days are more than the working days worked × 24",
+    "daysAboveWorkingDays": "Days worked and absence days together are more than the month’s working days",
+    "restDayHoursAboveRestDays": "More than the month’s rest days × 24",
+    "holidayHoursAboveHolidays": "More than the month’s holidays × 24"
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -374,6 +387,16 @@
     },
     "salary": {
       "unchanged": "This salary already applies in that month."
+    },
+    "placement": {
+      "notFound": "Placement not found."
+    },
+    "monthlyHours": {
+      "notInMonth": "The worker wasn’t at this site in this month.",
+      "unchanged": "These hours are already entered for this month."
+    },
+    "hours": {
+      "otherSource": "The worker has daily timesheet entries this month. A month’s hours come from one source only."
     }
   },
   "payRules": {
@@ -664,8 +687,7 @@
     "addSalary": "Add salary",
     "salaryHistory": "Salary history",
     "noSalaryYet": "No salary has been added yet.",
-    "salaryFromAmount": "{{amount}} · from {{month}}",
-    "salaryCorrected": "Corrected"
+    "salaryFromAmount": "{{amount}} · from {{month}}"
   },
   "impersonation": {
     "banner": "You are logged in as {{name}}.",
@@ -760,6 +782,122 @@
         "description": "{{name}} can be given to companies again.",
         "button": "Offer again"
       }
+    }
+  },
+  "monthlyHours": {
+    "title": "Monthly hours",
+    "description": "Each worker’s total hours and days for the month, without a daily timesheet",
+    "hours": "Hours and days",
+    "dailyEntries": "Daily timesheet",
+    "entered": "Entered",
+    "notEntered": "Not entered",
+    "enterFor": "Enter hours: {{name}}",
+    "locked": "Month locked",
+    "emptyTitle": "No workers this month",
+    "emptyDescription": "Workers who were employed on at least one day of the month show here.",
+    "fromUntil": "{{from}} – {{until}}",
+    "fromDay": "from {{date}}",
+    "untilDay": "until {{date}}",
+    "nothing": "All zero",
+    "short": {
+      "normalHours": "normal: {{value}} h",
+      "overtimeHours": "overtime: {{value}} h",
+      "restDayHours": "rest days: {{value}} h",
+      "holidayHours": "holidays: {{value}} h",
+      "workdaysWorked": "days worked: {{count}}",
+      "leaveDays": "leave: {{count}}",
+      "sickDays": "sick: {{count}}",
+      "travelDays": "travel: {{count}}"
+    },
+    "dialogTitle": "Hours for {{month}}",
+    "dialogHint": "Entered hours are never changed: a correction is added as a new entry.",
+    "lockedHint": "The month is locked, so its hours can’t change.",
+    "dailyEntriesHint": "The worker has daily timesheet entries this month, so the hours come from those.",
+    "hoursWorked": "Hours worked",
+    "days": "Days",
+    "field": {
+      "normalHours": "Normal hours",
+      "overtimeHours": "Overtime hours",
+      "restDayHours": "Rest-day hours",
+      "holidayHours": "Holiday hours",
+      "workdaysWorked": "Working days worked",
+      "leaveDays": "Leave days",
+      "sickDays": "Sick days",
+      "travelDays": "Travel days"
+    },
+    "hint": {
+      "normalHours": "On working days, up to the normal hours per day",
+      "overtimeHours": "On working days, above the normal hours per day",
+      "restDayHours": "All hours on rest days",
+      "holidayHours": "All hours on public holidays",
+      "workdaysWorked": "Working days with hours worked (travel pay per day counts these)",
+      "leaveDays": "Working days only",
+      "sickDays": "Working days only",
+      "travelDays": "Moving between sites, working days only"
+    },
+    "note": "Note",
+    "noteHint": "Optional, e.g. why it was corrected",
+    "history": "Entries"
+  },
+  "payroll": {
+    "title": "Pay calculation",
+    "description": "Each worker’s pay for the month, and where every amount comes from",
+    "source": "Hours from",
+    "sources": {
+      "TOTALS": "Monthly hours",
+      "DAILY": "Daily timesheet"
+    },
+    "pay": "Pay",
+    "problemCount": "Problems: {{count}}",
+    "detailsFor": "Pay details: {{name}}",
+    "totalFor": "Total for {{month}}",
+    "workersWithProblems": "Workers who can’t be paid yet: {{count}}",
+    "emptyTitle": "No workers this month",
+    "emptyDescription": "Workers employed on at least one day of the month are paid here.",
+    "cannotPay": "Can’t be paid yet:",
+    "goToMonthlyHours": "Go to monthly hours",
+    "monthTotal": "Total for the month",
+    "partTotal": "For this part",
+    "allPlacements": "All placements together",
+    "problems": {
+      "noSalary": "No salary for this month.",
+      "noHours": "No hours for this month.",
+      "twoSources": "This month has both daily timesheet entries and monthly hours. Keep only one.",
+      "placementWithoutHours": "No hours for {{site}} (from {{date}}).",
+      "noRules": "No pay rules for this month: {{sites}}.",
+      "totalsInvalid": "The monthly hours don’t fit the month (the pay rules may have changed):",
+      "invalidHours": "The daily timesheet entries contradict each other."
+    },
+    "totalsProblems": {
+      "NORMAL_ABOVE_DAYS_WORKED": "more normal hours than the working days worked × normal hours per day",
+      "WORKDAY_HOURS_ABOVE_DAYS_WORKED": "more hours on working days than the working days worked × 24",
+      "DAYS_ABOVE_WORKING_DAYS": "more days than the month’s working days",
+      "REST_DAY_HOURS_ABOVE_REST_DAYS": "too many rest-day hours",
+      "HOLIDAY_HOURS_ABOVE_HOLIDAYS": "too many holiday hours"
+    },
+    "defaultRules": "Under the company’s rules",
+    "siteRules": "Under the rules of {{site}}",
+    "hourlyRate": "Hourly rate = {{salary}} ÷ ({{days}} working days × {{hours}} h) = {{rate}}",
+    "workingDaysOverridden": "(working days set by hand; calculated: {{calculated}})",
+    "hourKinds": {
+      "NORMAL": "Normal hours",
+      "OVERTIME": "Overtime",
+      "REST_DAY": "Rest-day hours",
+      "HOLIDAY": "Holiday hours"
+    },
+    "absences": {
+      "LEAVE": "Leave",
+      "SICK": "Sick",
+      "TRAVEL": "Travel days"
+    },
+    "lines": {
+      "hours": "{{kind}}: {{hours}} h × rate × {{multiplier}}",
+      "absencePaid": "{{absence}}: days: {{count}} × {{hours}} h × rate",
+      "absenceUnpaid": "{{absence}}: days: {{count}} (unpaid)",
+      "travelPerDay": "Travel pay ({{route}}): days: {{count}} × {{amount}}",
+      "travelNoRoute": "Travel pay: days: {{count}}, no route set",
+      "travelMonthly": "Travel pay (monthly amount)",
+      "rounding": "Rounding to {{step}}"
     }
   }
 }

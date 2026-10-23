@@ -114,6 +114,7 @@ model User {
   workingDaysOverrides WorkingDaysOverride[]
   payrollRules         PayrollRules[]
   salaries             Salary[]
+  monthlyHours         MonthlyHours[]
 }
 
 /// How a session's token is sent: the browser's httpOnly cookie, or the mobile app's
@@ -350,12 +351,13 @@ model Assignment {
   shift         Shift     @default(DAY)
   createdAt     DateTime  @default(now())
 
-  worker      Worker           @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
-  site        Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
-  team        Team?            @relation(fields: [teamId, companyId], references: [id, companyId], onDelete: NoAction)
-  travelRoute TravelRoute?     @relation(fields: [travelRouteId, companyId], references: [id, companyId], onDelete: NoAction)
-  entries     TimesheetEntry[]
-  adjustments Adjustment[]
+  worker       Worker           @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+  site         Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  team         Team?            @relation(fields: [teamId, companyId], references: [id, companyId], onDelete: NoAction)
+  travelRoute  TravelRoute?     @relation(fields: [travelRouteId, companyId], references: [id, companyId], onDelete: NoAction)
+  entries      TimesheetEntry[]
+  adjustments  Adjustment[]
+  monthlyHours MonthlyHours[]
 
   @@unique([id, companyId])
   @@index([companyId])
@@ -620,6 +622,40 @@ model TimesheetEntry {
 
   @@index([assignmentId, date])
   @@index([periodId])
+}
+
+/// One placement's hours for a month entered as totals instead of daily entries
+/// (AGENTS.md: Modules), by an owner, admin or accountant. Only ever added: a correction
+/// is a newer row, and the newest (highest seq) of a placement and month counts. A
+/// worker-month has one source of hours, so these and TimesheetEntry rows never both
+/// exist for one worker and month (checked by the API). Ranges are CHECK constraints in
+/// the migration.
+model MonthlyHours {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @db.Uuid
+  assignmentId   String   @db.Uuid
+  year           Int
+  /// 1-based
+  month          Int
+  normalHours    Decimal  @db.Decimal(5, 2)
+  overtimeHours  Decimal  @db.Decimal(5, 2)
+  restDayHours   Decimal  @db.Decimal(5, 2)
+  holidayHours   Decimal  @db.Decimal(5, 2)
+  /// Working days with hours worked; travel pay per day worked counts these
+  workdaysWorked Int
+  leaveDays      Int
+  sickDays       Int
+  travelDays     Int
+  note           String?
+  seq            BigInt   @unique @default(autoincrement())
+  setById        String   @db.Uuid
+  setAt          DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId, companyId], references: [id, companyId], onDelete: NoAction)
+  setBy      User       @relation(fields: [setById], references: [id], onDelete: NoAction)
+
+  @@index([assignmentId, year, month])
+  @@index([companyId, year, month])
 }
 
 enum AdjustmentType {

@@ -23,7 +23,10 @@
     "sites": "Obyektlar",
     "workers": "Ishchilar",
     "platformUsers": "Barcha foydalanuvchilar",
-    "plans": "Tariflar"
+    "plans": "Tariflar",
+    "payroll": "Ish haqi",
+    "monthlyHours": "Oylik soatlar",
+    "payrollRun": "Ish haqi hisobi"
   },
   "settings": {
     "language": "Til",
@@ -62,7 +65,10 @@
     "year": "Yil",
     "month": "Oy",
     "previousYear": "Oldingi yil",
-    "nextYear": "Keyingi yil"
+    "nextYear": "Keyingi yil",
+    "previousMonth": "Oldingi oy",
+    "nextMonth": "Keyingi oy",
+    "corrected": "Tuzatilgan"
   },
   "states": {
     "emptyTitle": "Hozircha hech narsa yoʻq",
@@ -277,7 +283,14 @@
     "teamNotOnSite": "Bu brigada tanlangan obyektda emas",
     "amountRange": "0 yoki undan koʻp boʻlishi kerak",
     "workerLimitRange": "1 dan 1 000 000 gacha",
-    "salaryRange": "0 dan katta boʻlishi kerak"
+    "salaryRange": "0 dan katta boʻlishi kerak",
+    "monthHoursRange": "0 dan 744 gacha boʻlishi kerak",
+    "daysRange": "0 dan 31 gacha boʻlishi kerak",
+    "normalAboveDaysWorked": "Ishlangan ish kunlari × kunlik normal soatdan koʻp",
+    "workdayHoursAboveDaysWorked": "Ish kunlaridagi soatlar ishlangan ish kunlari × 24 dan koʻp",
+    "daysAboveWorkingDays": "Ishlangan va yoʻq kunlar birgalikda oydagi ish kunlaridan koʻp",
+    "restDayHoursAboveRestDays": "Oydagi dam olish kunlari × 24 dan koʻp",
+    "holidayHoursAboveHolidays": "Oydagi bayram kunlari × 24 dan koʻp"
   },
   "errors": {
     "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
@@ -374,6 +387,16 @@
     },
     "salary": {
       "unchanged": "Bu oy uchun aynan shu maosh allaqachon amal qilmoqda."
+    },
+    "placement": {
+      "notFound": "Joylashuv topilmadi."
+    },
+    "monthlyHours": {
+      "notInMonth": "Ishchi bu oyda ushbu obyektda ishlamagan.",
+      "unchanged": "Bu oy uchun aynan shu soatlar allaqachon kiritilgan."
+    },
+    "hours": {
+      "otherSource": "Bu oy uchun ishchining kunlik tabeli bor. Bir oyda soatlar faqat bitta manbadan olinadi."
     }
   },
   "payRules": {
@@ -664,8 +687,7 @@
     "addSalary": "Maosh qoʻshish",
     "salaryHistory": "Maosh tarixi",
     "noSalaryYet": "Hali maosh kiritilmagan.",
-    "salaryFromAmount": "{{amount}} · boshlanishi: {{month}}",
-    "salaryCorrected": "Tuzatilgan"
+    "salaryFromAmount": "{{amount}} · boshlanishi: {{month}}"
   },
   "impersonation": {
     "banner": "Siz {{name}} nomidan kirgansiz.",
@@ -760,6 +782,122 @@
         "description": "{{name}} yana kompaniyalarga berilishi mumkin boʻladi.",
         "button": "Yana taklif qilish"
       }
+    }
+  },
+  "monthlyHours": {
+    "title": "Oylik soatlar",
+    "description": "Har bir ishchining oy boʻyicha jami soatlari va kunlari, kunlik tabelsiz",
+    "hours": "Soatlar va kunlar",
+    "dailyEntries": "Kunlik tabel",
+    "entered": "Kiritilgan",
+    "notEntered": "Kiritilmagan",
+    "enterFor": "{{name}} soatlarini kiritish",
+    "locked": "Oy yopilgan",
+    "emptyTitle": "Bu oyda ishchilar yoʻq",
+    "emptyDescription": "Bu yerda oyda kamida bir kun ishlagan ishchilar koʻrinadi.",
+    "fromUntil": "{{from}} – {{until}}",
+    "fromDay": "boshlanishi: {{date}}",
+    "untilDay": "oxirgi kun: {{date}}",
+    "nothing": "Hammasi 0",
+    "short": {
+      "normalHours": "normal: {{value}} s",
+      "overtimeHours": "qoʻshimcha: {{value}} s",
+      "restDayHours": "dam olish kuni: {{value}} s",
+      "holidayHours": "bayram: {{value}} s",
+      "workdaysWorked": "ish kunlari: {{count}}",
+      "leaveDays": "taʼtil: {{count}}",
+      "sickDays": "kasallik: {{count}}",
+      "travelDays": "yoʻlda: {{count}}"
+    },
+    "dialogTitle": "Soatlar: {{month}}",
+    "dialogHint": "Kiritilgan soatlar oʻzgartirilmaydi: tuzatish yangi yozuv sifatida qoʻshiladi.",
+    "lockedHint": "Oy yopilgan, soatlarni oʻzgartirib boʻlmaydi.",
+    "dailyEntriesHint": "Bu oy uchun ishchining kunlik tabeli bor, shuning uchun soatlar shundan olinadi.",
+    "hoursWorked": "Ishlangan soatlar",
+    "days": "Kunlar",
+    "field": {
+      "normalHours": "Normal soatlar",
+      "overtimeHours": "Qoʻshimcha soatlar",
+      "restDayHours": "Dam olish kunidagi soatlar",
+      "holidayHours": "Bayram kunidagi soatlar",
+      "workdaysWorked": "Ishlangan ish kunlari",
+      "leaveDays": "Taʼtil kunlari",
+      "sickDays": "Kasallik kunlari",
+      "travelDays": "Yoʻldagi kunlar"
+    },
+    "hint": {
+      "normalHours": "Ish kunlarida, kunlik normagacha",
+      "overtimeHours": "Ish kunlarida, kunlik normadan ortiq",
+      "restDayHours": "Dam olish kunlaridagi barcha soatlar",
+      "holidayHours": "Bayram kunlaridagi barcha soatlar",
+      "workdaysWorked": "Soat ishlangan ish kunlari (kunlik yoʻl haqi shularga toʻlanadi)",
+      "leaveDays": "Faqat ish kunlari",
+      "sickDays": "Faqat ish kunlari",
+      "travelDays": "Obyektlar orasida yoʻlda, faqat ish kunlari"
+    },
+    "note": "Izoh",
+    "noteHint": "Ixtiyoriy, masalan: nima uchun tuzatildi",
+    "history": "Kiritilganlar"
+  },
+  "payroll": {
+    "title": "Ish haqi hisobi",
+    "description": "Oy boʻyicha har bir ishchining ish haqi, har bir summa qayerdan kelgani bilan",
+    "source": "Soatlar manbasi",
+    "sources": {
+      "TOTALS": "Oylik soatlar",
+      "DAILY": "Kunlik tabel"
+    },
+    "pay": "Toʻlanadi",
+    "problemCount": "Muammolar: {{count}}",
+    "detailsFor": "{{name}}: hisob tafsilotlari",
+    "totalFor": "{{month}} uchun jami",
+    "workersWithProblems": "Hisoblab boʻlmaydigan ishchilar: {{count}}",
+    "emptyTitle": "Bu oyda ishchilar yoʻq",
+    "emptyDescription": "Oyda kamida bir kun ishlagan ishchilar shu yerda hisoblanadi.",
+    "cannotPay": "Hali hisoblab boʻlmaydi:",
+    "goToMonthlyHours": "Oylik soatlarga oʻtish",
+    "monthTotal": "Oy uchun jami",
+    "partTotal": "Bu qism uchun",
+    "allPlacements": "Barcha joylashuvlar birga",
+    "problems": {
+      "noSalary": "Bu oy uchun maosh kiritilmagan.",
+      "noHours": "Bu oy uchun soatlar kiritilmagan.",
+      "twoSources": "Bu oy uchun ham kunlik tabel, ham oylik soatlar bor. Bittasini qoldiring.",
+      "placementWithoutHours": "{{site}} ({{date}} dan) uchun soatlar kiritilmagan.",
+      "noRules": "Bu oy uchun toʻlov qoidalari yoʻq: {{sites}}.",
+      "totalsInvalid": "Oylik soatlar oyga mos kelmaydi (balki toʻlov qoidalari oʻzgargandir):",
+      "invalidHours": "Kunlik tabel yozuvlari bir-biriga zid."
+    },
+    "totalsProblems": {
+      "NORMAL_ABOVE_DAYS_WORKED": "normal soatlar ishlangan ish kunlari × kunlik normadan koʻp",
+      "WORKDAY_HOURS_ABOVE_DAYS_WORKED": "ish kunlaridagi soatlar ishlangan ish kunlari × 24 dan koʻp",
+      "DAYS_ABOVE_WORKING_DAYS": "kunlar oydagi ish kunlaridan koʻp",
+      "REST_DAY_HOURS_ABOVE_REST_DAYS": "dam olish kunidagi soatlar juda koʻp",
+      "HOLIDAY_HOURS_ABOVE_HOLIDAYS": "bayram kunidagi soatlar juda koʻp"
+    },
+    "defaultRules": "Kompaniya qoidalari boʻyicha",
+    "siteRules": "{{site}} qoidalari boʻyicha",
+    "hourlyRate": "Soatlik stavka = {{salary}} ÷ ({{days}} ish kuni × {{hours}} soat) = {{rate}}",
+    "workingDaysOverridden": "(ish kunlari qoʻlda oʻzgartirilgan, hisoblangani: {{calculated}})",
+    "hourKinds": {
+      "NORMAL": "Normal soatlar",
+      "OVERTIME": "Qoʻshimcha soatlar",
+      "REST_DAY": "Dam olish kunidagi soatlar",
+      "HOLIDAY": "Bayram kunidagi soatlar"
+    },
+    "absences": {
+      "LEAVE": "Taʼtil",
+      "SICK": "Kasallik",
+      "TRAVEL": "Yoʻlda"
+    },
+    "lines": {
+      "hours": "{{kind}}: {{hours}} soat × stavka × {{multiplier}}",
+      "absencePaid": "{{absence}}: kunlar: {{count}} × {{hours}} soat × stavka",
+      "absenceUnpaid": "{{absence}}: kunlar: {{count}} (toʻlanmaydi)",
+      "travelPerDay": "Yoʻl haqi ({{route}}): kunlar: {{count}} × {{amount}}",
+      "travelNoRoute": "Yoʻl haqi: kunlar: {{count}}, yoʻnalish belgilanmagan",
+      "travelMonthly": "Yoʻl haqi (oylik summa)",
+      "rounding": "{{step}} gacha yaxlitlash"
     }
   }
 }

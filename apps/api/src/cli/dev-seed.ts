@@ -78,18 +78,58 @@ async function main() {
       data: [ids.pm, ids.timekeeper].map((userId) => ({ userId, companyId: demo.id, siteId: north.id })),
     });
     await prisma.memberTeam.create({ data: { userId: ids.foreman, companyId: demo.id, teamId: electrical.id } });
-    // The first worker has a salary; the second shows how a missing one looks.
+    // Pay rules from September 2026, so the payroll pages have something to calculate.
+    const ruleSet = await prisma.payrollRuleSet.create({ data: { companyId: demo.id } });
+    await prisma.payrollRules.create({
+      data: {
+        companyId: demo.id,
+        ruleSetId: ruleSet.id,
+        fromYear: 2026,
+        fromMonth: 9,
+        restWeekdays: [7],
+        normalHoursPerDay: '9',
+        overtimeMultiplier: '1.5',
+        restDayMultiplier: '2',
+        holidayMultiplier: '2',
+        leavePaid: true,
+        sickPaid: true,
+        sickHoursPerDay: '8',
+        travelDayPaid: true,
+        travelPayMode: 'NONE',
+        payRoundingStep: '1000',
+        setById: ids.owner,
+      },
+    });
+    // The first worker has a salary and September's hours; the second shows how missing ones look.
     for (const [lastName, firstName, position, monthlySalary] of [
       ['Demoev', 'Ali', 'Electrician', '6000000'],
       ['Testova', 'Malika', 'Cable installer', null],
     ] as const) {
       const worker = await prisma.worker.create({ data: { companyId: demo.id, lastName, firstName, position } });
-      await prisma.assignment.create({
+      const placement = await prisma.assignment.create({
         data: { companyId: demo.id, workerId: worker.id, siteId: north.id, teamId: electrical.id, hiredOn: new Date('2026-09-01') },
       });
       if (monthlySalary) {
         await prisma.salary.create({
           data: { companyId: demo.id, workerId: worker.id, fromYear: 2026, fromMonth: 9, monthlySalary, setById: ids.accountant },
+        });
+        // September 2026: 25 working days; one sick day, 6 hours of overtime and a Sunday worked.
+        await prisma.monthlyHours.create({
+          data: {
+            companyId: demo.id,
+            assignmentId: placement.id,
+            year: 2026,
+            month: 9,
+            normalHours: '216',
+            overtimeHours: '6',
+            restDayHours: '8',
+            holidayHours: '0',
+            workdaysWorked: 24,
+            leaveDays: 0,
+            sickDays: 1,
+            travelDays: 0,
+            setById: ids.accountant,
+          },
         });
       }
     }
@@ -125,6 +165,7 @@ async function removeDemoData(prisma: PrismaClient) {
     prisma.adjustment.deleteMany({ where: inCompany }),
     prisma.timesheetEntry.deleteMany({ where: inCompany }),
     prisma.salary.deleteMany({ where: inCompany }),
+    prisma.monthlyHours.deleteMany({ where: inCompany }),
     prisma.payrollPeriod.deleteMany({ where: inCompany }),
     prisma.workingDaysOverride.deleteMany({ where: inCompany }),
     prisma.payrollRules.deleteMany({ where: inCompany }),

@@ -72,7 +72,7 @@ const PLACEMENT_INCLUDE = {
 } as const satisfies Prisma.AssignmentInclude;
 
 /** Newest first: by from-month, then the one added last. The first row of a month is the one that counts. */
-const SALARY_ORDER = [
+export const SALARY_ORDER = [
   { fromYear: 'desc' },
   { fromMonth: 'desc' },
   { seq: 'desc' },

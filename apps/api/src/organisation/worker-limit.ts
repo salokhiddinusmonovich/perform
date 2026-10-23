@@ -1,19 +1,8 @@
 import type { Prisma } from '@prisma/client';
 import { conflict } from '../common/api-error';
-import { monthOfDay, todayIn } from '../common/dates';
+import { inMonth, monthOfDay, todayIn } from '../common/dates';
 
 type Db = Pick<Prisma.TransactionClient, 'assignment'>;
-
-/** First and last calendar day of a month, as @db.Date values. */
-function monthSpan(year: number, month: number) {
-  return { first: new Date(Date.UTC(year, month - 1, 1)), last: new Date(Date.UTC(year, month, 0)) };
-}
-
-/** Placements that overlap the month. */
-const inMonth = (year: number, month: number) => {
-  const { first, last } = monthSpan(year, month);
-  return { hiredOn: { lte: last }, OR: [{ leftOn: null }, { leftOn: { gte: first } }] };
-};
 
 /** Active workers in a month: workers with a placement overlapping it (AGENTS.md: Plans). */
 export async function countActiveWorkers(db: Db, companyId: string, year: number, month: number): Promise<number> {

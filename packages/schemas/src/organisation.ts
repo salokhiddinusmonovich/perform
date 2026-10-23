@@ -12,7 +12,7 @@ const requiredName = (max: number) =>
     .min(1, { error: 'validation.required', abort: true })
     .max(max, { error: 'validation.tooLong' });
 
-const optionalText = (max: number) =>
+export const optionalText = (max: number) =>
   z
     .string()
     .nullish()

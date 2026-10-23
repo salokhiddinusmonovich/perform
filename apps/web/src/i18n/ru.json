@@ -23,7 +23,10 @@
     "sites": "Объекты",
     "workers": "Работники",
     "platformUsers": "Все пользователи",
-    "plans": "Тарифы"
+    "plans": "Тарифы",
+    "payroll": "Зарплата",
+    "monthlyHours": "Часы за месяц",
+    "payrollRun": "Расчёт зарплаты"
   },
   "settings": {
     "language": "Язык",
@@ -62,7 +65,10 @@
     "year": "Год",
     "month": "Месяц",
     "previousYear": "Предыдущий год",
-    "nextYear": "Следующий год"
+    "nextYear": "Следующий год",
+    "previousMonth": "Предыдущий месяц",
+    "nextMonth": "Следующий месяц",
+    "corrected": "Исправлено"
   },
   "states": {
     "emptyTitle": "Здесь пока ничего нет",
@@ -277,7 +283,14 @@
     "teamNotOnSite": "Эта бригада не на выбранном объекте",
     "amountRange": "Должно быть 0 или больше",
     "workerLimitRange": "От 1 до 1 000 000",
-    "salaryRange": "Должно быть больше 0"
+    "salaryRange": "Должно быть больше 0",
+    "monthHoursRange": "Должно быть от 0 до 744",
+    "daysRange": "Должно быть от 0 до 31",
+    "normalAboveDaysWorked": "Больше, чем отработанные рабочие дни × норма часов в день",
+    "workdayHoursAboveDaysWorked": "Часов в рабочие дни больше, чем отработанные рабочие дни × 24",
+    "daysAboveWorkingDays": "Отработанные дни и отсутствия вместе больше рабочих дней месяца",
+    "restDayHoursAboveRestDays": "Больше, чем выходные дни месяца × 24",
+    "holidayHoursAboveHolidays": "Больше, чем праздничные дни месяца × 24"
   },
   "errors": {
     "unknown": "Что-то пошло не так. Попробуйте ещё раз.",
@@ -374,6 +387,16 @@
     },
     "salary": {
       "unchanged": "На этот месяц уже действует такой же оклад."
+    },
+    "placement": {
+      "notFound": "Назначение не найдено."
+    },
+    "monthlyHours": {
+      "notInMonth": "В этом месяце работник не работал на этом объекте.",
+      "unchanged": "За этот месяц уже введены точно такие же часы."
+    },
+    "hours": {
+      "otherSource": "За этот месяц у работника есть дневной табель. Часы за месяц берутся только из одного источника."
     }
   },
   "payRules": {
@@ -664,8 +687,7 @@
     "addSalary": "Добавить оклад",
     "salaryHistory": "История оклада",
     "noSalaryYet": "Оклад ещё не указан.",
-    "salaryFromAmount": "{{amount}} · начало: {{month}}",
-    "salaryCorrected": "Исправлен"
+    "salaryFromAmount": "{{amount}} · начало: {{month}}"
   },
   "impersonation": {
     "banner": "Вы вошли как {{name}}.",
@@ -760,6 +782,122 @@
         "description": "{{name}} снова можно будет назначать компаниям.",
         "button": "Снова предлагать"
       }
+    }
+  },
+  "monthlyHours": {
+    "title": "Часы за месяц",
+    "description": "Итоги часов и дней каждого работника за месяц, без дневного табеля",
+    "hours": "Часы и дни",
+    "dailyEntries": "Дневной табель",
+    "entered": "Введено",
+    "notEntered": "Не введено",
+    "enterFor": "Ввести часы: {{name}}",
+    "locked": "Месяц закрыт",
+    "emptyTitle": "В этом месяце нет работников",
+    "emptyDescription": "Здесь показаны работники, которые работали хотя бы один день месяца.",
+    "fromUntil": "{{from}} – {{until}}",
+    "fromDay": "с {{date}}",
+    "untilDay": "по {{date}}",
+    "nothing": "Всё по нулям",
+    "short": {
+      "normalHours": "норма: {{value}} ч",
+      "overtimeHours": "сверхурочно: {{value}} ч",
+      "restDayHours": "выходные: {{value}} ч",
+      "holidayHours": "праздники: {{value}} ч",
+      "workdaysWorked": "рабочих дней: {{count}}",
+      "leaveDays": "отпуск: {{count}}",
+      "sickDays": "больничный: {{count}}",
+      "travelDays": "в пути: {{count}}"
+    },
+    "dialogTitle": "Часы за {{month}}",
+    "dialogHint": "Введённые часы не изменяются: исправление добавляется новой записью.",
+    "lockedHint": "Месяц закрыт, часы изменить нельзя.",
+    "dailyEntriesHint": "За этот месяц у работника есть дневной табель, поэтому часы берутся из него.",
+    "hoursWorked": "Отработанные часы",
+    "days": "Дни",
+    "field": {
+      "normalHours": "Часы по норме",
+      "overtimeHours": "Сверхурочные часы",
+      "restDayHours": "Часы в выходные",
+      "holidayHours": "Часы в праздники",
+      "workdaysWorked": "Отработанные рабочие дни",
+      "leaveDays": "Дни отпуска",
+      "sickDays": "Дни больничного",
+      "travelDays": "Дни в пути"
+    },
+    "hint": {
+      "normalHours": "В рабочие дни, до нормы часов в день",
+      "overtimeHours": "В рабочие дни, сверх нормы часов в день",
+      "restDayHours": "Все часы в выходные дни",
+      "holidayHours": "Все часы в праздничные дни",
+      "workdaysWorked": "Рабочие дни, в которые были часы (по ним платится проезд за день)",
+      "leaveDays": "Только рабочие дни",
+      "sickDays": "Только рабочие дни",
+      "travelDays": "Переезд между объектами, только рабочие дни"
+    },
+    "note": "Примечание",
+    "noteHint": "Необязательно, например: почему исправлено",
+    "history": "Записи"
+  },
+  "payroll": {
+    "title": "Расчёт зарплаты",
+    "description": "Зарплата каждого работника за месяц и откуда взялась каждая сумма",
+    "source": "Источник часов",
+    "sources": {
+      "TOTALS": "Часы за месяц",
+      "DAILY": "Дневной табель"
+    },
+    "pay": "К выплате",
+    "problemCount": "Проблем: {{count}}",
+    "detailsFor": "Подробности расчёта: {{name}}",
+    "totalFor": "Итого за {{month}}",
+    "workersWithProblems": "Работников, которых нельзя рассчитать: {{count}}",
+    "emptyTitle": "В этом месяце нет работников",
+    "emptyDescription": "Здесь рассчитываются работники, которые работали хотя бы один день месяца.",
+    "cannotPay": "Пока нельзя рассчитать:",
+    "goToMonthlyHours": "Перейти к часам за месяц",
+    "monthTotal": "Итого за месяц",
+    "partTotal": "За эту часть",
+    "allPlacements": "Все назначения вместе",
+    "problems": {
+      "noSalary": "На этот месяц не указан оклад.",
+      "noHours": "За этот месяц не введены часы.",
+      "twoSources": "За этот месяц есть и дневной табель, и часы за месяц. Оставьте что-то одно.",
+      "placementWithoutHours": "Не введены часы на объекте {{site}} (с {{date}}).",
+      "noRules": "Нет правил оплаты на этот месяц: {{sites}}.",
+      "totalsInvalid": "Часы за месяц не сходятся с месяцем (возможно, изменились правила оплаты):",
+      "invalidHours": "Записи дневного табеля противоречат друг другу."
+    },
+    "totalsProblems": {
+      "NORMAL_ABOVE_DAYS_WORKED": "часов по норме больше, чем отработанные дни × норма в день",
+      "WORKDAY_HOURS_ABOVE_DAYS_WORKED": "часов в рабочие дни больше, чем отработанные дни × 24",
+      "DAYS_ABOVE_WORKING_DAYS": "дней больше, чем рабочих дней в месяце",
+      "REST_DAY_HOURS_ABOVE_REST_DAYS": "слишком много часов в выходные",
+      "HOLIDAY_HOURS_ABOVE_HOLIDAYS": "слишком много часов в праздники"
+    },
+    "defaultRules": "По правилам компании",
+    "siteRules": "По правилам объекта {{site}}",
+    "hourlyRate": "Ставка в час = {{salary}} ÷ ({{days}} раб. дней × {{hours}} ч) = {{rate}}",
+    "workingDaysOverridden": "(рабочие дни изменены вручную, по календарю: {{calculated}})",
+    "hourKinds": {
+      "NORMAL": "Часы по норме",
+      "OVERTIME": "Сверхурочные",
+      "REST_DAY": "Часы в выходные",
+      "HOLIDAY": "Часы в праздники"
+    },
+    "absences": {
+      "LEAVE": "Отпуск",
+      "SICK": "Больничный",
+      "TRAVEL": "В пути"
+    },
+    "lines": {
+      "hours": "{{kind}}: {{hours}} ч × ставка × {{multiplier}}",
+      "absencePaid": "{{absence}}: дней: {{count}} × {{hours}} ч × ставка",
+      "absenceUnpaid": "{{absence}}: дней: {{count}} (не оплачивается)",
+      "travelPerDay": "Проезд ({{route}}): дней: {{count}} × {{amount}}",
+      "travelNoRoute": "Проезд: дней: {{count}}, маршрут не указан",
+      "travelMonthly": "Проезд (сумма за месяц)",
+      "rounding": "Округление до {{step}}"
     }
   }
 }

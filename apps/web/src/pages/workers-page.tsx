@@ -667,7 +667,7 @@ function SalaryDialog({
                         amount: format.money(s.monthlySalary, currency),
                       })}
                     </span>
-                    {s.corrected && <StatusBadge tone="neutral">{t('workers.salaryCorrected')}</StatusBadge>}
+                    {s.corrected && <StatusBadge tone="neutral">{t('common.corrected')}</StatusBadge>}
                   </span>
                   {s.reason && <span className="text-muted-foreground">{s.reason}</span>}
                   <span className="text-muted-foreground">

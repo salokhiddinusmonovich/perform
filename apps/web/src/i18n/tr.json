@@ -23,7 +23,10 @@
     "sites": "Şantiyeler",
     "workers": "İşçiler",
     "platformUsers": "Tüm kullanıcılar",
-    "plans": "Paketler"
+    "plans": "Paketler",
+    "payroll": "Maaş",
+    "monthlyHours": "Aylık saatler",
+    "payrollRun": "Maaş hesabı"
   },
   "settings": {
     "language": "Dil",
@@ -62,7 +65,10 @@
     "year": "Yıl",
     "month": "Ay",
     "previousYear": "Önceki yıl",
-    "nextYear": "Sonraki yıl"
+    "nextYear": "Sonraki yıl",
+    "previousMonth": "Önceki ay",
+    "nextMonth": "Sonraki ay",
+    "corrected": "Düzeltildi"
   },
   "states": {
     "emptyTitle": "Henüz bir şey yok",
@@ -277,7 +283,14 @@
     "teamNotOnSite": "Bu ekip seçilen şantiyede değil",
     "amountRange": "0 veya daha fazla olmalı",
     "workerLimitRange": "1 ile 1 000 000 arası",
-    "salaryRange": "0'dan büyük olmalı"
+    "salaryRange": "0'dan büyük olmalı",
+    "monthHoursRange": "0 ile 744 arasında olmalı",
+    "daysRange": "0 ile 31 arasında olmalı",
+    "normalAboveDaysWorked": "Çalışılan iş günü × günlük normal saatten fazla",
+    "workdayHoursAboveDaysWorked": "İş günlerindeki saatler çalışılan iş günü × 24'ten fazla",
+    "daysAboveWorkingDays": "Çalışılan ve devamsız günler birlikte ayın iş günlerinden fazla",
+    "restDayHoursAboveRestDays": "Ayın dinlenme günleri × 24'ten fazla",
+    "holidayHoursAboveHolidays": "Ayın tatil günleri × 24'ten fazla"
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -374,6 +387,16 @@
     },
     "salary": {
       "unchanged": "Bu ay için zaten aynı maaş geçerli."
+    },
+    "placement": {
+      "notFound": "Görevlendirme bulunamadı."
+    },
+    "monthlyHours": {
+      "notInMonth": "İşçi bu ay bu şantiyede çalışmadı.",
+      "unchanged": "Bu ay için tam olarak aynı saatler zaten girildi."
+    },
+    "hours": {
+      "otherSource": "İşçinin bu ay için günlük puantajı var. Bir ayın saatleri yalnızca tek bir kaynaktan gelir."
     }
   },
   "payRules": {
@@ -664,8 +687,7 @@
     "addSalary": "Maaş ekle",
     "salaryHistory": "Maaş geçmişi",
     "noSalaryYet": "Henüz maaş girilmedi.",
-    "salaryFromAmount": "{{amount}} · {{month}} itibarıyla",
-    "salaryCorrected": "Düzeltildi"
+    "salaryFromAmount": "{{amount}} · {{month}} itibarıyla"
   },
   "impersonation": {
     "banner": "{{name}} olarak giriş yaptınız.",
@@ -760,6 +782,122 @@
         "description": "{{name}} yeniden şirketlere verilebilecek.",
         "button": "Yeniden sun"
       }
+    }
+  },
+  "monthlyHours": {
+    "title": "Aylık saatler",
+    "description": "Günlük puantaj olmadan, her işçinin ay boyunca toplam saatleri ve günleri",
+    "hours": "Saatler ve günler",
+    "dailyEntries": "Günlük puantaj",
+    "entered": "Girildi",
+    "notEntered": "Girilmedi",
+    "enterFor": "Saatleri gir: {{name}}",
+    "locked": "Ay kilitli",
+    "emptyTitle": "Bu ay işçi yok",
+    "emptyDescription": "Burada ayın en az bir günü çalışan işçiler görünür.",
+    "fromUntil": "{{from}} – {{until}}",
+    "fromDay": "{{date}} itibarıyla",
+    "untilDay": "{{date}} tarihine kadar",
+    "nothing": "Hepsi 0",
+    "short": {
+      "normalHours": "normal: {{value}} sa",
+      "overtimeHours": "fazla mesai: {{value}} sa",
+      "restDayHours": "dinlenme günü: {{value}} sa",
+      "holidayHours": "tatil: {{value}} sa",
+      "workdaysWorked": "iş günü: {{count}}",
+      "leaveDays": "izin: {{count}}",
+      "sickDays": "hastalık: {{count}}",
+      "travelDays": "yolda: {{count}}"
+    },
+    "dialogTitle": "Saatler: {{month}}",
+    "dialogHint": "Girilen saatler değiştirilmez: düzeltme yeni bir kayıt olarak eklenir.",
+    "lockedHint": "Ay kilitli, saatler değiştirilemez.",
+    "dailyEntriesHint": "İşçinin bu ay için günlük puantajı var, saatler oradan alınır.",
+    "hoursWorked": "Çalışılan saatler",
+    "days": "Günler",
+    "field": {
+      "normalHours": "Normal saatler",
+      "overtimeHours": "Fazla mesai saatleri",
+      "restDayHours": "Dinlenme günü saatleri",
+      "holidayHours": "Tatil günü saatleri",
+      "workdaysWorked": "Çalışılan iş günleri",
+      "leaveDays": "İzin günleri",
+      "sickDays": "Hastalık günleri",
+      "travelDays": "Yolda geçen günler"
+    },
+    "hint": {
+      "normalHours": "İş günlerinde, günlük normale kadar",
+      "overtimeHours": "İş günlerinde, günlük normalin üstü",
+      "restDayHours": "Dinlenme günlerindeki tüm saatler",
+      "holidayHours": "Tatil günlerindeki tüm saatler",
+      "workdaysWorked": "Saat çalışılan iş günleri (günlük yol ücreti bunlara ödenir)",
+      "leaveDays": "Yalnızca iş günleri",
+      "sickDays": "Yalnızca iş günleri",
+      "travelDays": "Şantiyeler arası yolculuk, yalnızca iş günleri"
+    },
+    "note": "Not",
+    "noteHint": "İsteğe bağlı, örneğin: neden düzeltildi",
+    "history": "Kayıtlar"
+  },
+  "payroll": {
+    "title": "Maaş hesabı",
+    "description": "Her işçinin aylık maaşı ve her tutarın nereden geldiği",
+    "source": "Saat kaynağı",
+    "sources": {
+      "TOTALS": "Aylık saatler",
+      "DAILY": "Günlük puantaj"
+    },
+    "pay": "Ödenecek",
+    "problemCount": "Sorun: {{count}}",
+    "detailsFor": "Hesap ayrıntıları: {{name}}",
+    "totalFor": "{{month}} toplamı",
+    "workersWithProblems": "Hesaplanamayan işçiler: {{count}}",
+    "emptyTitle": "Bu ay işçi yok",
+    "emptyDescription": "Ayın en az bir günü çalışan işçiler burada hesaplanır.",
+    "cannotPay": "Henüz hesaplanamıyor:",
+    "goToMonthlyHours": "Aylık saatlere git",
+    "monthTotal": "Ay toplamı",
+    "partTotal": "Bu bölüm için",
+    "allPlacements": "Tüm görevlendirmeler birlikte",
+    "problems": {
+      "noSalary": "Bu ay için maaş girilmedi.",
+      "noHours": "Bu ay için saat girilmedi.",
+      "twoSources": "Bu ay için hem günlük puantaj hem aylık saatler var. Birini bırakın.",
+      "placementWithoutHours": "{{site}} ({{date}} itibarıyla) için saat girilmedi.",
+      "noRules": "Bu ay için ödeme kuralı yok: {{sites}}.",
+      "totalsInvalid": "Aylık saatler aya uymuyor (ödeme kuralları değişmiş olabilir):",
+      "invalidHours": "Günlük puantaj kayıtları birbiriyle çelişiyor."
+    },
+    "totalsProblems": {
+      "NORMAL_ABOVE_DAYS_WORKED": "normal saatler çalışılan iş günü × günlük normalden fazla",
+      "WORKDAY_HOURS_ABOVE_DAYS_WORKED": "iş günlerindeki saatler çalışılan iş günü × 24'ten fazla",
+      "DAYS_ABOVE_WORKING_DAYS": "günler ayın iş günlerinden fazla",
+      "REST_DAY_HOURS_ABOVE_REST_DAYS": "dinlenme günü saatleri çok fazla",
+      "HOLIDAY_HOURS_ABOVE_HOLIDAYS": "tatil günü saatleri çok fazla"
+    },
+    "defaultRules": "Şirket kurallarına göre",
+    "siteRules": "{{site}} kurallarına göre",
+    "hourlyRate": "Saatlik ücret = {{salary}} ÷ ({{days}} iş günü × {{hours}} sa) = {{rate}}",
+    "workingDaysOverridden": "(iş günleri elle değiştirildi, hesaplanan: {{calculated}})",
+    "hourKinds": {
+      "NORMAL": "Normal saatler",
+      "OVERTIME": "Fazla mesai",
+      "REST_DAY": "Dinlenme günü saatleri",
+      "HOLIDAY": "Tatil günü saatleri"
+    },
+    "absences": {
+      "LEAVE": "İzin",
+      "SICK": "Hastalık",
+      "TRAVEL": "Yolda"
+    },
+    "lines": {
+      "hours": "{{kind}}: {{hours}} sa × ücret × {{multiplier}}",
+      "absencePaid": "{{absence}}: gün: {{count}} × {{hours}} sa × ücret",
+      "absenceUnpaid": "{{absence}}: gün: {{count}} (ödenmez)",
+      "travelPerDay": "Yol ücreti ({{route}}): gün: {{count}} × {{amount}}",
+      "travelNoRoute": "Yol ücreti: gün: {{count}}, güzergâh yok",
+      "travelMonthly": "Yol ücreti (aylık tutar)",
+      "rounding": "{{step}} katına yuvarlama"
     }
   }
 }

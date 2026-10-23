@@ -5,9 +5,11 @@ import {
   ABSENCE_TYPES,
   HOUR_KINDS,
   summarizeUnits,
+  totalsToUnits,
   type AbsenceType,
   type HourKind,
   type HoursSummary,
+  type PlaceTotals,
   type PlaceUnits,
 } from './summary';
 
@@ -45,15 +47,26 @@ export type TravelInput =
     }
   | { kind: 'MONTHLY_AMOUNT'; amount: string };
 
-export interface PayInput {
+interface PayInputBase {
   monthlySalary: string;
   workingDays: WorkingDays;
   calendar: readonly CalendarDay[];
-  entries: readonly DayEntry[];
   settings: PaySettings;
   /** null = no travel pay for this worker this month */
   travel: TravelInput | null;
 }
+
+/** Hours from daily entries (the timesheet or an Excel import of the daily grid). */
+export interface DailyPayInput extends PayInputBase {
+  entries: readonly DayEntry[];
+}
+
+/** Hours entered as monthly totals, per place (e.g. per placement); pay lines are charged to those places. */
+export interface TotalsPayInput extends PayInputBase {
+  totals: readonly PlaceTotals[];
+}
+
+export type PayInput = DailyPayInput | TotalsPayInput;
 
 /**
  * One explainable amount: every line carries the inputs it was computed from.
@@ -105,7 +118,7 @@ export type PayLine =
       amount: string;
     };
 
-export interface PayResult {
+interface PayResultBase {
   /** hourly rate = monthlySalary ÷ (workingDays.effective × normalHoursPerDay) */
   hourlyRate: {
     monthlySalary: string;
@@ -117,11 +130,23 @@ export interface PayResult {
      */
     rounded: string;
   };
-  summary: HoursSummary;
   lines: PayLine[];
   /** Sum of the line amounts, a multiple of settings.payRoundingStep. */
   total: string;
 }
+
+/** Every result says where its hours came from (AGENTS.md: Modules). */
+export interface DailyPayResult extends PayResultBase {
+  source: 'DAILY';
+  summary: HoursSummary;
+}
+
+export interface TotalsPayResult extends PayResultBase {
+  source: 'TOTALS';
+  totals: readonly PlaceTotals[];
+}
+
+export type PayResult = DailyPayResult | TotalsPayResult;
 
 const MAX_DAY = BigInt(MAX_HOURS_PER_DAY) * SCALE;
 
@@ -138,7 +163,13 @@ const MAX_DAY = BigInt(MAX_HOURS_PER_DAY) * SCALE;
  * Each line is computed as one exact fraction and rounded once to 0.01
  * (halves away from zero); the total is the sum of the lines, so the breakdown
  * always adds up to it.
+ *
+ * Hours come from daily entries or from monthly totals (checkTotals first: totals
+ * that don't fit the month throw).
  */
+export function calculatePay(input: DailyPayInput): DailyPayResult;
+export function calculatePay(input: TotalsPayInput): TotalsPayResult;
+export function calculatePay(input: PayInput): PayResult;
 export function calculatePay(input: PayInput): PayResult {
   const { settings, workingDays } = input;
   const salary = nonNegative(input.monthlySalary, 'monthlySalary');
@@ -147,7 +178,10 @@ export function calculatePay(input: PayInput): PayResult {
   if (!Number.isInteger(workingDays.effective) || wd <= 0n) {
     throw new RangeError(`Working days must be a positive whole number, got ${workingDays.effective}`);
   }
-  const { places, summary } = summarizeUnits(input.calendar, input.entries, normalDay);
+  const daily = 'entries' in input ? summarizeUnits(input.calendar, input.entries, normalDay) : null;
+  const places: ReadonlyMap<string, PlaceUnits> = daily
+    ? daily.places
+    : totalsToUnits((input as TotalsPayInput).totals, input.calendar, normalDay);
 
   /** hours × (salary ÷ (wd × normalDay)) × multiplier, all in hundredths. */
   const amountFor = (h: Units, multiplier: Units): Units =>
@@ -234,17 +268,28 @@ export function calculatePay(input: PayInput): PayResult {
   if (total !== exact) {
     lines.push({ type: 'ROUNDING', step: fromUnits(step), amount: fromUnits(total - exact) });
   }
-  return {
+  const base: PayResultBase = {
     hourlyRate: {
       monthlySalary: fromUnits(salary),
       workingDays,
       normalHoursPerDay: fromUnits(normalDay),
       rounded: fromUnits(divRound(salary * SCALE, wd * normalDay)),
     },
-    summary,
     lines,
     total: fromUnits(total),
   };
+  return daily
+    ? { source: 'DAILY', summary: daily.summary, ...base }
+    : { source: 'TOTALS', totals: (input as TotalsPayInput).totals, ...base };
+}
+
+/**
+ * A worker's month paid in parts, one per rule set their placements fall under
+ * (AGENTS.md: split by placement). Each part is computed and rounded under its own
+ * rules; the month's total is their sum.
+ */
+export function totalOfParts(parts: readonly PayResult[]): string {
+  return fromUnits(parts.reduce((sum, part) => sum + toUnits(part.total), 0n));
 }
 
 function nonNegative(value: string, what: string): Units {

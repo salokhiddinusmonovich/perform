@@ -51,6 +51,14 @@ export class PayRulesService {
     return db.payrollRuleSet.findFirst({ where: { companyId, siteId: null } });
   }
 
+  /**
+   * The rule set that applies at a site: its own (it overrides the company default), or
+   * the default. null before any rules are saved. Payroll and checks use only this.
+   */
+  async ruleSetForSite(companyId: string, siteId: string, db: Db = this.prisma) {
+    return (await db.payrollRuleSet.findFirst({ where: { companyId, siteId } })) ?? this.defaultRuleSet(companyId, db);
+  }
+
   async list(companyId: string): Promise<PayRulesVersionView[]> {
     const set = await this.defaultRuleSet(companyId);
     if (!set) return [];

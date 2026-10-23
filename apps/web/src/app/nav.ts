@@ -3,6 +3,7 @@ import {
   Building2,
   CalendarCheck,
   CalendarDays,
+  Clock,
   CreditCard,
   HardHat,
   LayoutDashboard,
@@ -10,9 +11,10 @@ import {
   Scale,
   UserCog,
   Users,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
-import { canManageCompany, canViewPayRules, inCompany, isPlatformAdmin, type Me } from '@/lib/auth';
+import { canEnterMonthlyHours, canManageCompany, canViewPayRules, inCompany, isPlatformAdmin, seesPay, type Me } from '@/lib/auth';
 
 export interface NavItem {
   path: string;
@@ -39,6 +41,13 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { path: '/sites', labelKey: 'nav.sites', icon: MapPin, visible: inCompany },
       { path: '/workers', labelKey: 'nav.workers', icon: HardHat, visible: inCompany },
+    ],
+  },
+  {
+    titleKey: 'nav.payroll',
+    items: [
+      { path: '/monthly-hours', labelKey: 'nav.monthlyHours', icon: Clock, visible: canEnterMonthlyHours },
+      { path: '/payroll', labelKey: 'nav.payrollRun', icon: Wallet, visible: seesPay },
     ],
   },
   {

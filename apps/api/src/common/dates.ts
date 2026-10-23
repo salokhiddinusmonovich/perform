@@ -26,3 +26,14 @@ export const currentOn = (day: string) => ({
   hiredOn: { lte: dayToDate(day) },
   OR: [{ leftOn: null }, { leftOn: { gte: dayToDate(day) } }],
 });
+
+/** First and last calendar day of a month (1-based), as @db.Date values. */
+export function monthSpan(year: number, month: number) {
+  return { first: new Date(Date.UTC(year, month - 1, 1)), last: new Date(Date.UTC(year, month, 0)) };
+}
+
+/** Placements that overlap the month. */
+export const inMonth = (year: number, month: number) => {
+  const { first, last } = monthSpan(year, month);
+  return { hiredOn: { lte: last }, OR: [{ leftOn: null }, { leftOn: { gte: first } }] };
+};

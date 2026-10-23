@@ -3,8 +3,8 @@ import { buildMonthCalendar, countWorkdays, workingDays } from './calendar';
 import { divRound, fromUnits, toUnits } from './decimal';
 import { normalizeCode, parseCell, type CodeMap, type DayEntry } from './entry';
 import { missingMovingHolidays, uzbekistanFixedHolidays } from './holidays';
-import { calculatePay, type PaySettings, type TravelInput } from './pay';
-import { summarizeMonth } from './summary';
+import { calculatePay, totalOfParts, type PaySettings, type TravelInput } from './pay';
+import { checkTotals, summarizeMonth, type MonthlyTotals } from './summary';
 
 // September 2026: Sept 1 (Tue) is Independence Day, Sundays are 6/13/20/27.
 const september = buildMonthCalendar(2026, 9, { restWeekdays: [7], holidays: ['2026-09-01'] });
@@ -534,5 +534,120 @@ describe('a day worked at several places', () => {
     expect(summarize([worked('2026-09-02', '20', 'Site A', 1), worked('2026-09-02', '4', 'Site B', 2)])).not.toThrow();
     expect(summarize([worked('2026-09-02', '4', '', 1)])).toThrow(/no place/);
     expect(summarize([worked('2026-09-02', '4', 'Site A', 1.5)])).toThrow(/invalid seq/);
+  });
+});
+
+describe('monthly totals', () => {
+  const base = {
+    monthlySalary: '7500000',
+    workingDays: workingDays(september),
+    calendar: september,
+    settings,
+    travel: null,
+  };
+  const at = (totals: MonthlyTotals, place = 'Site A') => [{ place, totals }];
+  const FULL: MonthlyTotals = {
+    normalHours: '225',
+    overtimeHours: '0',
+    restDayHours: '0',
+    holidayHours: '0',
+    workdaysWorked: 25,
+    leaveDays: 0,
+    sickDays: 0,
+    travelDays: 0,
+  };
+
+  it('pays exactly the monthly salary for a full month at normal hours, and says the hours are totals', () => {
+    const result = calculatePay({ ...base, totals: at(FULL) });
+    expect(result.source).toBe('TOTALS');
+    expect(result.totals).toEqual(at(FULL));
+    expect(result.total).toBe('7500000.00');
+  });
+
+  it('pays the same lines as the daily entries the totals sum up', () => {
+    const entries = month('9', [
+      worked('2026-09-01', '4'), // holiday
+      worked('2026-09-02', '11'), // 2h overtime
+      status('2026-09-03', 'SICK'),
+      status('2026-09-04', 'LEAVE'),
+      status('2026-09-05', 'TRAVEL'),
+      worked('2026-09-06', '8'), // Sunday
+      worked('2026-09-07', '4'), // short day
+    ]);
+    const travel: TravelInput = { kind: 'PER_DAY_WORKED', routes: { 'Site A': { route: 'Route A', amountPerDay: '20000' } } };
+    const daily = calculatePay({ ...base, entries, travel });
+    const sum = daily.summary;
+    const totals: MonthlyTotals = {
+      normalHours: sum.normalHours,
+      overtimeHours: sum.overtimeHours,
+      restDayHours: sum.restDayHours,
+      holidayHours: sum.holidayHours,
+      workdaysWorked: sum.workdaysWorked,
+      leaveDays: sum.leaveDays,
+      sickDays: sum.sickDays,
+      travelDays: sum.travelDays,
+    };
+    expect(checkTotals(at(totals), september, '9')).toEqual([]);
+    const fromTotals = calculatePay({ ...base, totals: at(totals), travel });
+    expect(fromTotals.lines).toEqual(daily.lines);
+    expect(fromTotals.total).toBe(daily.total);
+  });
+
+  it('finds totals that cannot fit the month', () => {
+    const problems = (totals: MonthlyTotals) => checkTotals(at(totals), september, '9').map((i) => i.problem);
+    expect(problems({ ...FULL, normalHours: '226' })).toEqual(['NORMAL_ABOVE_DAYS_WORKED']);
+    expect(problems({ ...FULL, workdaysWorked: 0, normalHours: '0', overtimeHours: '3' })).toEqual([
+      'WORKDAY_HOURS_ABOVE_DAYS_WORKED',
+    ]);
+    expect(problems({ ...FULL, sickDays: 1 })).toEqual(['DAYS_ABOVE_WORKING_DAYS']);
+    // September 2026 has 4 Sundays and 1 holiday.
+    expect(problems({ ...FULL, restDayHours: '96' })).toEqual([]);
+    expect(problems({ ...FULL, restDayHours: '96.5', holidayHours: '24.5' })).toEqual([
+      'REST_DAY_HOURS_ABOVE_REST_DAYS',
+      'HOLIDAY_HOURS_ABOVE_HOLIDAYS',
+    ]);
+    expect(() => calculatePay({ ...base, totals: at({ ...FULL, normalHours: '226' }) })).toThrow(/NORMAL_ABOVE_DAYS_WORKED/);
+    expect(() => checkTotals(at({ ...FULL, sickDays: -1 }), september, '9')).toThrow(RangeError);
+    expect(() => checkTotals(at({ ...FULL, normalHours: '1.005' }), september, '9')).toThrow(RangeError);
+  });
+
+  it('checks two placements of one month each and together', () => {
+    const half = { ...FULL, normalHours: '117', workdaysWorked: 13 };
+    const list = [
+      { place: 'Placement 1', totals: half },
+      { place: 'Placement 2', totals: { ...half, normalHours: '200' } },
+    ];
+    // Placement 2: 200 h > 13 days × 9 h. Together: 317 h > 26 days × 9 h, and 26 days worked > 25 working days.
+    expect(checkTotals(list, september, '9')).toEqual([
+      { place: 'Placement 2', problem: 'NORMAL_ABOVE_DAYS_WORKED' },
+      { place: null, problem: 'NORMAL_ABOVE_DAYS_WORKED' },
+      { place: null, problem: 'DAYS_ABOVE_WORKING_DAYS' },
+    ]);
+    const ok = calculatePay({
+      ...base,
+      totals: [
+        { place: 'Placement 1', totals: { ...FULL, normalHours: '117', workdaysWorked: 13 } },
+        { place: 'Placement 2', totals: { ...FULL, normalHours: '108', workdaysWorked: 12 } },
+      ],
+    });
+    // Two placements under the same rules add up to exactly the salary.
+    expect(ok.lines.map((l) => (l.type === 'HOURS' ? [l.place, l.hours] : l.type))).toEqual([
+      ['Placement 1', '117.00'],
+      ['Placement 2', '108.00'],
+    ]);
+    expect(ok.total).toBe('7500000.00');
+  });
+
+  it('adds up a month paid in parts, each rounded under its own rules', () => {
+    // Half the month under 9-hour days, the rest under 8-hour days with a 500 rounding step.
+    const first = calculatePay({ ...base, totals: at({ ...FULL, normalHours: '100', workdaysWorked: 12 }) });
+    const second = calculatePay({
+      ...base,
+      settings: { ...settings, normalHoursPerDay: '8', payRoundingStep: '500' },
+      totals: at({ ...FULL, normalHours: '96', workdaysWorked: 12 }, 'Site B'),
+    });
+    // 100 h × 7 500 000 ÷ 225 = 3 333 333.33 → 3 333 000; 96 h × 7 500 000 ÷ 200 = 3 600 000
+    expect([first.total, second.total]).toEqual(['3333000.00', '3600000.00']);
+    expect(totalOfParts([first, second])).toBe('6933000.00');
   });
 });

@@ -217,3 +217,154 @@ function checkedHours(e: DayEntry): Units {
   }
   return h;
 }
+
+/**
+ * A worker's hours for a month (or for one placement in it) entered as totals
+ * instead of daily entries: by the accountant in a company without the Timesheet
+ * module (AGENTS.md: Modules). Hours are decimal strings, days whole numbers.
+ */
+export interface MonthlyTotals {
+  normalHours: string;
+  overtimeHours: string;
+  restDayHours: string;
+  holidayHours: string;
+  /** Working days with hours worked; travel pay per day worked counts these. */
+  workdaysWorked: number;
+  /** Absence days on working days, per type (absences on days off are never paid). */
+  leaveDays: number;
+  sickDays: number;
+  travelDays: number;
+}
+
+/** Totals charged to one place (e.g. one placement of the worker). */
+export interface PlaceTotals {
+  place: string;
+  totals: MonthlyTotals;
+}
+
+/** Why monthly totals can't be right; the app shows them as problems instead of paying. */
+export type TotalsProblem =
+  /** More normal hours than the working days worked × normal hours per day */
+  | 'NORMAL_ABOVE_DAYS_WORKED'
+  /** More hours on working days than the working days worked × 24 */
+  | 'WORKDAY_HOURS_ABOVE_DAYS_WORKED'
+  /** Days worked plus absence days are more than the month's working days */
+  | 'DAYS_ABOVE_WORKING_DAYS'
+  /** More rest-day hours than the month's rest days × 24 */
+  | 'REST_DAY_HOURS_ABOVE_REST_DAYS'
+  /** More holiday hours than the month's holidays × 24 */
+  | 'HOLIDAY_HOURS_ABOVE_HOLIDAYS';
+
+export interface TotalsIssue {
+  /** The place whose totals don't fit, or null: the places' totals together don't. */
+  place: string | null;
+  problem: TotalsProblem;
+}
+
+/**
+ * Checks the totals of each place, and of all places together (they share the
+ * month), against the month's calendar and the normal hours per day.
+ * Throws only for values that aren't valid at all (negative, too many decimals).
+ */
+export function checkTotals(
+  list: readonly PlaceTotals[],
+  calendar: readonly CalendarDay[],
+  normalHoursPerDay: string,
+): TotalsIssue[] {
+  return totalsIssues(
+    list.map((p) => ({ place: p.place, units: parseTotals(p.totals) })),
+    calendar,
+    toUnits(normalHoursPerDay, 'normalHoursPerDay'),
+  );
+}
+
+function totalsIssues(
+  list: readonly { place: string; units: TotalsUnits }[],
+  calendar: readonly CalendarDay[],
+  normalDay: Units,
+): TotalsIssue[] {
+  const issues: TotalsIssue[] = list.flatMap(({ place, units }) =>
+    totalsProblems(units, calendar, normalDay).map((problem) => ({ place, problem })),
+  );
+  if (list.length > 1) {
+    const sum: TotalsUnits = {
+      hours: { NORMAL: 0n, OVERTIME: 0n, REST_DAY: 0n, HOLIDAY: 0n },
+      absenceDays: { LEAVE: 0, SICK: 0, TRAVEL: 0 },
+      workdaysWorked: 0,
+    };
+    for (const { units } of list) {
+      for (const kind of HOUR_KINDS) sum.hours[kind] += units.hours[kind];
+      for (const type of ABSENCE_TYPES) sum.absenceDays[type] += units.absenceDays[type];
+      sum.workdaysWorked += units.workdaysWorked;
+    }
+    issues.push(...totalsProblems(sum, calendar, normalDay).map((problem) => ({ place: null, problem })));
+  }
+  return issues;
+}
+
+interface TotalsUnits {
+  hours: Record<HourKind, Units>;
+  absenceDays: Record<AbsenceType, number>;
+  workdaysWorked: number;
+}
+
+function parseTotals(t: MonthlyTotals): TotalsUnits {
+  const hours = (value: string, what: string) => {
+    const units = toUnits(value, what);
+    if (units < 0n) throw new RangeError(`${what} must not be negative`);
+    return units;
+  };
+  const days = (value: number, what: string) => {
+    if (!Number.isInteger(value) || value < 0) throw new RangeError(`${what} must be a whole number of 0 or more`);
+    return value;
+  };
+  return {
+    hours: {
+      NORMAL: hours(t.normalHours, 'normalHours'),
+      OVERTIME: hours(t.overtimeHours, 'overtimeHours'),
+      REST_DAY: hours(t.restDayHours, 'restDayHours'),
+      HOLIDAY: hours(t.holidayHours, 'holidayHours'),
+    },
+    absenceDays: {
+      LEAVE: days(t.leaveDays, 'leaveDays'),
+      SICK: days(t.sickDays, 'sickDays'),
+      TRAVEL: days(t.travelDays, 'travelDays'),
+    },
+    workdaysWorked: days(t.workdaysWorked, 'workdaysWorked'),
+  };
+}
+
+function totalsProblems(t: TotalsUnits, calendar: readonly CalendarDay[], normalDay: Units): TotalsProblem[] {
+  const count = (kind: CalendarDay['kind']) => BigInt(calendar.filter((d) => d.kind === kind).length);
+  const worked = BigInt(t.workdaysWorked);
+  const problems: TotalsProblem[] = [];
+  if (t.hours.NORMAL > worked * normalDay) problems.push('NORMAL_ABOVE_DAYS_WORKED');
+  if (t.hours.NORMAL + t.hours.OVERTIME > worked * MAX_DAY) problems.push('WORKDAY_HOURS_ABOVE_DAYS_WORKED');
+  const days = worked + BigInt(t.absenceDays.LEAVE + t.absenceDays.SICK + t.absenceDays.TRAVEL);
+  if (days > count('WORKDAY')) problems.push('DAYS_ABOVE_WORKING_DAYS');
+  if (t.hours.REST_DAY > count('REST_DAY') * MAX_DAY) problems.push('REST_DAY_HOURS_ABOVE_REST_DAYS');
+  if (t.hours.HOLIDAY > count('HOLIDAY') * MAX_DAY) problems.push('HOLIDAY_HOURS_ABOVE_HOLIDAYS');
+  return problems;
+}
+
+/**
+ * Monthly totals as what each place is charged with, for calculatePay. Throws when
+ * checkTotals finds issues: the caller checks first and shows them.
+ */
+export function totalsToUnits(
+  list: readonly PlaceTotals[],
+  calendar: readonly CalendarDay[],
+  normalDay: Units,
+): ReadonlyMap<string, PlaceUnits> {
+  const parsed = list.map((p) => ({ place: p.place, units: parseTotals(p.totals) }));
+  if (new Set(parsed.map((p) => p.place)).size !== parsed.length) throw new RangeError('Two totals for one place');
+  const issues = totalsIssues(parsed, calendar, normalDay);
+  if (issues.length > 0) {
+    throw new RangeError(`Monthly totals don't fit the month: ${issues.map((i) => i.problem).join(', ')}`);
+  }
+  return new Map(
+    parsed
+      .sort((a, b) => (a.place < b.place ? -1 : a.place > b.place ? 1 : 0))
+      .map(({ place, units: t }) => [place, { hours: t.hours, absenceDays: t.absenceDays, travelDays: t.workdaysWorked }]),
+  );
+}
