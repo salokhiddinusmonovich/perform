@@ -1,9 +1,5 @@
-import i18n from 'i18next';
+import i18n, { type BackendModule } from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import en from './en.json';
-import ru from './ru.json';
-import tr from './tr.json';
-import uz from './uz.json';
 
 export const LANGUAGES = { uz: 'Oʻzbekcha', ru: 'Русский', tr: 'Türkçe', en: 'English' } as const;
 export type Language = keyof typeof LANGUAGES;
@@ -23,21 +19,52 @@ function savedLanguage(): Language | null {
   }
 }
 
-i18n.use(initReactI18next).init({
-  resources: { uz: { t: uz }, ru: { t: ru }, tr: { t: tr }, en: { t: en } },
-  defaultNS: 't',
-  lng: savedLanguage() ?? 'uz',
-  fallbackLng: 'en',
-  interpolation: { escapeValue: false },
-  showSupportNotice: false,
-});
+// Each language is its own chunk, so a visitor downloads only the language they use.
+const translations: Record<Language, () => Promise<{ default: object }>> = {
+  uz: () => import('./uz.json'),
+  ru: () => import('./ru.json'),
+  tr: () => import('./tr.json'),
+  en: () => import('./en.json'),
+};
+
+const lazyTranslations: BackendModule = {
+  type: 'backend',
+  init() {},
+  read(lng, _ns, callback) {
+    if (!isLanguage(lng)) return callback(new Error(`Unknown language: ${lng}`), false);
+    translations[lng]().then(
+      (module) => callback(null, module.default),
+      (error: Error) => callback(error, false),
+    );
+  },
+};
 
 const syncHtmlLang = (lang: string) => document.documentElement.setAttribute('lang', lang);
-syncHtmlLang(i18n.language);
 i18n.on('languageChanged', syncHtmlLang);
 
-export function setLanguage(lang: Language) {
-  i18n.changeLanguage(lang);
+/** Resolves once the active language is loaded. Render the app only after it. */
+export const i18nReady = i18n
+  .use(lazyTranslations)
+  .use(initReactI18next)
+  .init({
+    defaultNS: 't',
+    ns: ['t'],
+    lng: savedLanguage() ?? 'uz',
+    // No fallback language: i18n.test.ts guarantees every language has every key, and a
+    // fallback would make every visitor download a second language.
+    fallbackLng: false,
+    interpolation: { escapeValue: false },
+    showSupportNotice: false,
+  });
+
+/**
+ * Loads the language, then switches to it, so the page never shows raw keys.
+ * Rejects (and keeps the current language) when the language can't be loaded.
+ */
+export async function setLanguage(lang: Language) {
+  await i18n.loadLanguages(lang);
+  if (!i18n.hasResourceBundle(lang, 't')) throw new Error(`Language not loaded: ${lang}`);
+  await i18n.changeLanguage(lang);
   try {
     localStorage.setItem(STORAGE_KEY, lang);
   } catch {

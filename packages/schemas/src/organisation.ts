@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { phoneSchema } from './contact.js';
-import { calendarDaySchema, isoDateSchema, MAX_YEAR } from './pay-rules.js';
+import { calendarDaySchema, decimalSchema, isoDateSchema, MAX_YEAR, monthSchema, yearSchema } from './pay-rules.js';
 
 // Sites, teams and workers. Optional text fields turn an empty value into null, and
 // accept null, so the API can validate what a form sends (the schema's own output).
@@ -115,6 +115,21 @@ export type CreateWorker = z.output<typeof createWorkerSchema>;
 export const leaveSchema = z.object({ date: isoDateSchema });
 export type LeaveInput = z.input<typeof leaveSchema>;
 export type Leave = z.output<typeof leaveSchema>;
+
+/**
+ * A worker's monthly salary from a month on, covering that month and later ones until a
+ * newer salary (AGENTS.md: Roles → Salaries). Salaries are only ever added; a correction
+ * is a new salary from the same month.
+ */
+export const salarySchema = z.object({
+  fromYear: yearSchema,
+  fromMonth: monthSchema,
+  /** More than 0: the hourly rate is worked out from it. Fits Decimal(14,2). */
+  monthlySalary: decimalSchema({ min: 0, minExclusive: true, max: 999_999_999_999, rangeError: 'validation.salaryRange' }),
+  reason: optionalText(500),
+});
+export type SalaryInput = z.input<typeof salarySchema>;
+export type Salary = z.output<typeof salarySchema>;
 
 /** Assigning a company member to a site (project manager, timekeeper) or a team (foreman). */
 export const staffSchema = z.object({ userId: uuid });

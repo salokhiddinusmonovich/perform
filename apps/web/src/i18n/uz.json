@@ -276,7 +276,8 @@
     "leaveBeforeStart": "Birinchi ish kunidan oldin boʻlishi mumkin emas",
     "teamNotOnSite": "Bu brigada tanlangan obyektda emas",
     "amountRange": "0 yoki undan koʻp boʻlishi kerak",
-    "workerLimitRange": "1 dan 1 000 000 gacha"
+    "workerLimitRange": "1 dan 1 000 000 gacha",
+    "salaryRange": "0 dan katta boʻlishi kerak"
   },
   "errors": {
     "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
@@ -370,6 +371,9 @@
     },
     "subscription": {
       "expired": "Kompaniyangiz obunasi tugagan, oʻzgarishlar saqlanmaydi. Koʻrish va eksport qilish mumkin."
+    },
+    "salary": {
+      "unchanged": "Bu oy uchun aynan shu maosh allaqachon amal qilmoqda."
     }
   },
   "payRules": {
@@ -643,7 +647,25 @@
     "leave": "Ishdan ketishni qayd etish",
     "changeLastDay": "Oxirgi ish kunini oʻzgartirish",
     "leaveHint": "Oxirgi ishlagan kuni. Undan keyingi kunlar endi unga tegishli emas.",
-    "lastDay": "Oxirgi ish kuni"
+    "lastDay": "Oxirgi ish kuni",
+    "salary": "Oylik maosh",
+    "salaryFrom": "boshlanishi: {{month}}",
+    "noSalary": "Maosh kiritilmagan",
+    "salaryAction": "Maosh",
+    "salaryTitle": "Oylik maosh",
+    "salaryHint": "Maosh tanlangan oydan boshlab, keyingi maoshgacha amal qiladi. Maosh oʻzgartirilmaydi: oshirish yoki tuzatish yangi yozuv sifatida qoʻshiladi.",
+    "salaryViewHint": "Maosh tarixi. Maoshni egasi, administrator yoki buxgalter qoʻshadi.",
+    "salaryFromMonth": "Qaysi oydan",
+    "salaryCorrects": "{{month}} uchun maosh allaqachon bor. Yangisi uni tuzatadi.",
+    "monthlySalary": "Oylik maosh ({{currency}})",
+    "monthlySalaryHint": "Barcha ish kunlarida normal soat ishlagan ishchi aynan shu summani oladi.",
+    "salaryReason": "Sabab",
+    "salaryReasonHint": "Ixtiyoriy, masalan: oshirish, xatoni tuzatish",
+    "addSalary": "Maosh qoʻshish",
+    "salaryHistory": "Maosh tarixi",
+    "noSalaryYet": "Hali maosh kiritilmagan.",
+    "salaryFromAmount": "{{amount}} · boshlanishi: {{month}}",
+    "salaryCorrected": "Tuzatilgan"
   },
   "impersonation": {
     "banner": "Siz {{name}} nomidan kirgansiz.",

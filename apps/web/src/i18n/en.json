@@ -276,7 +276,8 @@
     "leaveBeforeStart": "Can't be before the first working day",
     "teamNotOnSite": "This team isn't on the chosen site",
     "amountRange": "Must be 0 or more",
-    "workerLimitRange": "From 1 to 1 000 000"
+    "workerLimitRange": "From 1 to 1 000 000",
+    "salaryRange": "Must be more than 0"
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -370,6 +371,9 @@
     },
     "subscription": {
       "expired": "Your company’s subscription has ended, so changes can’t be saved. You can still view and export."
+    },
+    "salary": {
+      "unchanged": "This salary already applies in that month."
     }
   },
   "payRules": {
@@ -643,7 +647,25 @@
     "leave": "Record leaving",
     "changeLastDay": "Change last working day",
     "leaveHint": "The last day they work. Days after it are not theirs any more.",
-    "lastDay": "Last working day"
+    "lastDay": "Last working day",
+    "salary": "Monthly salary",
+    "salaryFrom": "from {{month}}",
+    "noSalary": "No salary yet",
+    "salaryAction": "Salary",
+    "salaryTitle": "Monthly salary",
+    "salaryHint": "A salary applies from the chosen month until the next salary. Salaries are never changed: a raise or a correction is added as a new one.",
+    "salaryViewHint": "Salary history. The owner, an admin or the accountant adds salaries.",
+    "salaryFromMonth": "From month",
+    "salaryCorrects": "{{month}} already has a salary. The new one corrects it.",
+    "monthlySalary": "Monthly salary ({{currency}})",
+    "monthlySalaryHint": "A worker who works every working day at normal hours earns exactly this amount.",
+    "salaryReason": "Reason",
+    "salaryReasonHint": "Optional, e.g. raise, correcting a mistake",
+    "addSalary": "Add salary",
+    "salaryHistory": "Salary history",
+    "noSalaryYet": "No salary has been added yet.",
+    "salaryFromAmount": "{{amount}} · from {{month}}",
+    "salaryCorrected": "Corrected"
   },
   "impersonation": {
     "banner": "You are logged in as {{name}}.",

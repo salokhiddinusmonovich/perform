@@ -78,14 +78,20 @@ async function main() {
       data: [ids.pm, ids.timekeeper].map((userId) => ({ userId, companyId: demo.id, siteId: north.id })),
     });
     await prisma.memberTeam.create({ data: { userId: ids.foreman, companyId: demo.id, teamId: electrical.id } });
-    for (const [lastName, firstName, position] of [
-      ['Demoev', 'Ali', 'Electrician'],
-      ['Testova', 'Malika', 'Cable installer'],
-    ]) {
+    // The first worker has a salary; the second shows how a missing one looks.
+    for (const [lastName, firstName, position, monthlySalary] of [
+      ['Demoev', 'Ali', 'Electrician', '6000000'],
+      ['Testova', 'Malika', 'Cable installer', null],
+    ] as const) {
       const worker = await prisma.worker.create({ data: { companyId: demo.id, lastName, firstName, position } });
       await prisma.assignment.create({
         data: { companyId: demo.id, workerId: worker.id, siteId: north.id, teamId: electrical.id, hiredOn: new Date('2026-09-01') },
       });
+      if (monthlySalary) {
+        await prisma.salary.create({
+          data: { companyId: demo.id, workerId: worker.id, fromYear: 2026, fromMonth: 9, monthlySalary, setById: ids.accountant },
+        });
+      }
     }
     const otherOwner = await user('other-owner', 'Other Owner');
     await prisma.membership.create({ data: { userId: otherOwner.id, companyId: other.id, role: 'OWNER', acceptedAt: new Date() } });

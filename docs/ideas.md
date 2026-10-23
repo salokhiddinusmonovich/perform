@@ -28,13 +28,6 @@ Decided parts moved to [AGENTS.md](../AGENTS.md) (Product → Roles): what the a
 
 ---
 
-## 4. Payroll-only companies (2026-10-20): mostly decided
+## 4. Payroll-only companies (2026-10-20): decided
 
-Decided parts moved to [AGENTS.md](../AGENTS.md) (Product → Modules).
-
-**Still open:**
-
-1. **The same worker and month with hours from two sources** (e.g. daily entries and monthly totals). Payroll must not count the hours twice, and every amount must stay explainable. Options:
-   - (a) Each worker-month uses one source. If a second source is entered, the app shows a warning and asks which to keep.
-   - (b) Sources add up. This is only safe if they cover different days or sites. Monthly totals have no days, so the app can't check that.
-   Recommendation: (a). It's a data rule, not a module limit.
+Moved to [AGENTS.md](../AGENTS.md) (Product → Modules), including two sources in one worker-month (decided 2026-10-23: one source per worker-month).

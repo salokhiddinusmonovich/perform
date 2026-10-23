@@ -4,6 +4,7 @@ import {
   EMPLOYMENT_TYPES,
   leaveSchema,
   placementSchema,
+  salarySchema,
   SHIFTS,
   workerSchema,
   type CreateWorker,
@@ -12,19 +13,25 @@ import {
   type LeaveInput,
   type Placement,
   type PlacementInput,
+  type Salary,
+  type SalaryInput,
   type Worker,
   type WorkerInput,
+  type YearMonth,
 } from '@puantaj/schemas';
 import { useMutation } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowRightLeft, LogOut, MoreHorizontal, Pencil, UserPlus } from 'lucide-react';
+import { ArrowRightLeft, LogOut, MoreHorizontal, Pencil, UserPlus, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm, type Control, type FieldErrors, type FieldPath, type FieldValues } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { DataTable } from '@/components/data-table';
 import { DatePicker } from '@/components/date-picker';
+import { ErrorState } from '@/components/error-state';
 import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
+import { LoadingState } from '@/components/loading-state';
+import { MonthPicker } from '@/components/month-picker';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
 import { StatusBadge } from '@/components/status-badge';
@@ -40,11 +47,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
-import { canManageWorkers, inCompany, seesPersonalData, useMe, type Me } from '@/lib/auth';
+import { canAddSalaries, canManageWorkers, inCompany, seesPay, seesPersonalData, useMe, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
 import { today } from '@/lib/format';
 import {
   useRefreshOrganisation,
+  useSalaries,
   useSites,
   useWorkers,
   workerName,
@@ -82,7 +90,7 @@ export function WorkersPage() {
   );
 }
 
-type Action = { kind: 'edit' | 'move' | 'leave'; worker: WorkerItem };
+type Action = { kind: 'edit' | 'move' | 'leave' | 'salary'; worker: WorkerItem };
 
 function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; onAddingChange: (open: boolean) => void }) {
   const { t } = useTranslation();
@@ -92,6 +100,8 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
   const refresh = useRefreshOrganisation();
   const manage = canManageWorkers(me);
   const personal = seesPersonalData(me);
+  const pay = seesPay(me);
+  const currency = me.activeCompany!.currency;
   const [siteFilter, setSiteFilter] = useState<string>(ALL);
   const [status, setStatus] = useState<Status>('working');
   const [action, setAction] = useState<Action | null>(null);
@@ -151,6 +161,28 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
             } satisfies ColumnDef<WorkerItem, unknown>,
           ]
         : []),
+      ...(pay
+        ? [
+            {
+              id: 'salary',
+              accessorFn: (w) => (w.salary ? Number(w.salary.monthlySalary) : -1),
+              header: t('workers.salary'),
+              cell: ({ row }) => {
+                const s = row.original.salary;
+                return s ? (
+                  <div className="min-w-32 tabular-nums">
+                    <div>{format.money(s.monthlySalary, currency)}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {t('workers.salaryFrom', { month: format.month(s.fromYear, s.fromMonth) })}
+                    </div>
+                  </div>
+                ) : (
+                  <StatusBadge tone="warning">{t('workers.noSalary')}</StatusBadge>
+                );
+              },
+            } satisfies ColumnDef<WorkerItem, unknown>,
+          ]
+        : []),
       {
         id: 'status',
         header: t('workers.status'),
@@ -170,7 +202,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         header: () => <span className="sr-only">{t('common.actions')}</span>,
         enableSorting: false,
         cell: ({ row }) =>
-          manage && (
+          (manage || pay) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label={t('common.actionsFor', { name: workerName(row.original) })}>
@@ -178,24 +210,34 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setAction({ kind: 'edit', worker: row.original })}>
-                  <Pencil aria-hidden />
-                  {t('workers.edit')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setAction({ kind: 'move', worker: row.original })}>
-                  <ArrowRightLeft aria-hidden />
-                  {hasLeft(row.original) ? t('workers.rehire') : t('workers.move')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setAction({ kind: 'leave', worker: row.original })}>
-                  <LogOut aria-hidden />
-                  {row.original.placement?.until ? t('workers.changeLastDay') : t('workers.leave')}
-                </DropdownMenuItem>
+                {manage && (
+                  <>
+                    <DropdownMenuItem onSelect={() => setAction({ kind: 'edit', worker: row.original })}>
+                      <Pencil aria-hidden />
+                      {t('workers.edit')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setAction({ kind: 'move', worker: row.original })}>
+                      <ArrowRightLeft aria-hidden />
+                      {hasLeft(row.original) ? t('workers.rehire') : t('workers.move')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setAction({ kind: 'leave', worker: row.original })}>
+                      <LogOut aria-hidden />
+                      {row.original.placement?.until ? t('workers.changeLastDay') : t('workers.leave')}
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {pay && (
+                  <DropdownMenuItem onSelect={() => setAction({ kind: 'salary', worker: row.original })}>
+                    <Wallet aria-hidden />
+                    {t('workers.salaryAction')}
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           ),
       },
     ],
-    [t, format, manage, personal],
+    [t, format, manage, personal, pay, currency],
   );
 
   const activeSites = (sites.data ?? []).filter((s) => s.isActive);
@@ -257,6 +299,15 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         <MoveDialog worker={action.worker} sites={activeSites} onClose={() => setAction(null)} onSaved={done} />
       )}
       {action?.kind === 'leave' && <LeaveDialog worker={action.worker} onClose={() => setAction(null)} onSaved={done} />}
+      {action?.kind === 'salary' && (
+        <SalaryDialog
+          worker={action.worker}
+          currency={currency}
+          canAdd={canAddSalaries(me)}
+          onClose={() => setAction(null)}
+          onSaved={done}
+        />
+      )}
     </>
   );
 }
@@ -492,6 +543,141 @@ function LeaveDialog({ worker, onClose, onSaved }: { worker: WorkerItem; onClose
           />
           <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** The month after the current one: a new salary usually starts there. */
+function nextMonth(): YearMonth {
+  const [year, month] = today().split('-').map(Number);
+  return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+}
+
+/** Salary history, and adding a salary from a month (salaries are never edited). */
+function SalaryDialog({
+  worker,
+  currency,
+  canAdd,
+  onClose,
+  onSaved,
+}: {
+  worker: WorkerItem;
+  currency: string;
+  canAdd: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const history = useSalaries(worker.id);
+  const [formError, setFormError] = useState<string>();
+  const [from, setFrom] = useState<YearMonth>(nextMonth);
+  const form = useForm<SalaryInput, unknown, Salary>({
+    resolver: zodResolver(salarySchema),
+    defaultValues: { fromYear: from.year, fromMonth: from.month, monthlySalary: '', reason: '' },
+  });
+  const { errors } = form.formState;
+  const monthError = errors.fromYear ?? errors.fromMonth;
+  const corrects = history.data?.some((s) => !s.corrected && s.fromYear === from.year && s.fromMonth === from.month);
+
+  const save = useMutation({
+    mutationFn: (values: Salary) => api.post(`/workers/${worker.id}/salaries`, values),
+    onSuccess: onSaved,
+    onError: (error) => {
+      if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
+    },
+  });
+
+  const chooseMonth = (month: YearMonth) => {
+    setFrom(month);
+    form.setValue('fromYear', month.year);
+    form.setValue('fromMonth', month.month);
+  };
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('workers.salaryTitle')}</DialogTitle>
+          <DialogDescription>
+            {workerName(worker)} · {canAdd ? t('workers.salaryHint') : t('workers.salaryViewHint')}
+          </DialogDescription>
+        </DialogHeader>
+        {canAdd && (
+          <form
+            className="space-y-4"
+            noValidate
+            onSubmit={form.handleSubmit((values) => {
+              setFormError(undefined);
+              save.mutate(values);
+            })}
+          >
+            <FormError message={formError} />
+            <fieldset className="space-y-1.5">
+              <legend className="mb-1.5 text-sm font-medium">{t('workers.salaryFromMonth')}</legend>
+              <MonthPicker value={from} onChange={chooseMonth} />
+              {monthError?.message ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {t(monthError.message)}
+                </p>
+              ) : (
+                corrects && (
+                  <StatusBadge tone="warning">
+                    {t('workers.salaryCorrects', { month: format.month(from.year, from.month) })}
+                  </StatusBadge>
+                )
+              )}
+            </fieldset>
+            <Field
+              id="s-amount"
+              label={t('workers.monthlySalary', { currency })}
+              error={errors.monthlySalary}
+              hint={t('workers.monthlySalaryHint')}
+            >
+              <Input
+                {...fieldControlProps('s-amount', errors.monthlySalary)}
+                {...form.register('monthlySalary')}
+                inputMode="decimal"
+                autoComplete="off"
+              />
+            </Field>
+            <Field id="s-reason" label={t('workers.salaryReason')} error={errors.reason} hint={t('workers.salaryReasonHint')}>
+              <Input {...fieldControlProps('s-reason', errors.reason)} {...form.register('reason')} autoComplete="off" />
+            </Field>
+            <FormActions submitLabel={t('workers.addSalary')} pending={save.isPending} onCancel={onClose} />
+          </form>
+        )}
+        <section className={canAdd ? 'space-y-2 border-t pt-4' : 'space-y-2'}>
+          <h3 className="text-sm font-medium">{t('workers.salaryHistory')}</h3>
+          {history.isPending ? (
+            <LoadingState />
+          ) : history.isError ? (
+            <ErrorState onRetry={() => history.refetch()} />
+          ) : history.data.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('workers.noSalaryYet')}</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {history.data.map((s) => (
+                <li key={s.id} className="flex flex-col gap-0.5">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className={s.corrected ? 'text-muted-foreground line-through' : 'font-medium'}>
+                      {t('workers.salaryFromAmount', {
+                        month: format.month(s.fromYear, s.fromMonth),
+                        amount: format.money(s.monthlySalary, currency),
+                      })}
+                    </span>
+                    {s.corrected && <StatusBadge tone="neutral">{t('workers.salaryCorrected')}</StatusBadge>}
+                  </span>
+                  {s.reason && <span className="text-muted-foreground">{s.reason}</span>}
+                  <span className="text-muted-foreground">
+                    {s.setBy.fullName} · {format.date(s.setAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </DialogContent>
     </Dialog>
   );

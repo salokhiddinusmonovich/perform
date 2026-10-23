@@ -18,6 +18,7 @@ Multi-company web app for construction **timesheets and payroll** ("puantaj" in 
   - **Working days per month (decided: option D):** calculated automatically from the rest weekdays and the holiday list, with a per-month override (by owner, admin or accountant). The app shows the calculated and overridden values side by side and records who changed them (audit trail). The app ships Uzbekistan's fixed-date public holidays per year. Moving holidays (Ramazon Hayit, Qurbon Hayit) and company days off are entered by an admin, and the app warns when a year's holidays are missing. Government day-off swaps are entered as both halves: the extra day off, and the rest weekday that becomes a working day (holiday kind `WORKING_DAY`).
   - **Final pay is rounded to the nearest 1000 soʻm** (halves up), a Settings value. The difference shows as its own rounding line.
   - **Per-site settings:** a site may have its own rule set (rest weekdays and pay settings) that overrides the company default. Working-days overrides are per rule set.
+    - **Split by placement (decided 2026-10-23):** pay rules follow the worker's placement (employment site), not the site where hours were entered. A worker whose placements in one month fall under different rule sets is paid in parts: the days of each placement under that placement's rules, at an hourly rate from that rule set's working days and normal hours. Each part is its own block on the payslip, so a full month split this way may not add up to exactly the salary.
   - Open: mid-month hire/exit (the hour model already prorates).
   - The overtime, rest-day and holiday multipliers have **no default**: the admin enters them when setting up the company.
   - Uzbek legal minimums (overtime, holiday pay) are deliberately out of scope for now. Don't enforce or assume them until the user raises it.
@@ -32,6 +33,7 @@ Multi-company web app for construction **timesheets and payroll** ("puantaj" in 
   - A company's modules come from its **plan** (see Platform admin). Only the platform admin assigns plans, so only they turn the Timesheet module on or off.
   - The API refuses routes of a disabled module with a stable error code. Every route declares its module through a guard, as with `@Roles`. Navigation, Settings and the mobile app show only enabled modules.
   - **Where hours come from** in a company without the Timesheet module: an **Excel import of the daily grid**, or **monthly totals per worker** entered by the accountant (normal, overtime, rest-day and holiday hours, plus absence days). Both feed the same payroll engine. Every pay result shows which source its hours came from.
+  - **One source per worker and month (decided 2026-10-23).** Hours for a worker-month come from exactly one source (daily entries, Excel import or monthly totals), so nothing is counted twice. When a second source is entered for a worker-month that already has one, the app warns and asks which to keep; it never adds sources together.
   - **Modules only switch features on or off.** They don't restrict anything else: a company with the Timesheet module can also use Excel import and monthly totals.
   - Turning the Timesheet module on or off takes effect from the **next open month**, so one month never mixes sources because of the switch.
 - **Platform admin (decided 2026-10-22):** the product operator can do anything on the platform. Every action is audited.
@@ -47,6 +49,7 @@ Multi-company web app for construction **timesheets and payroll** ("puantaj" in 
 
 - **Roles (decided 2026-10-20, partly open, see `docs/ideas.md` idea 3):**
   - **Accountant: add and view only, never edit or delete.** Corrections are made by adding a new record (e.g. a new salary from a date, an adjustment), never by changing an old one.
+    - **Salaries (decided 2026-10-23):** a salary belongs to the worker (not to a placement, so moving sites keeps it) and starts **from a month**, covering that whole month and later ones until a newer salary. One salary per worker-month. Owner, admin and accountant add salaries; project managers only view them on their sites.
     - The accountant adds salaries, adjustments, monthly travel amounts and working-day overrides, and can lock a month.
   - **Locking a month:** owner, admin or accountant. **Unlocking: owner only**, with a required reason and an audit record.
   - **Timekeepers and foremen never see salaries or pay amounts.** The API doesn't send these fields to them at all; hiding them in the UI isn't enough.

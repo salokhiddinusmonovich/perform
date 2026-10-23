@@ -7,12 +7,13 @@ import { z } from 'zod';
 export const MIN_YEAR = 2000;
 export const MAX_YEAR = 2100;
 
-const yearSchema = z.coerce
+export const yearSchema = z.coerce
   .number({ error: 'validation.invalid' })
   .int({ error: 'validation.invalid' })
   .min(MIN_YEAR, { error: 'validation.invalid' })
   .max(MAX_YEAR, { error: 'validation.invalid' });
-const monthSchema = z.coerce
+/** 1-based */
+export const monthSchema = z.coerce
   .number({ error: 'validation.invalid' })
   .int({ error: 'validation.invalid' })
   .min(1, { error: 'validation.invalid' })

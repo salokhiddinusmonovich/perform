@@ -28,7 +28,7 @@ async function workerWithHistory() {
   });
   const user = await createUser(prisma);
   await prisma.salary.create({
-    data: { companyId: company.id, assignmentId: assignment.id, fromDate: new Date('2026-09-01'), monthlySalary: '5000000', setById: user.id },
+    data: { companyId: company.id, workerId: worker.id, fromYear: 2026, fromMonth: 9, monthlySalary: '5000000', setById: user.id },
   });
   const period = await prisma.payrollPeriod.create({ data: { companyId: company.id, year: 2026, month: 9 } });
   await prisma.timesheetEntry.create({
@@ -65,8 +65,9 @@ describe('history is never deleted by accident', () => {
 
     await prisma.timesheetEntry.deleteMany();
     await prisma.adjustment.deleteMany();
-    // The salary history alone keeps the placement too.
-    await expect(prisma.assignment.delete({ where: { id: assignment.id } })).rejects.toMatchObject(STILL_REFERENCED);
+    await prisma.assignment.delete({ where: { id: assignment.id } });
+    // The salary history alone keeps the worker too.
+    await expect(prisma.worker.delete({ where: { id: worker.id } })).rejects.toMatchObject(STILL_REFERENCED);
   });
 
   it("refuses to delete a site or team a member is assigned to, instead of silently dropping the assignment", async () => {

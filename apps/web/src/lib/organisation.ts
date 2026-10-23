@@ -57,6 +57,22 @@ export interface WorkerItem {
     passportNumber: string | null;
     phone: string | null;
   } | null;
+  /** The latest salary (it may start in a later month). null when there is none yet, or for timekeepers and foremen. */
+  salary: Pick<SalaryItem, 'fromYear' | 'fromMonth' | 'monthlySalary'> | null;
+}
+
+/** A salary from a month on, newest first in a worker's history. */
+export interface SalaryItem {
+  id: string;
+  fromYear: number;
+  fromMonth: number;
+  /** Decimal string, e.g. "7500000" */
+  monthlySalary: string;
+  reason: string | null;
+  /** A newer salary from the same month corrected this one, so it never applies. */
+  corrected: boolean;
+  setBy: { fullName: string };
+  setAt: string;
 }
 
 export const SITES_KEY = ['sites'] as const;
@@ -69,6 +85,12 @@ export function useSites() {
 
 export function useWorkers() {
   return useQuery({ queryKey: WORKERS_KEY, queryFn: () => api.get<WorkerItem[]>('/workers') });
+}
+
+export const salariesKey = (workerId: string) => [...WORKERS_KEY, workerId, 'salaries'] as const;
+
+export function useSalaries(workerId: string) {
+  return useQuery({ queryKey: salariesKey(workerId), queryFn: () => api.get<SalaryItem[]>(`/workers/${workerId}/salaries`) });
 }
 
 /** After any change to sites, teams or workers: counts and lists on both pages change. */

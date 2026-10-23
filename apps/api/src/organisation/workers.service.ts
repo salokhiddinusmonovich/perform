@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import type { EmploymentType, Prisma, Shift } from '@prisma/client';
-import type { CreateWorker, Placement, Worker } from '@puantaj/schemas';
+import type { CreateWorker, Placement, Salary, Worker } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
 import { dayToDate, isoDay, monthOfDay, previousDay } from '../common/dates';
-import { assertMonthsOpen } from '../pay-rules/months';
+import { assertMonthsOpen, monthIndex } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
-import { assertManagesSite, seesPersonalData, seesPlacement } from './access';
+import { assertManagesSite, seesPay, seesPersonalData, seesPlacement } from './access';
 import { withinWorkerLimit } from './worker-limit';
 
 export interface PlacementView {
@@ -33,6 +33,19 @@ export interface PersonalDataView {
   phone: string | null;
 }
 
+/** A salary from a month on. Never sent to timekeepers or foremen (AGENTS.md: Roles). */
+export interface SalaryView {
+  id: string;
+  fromYear: number;
+  fromMonth: number;
+  monthlySalary: string;
+  reason: string | null;
+  /** A newer salary from the same month corrected this one, so it never applies. */
+  corrected: boolean;
+  setBy: { fullName: string };
+  setAt: Date;
+}
+
 export interface WorkerView {
   id: string;
   lastName: string;
@@ -44,6 +57,11 @@ export interface WorkerView {
   placement: PlacementView | null;
   /** null when the caller doesn't see personal data */
   personal: PersonalDataView | null;
+  /**
+   * The latest salary (by from-month; it may start in a later month). null when there
+   * is none yet or the caller doesn't see pay.
+   */
+  salary: Pick<SalaryView, 'fromYear' | 'fromMonth' | 'monthlySalary'> | null;
 }
 
 type Tx = Prisma.TransactionClient;
@@ -53,8 +71,16 @@ const PLACEMENT_INCLUDE = {
   team: { select: { name: true } },
 } as const satisfies Prisma.AssignmentInclude;
 
+/** Newest first: by from-month, then the one added last. The first row of a month is the one that counts. */
+const SALARY_ORDER = [
+  { fromYear: 'desc' },
+  { fromMonth: 'desc' },
+  { seq: 'desc' },
+] as const satisfies Prisma.SalaryOrderByWithRelationInput[];
+
 const WORKER_INCLUDE = {
   assignments: { orderBy: { hiredOn: 'desc' }, take: 1, include: PLACEMENT_INCLUDE },
+  salaries: { orderBy: SALARY_ORDER, take: 1 },
 } as const satisfies Prisma.WorkerInclude;
 
 type WorkerRow = Prisma.WorkerGetPayload<{ include: typeof WORKER_INCLUDE }>;
@@ -190,6 +216,61 @@ export class WorkersService {
     });
   }
 
+  /** Every salary of the worker, newest first (SALARY_ORDER). */
+  async salaries(auth: CompanyAuthContext, id: string): Promise<SalaryView[]> {
+    await this.find(this.prisma, auth, id);
+    const rows = await this.prisma.salary.findMany({
+      where: { workerId: id, companyId: auth.company.id },
+      orderBy: SALARY_ORDER,
+      include: { setBy: { select: { fullName: true } } },
+    });
+    return rows.map((r, i) => ({
+      id: r.id,
+      fromYear: r.fromYear,
+      fromMonth: r.fromMonth,
+      monthlySalary: r.monthlySalary.toString(),
+      reason: r.reason,
+      corrected: i > 0 && rows[i - 1].fromYear === r.fromYear && rows[i - 1].fromMonth === r.fromMonth,
+      setBy: { fullName: r.setBy.fullName },
+      setAt: r.setAt,
+    }));
+  }
+
+  /**
+   * Adds a salary from a month on. It covers the months until the next later salary, so
+   * none of those may be locked. A salary from a month that already has one corrects it.
+   */
+  async addSalary(auth: CompanyAuthContext, id: string, input: Salary): Promise<{ id: string }> {
+    const companyId = auth.company.id;
+    return this.prisma.$transaction(async (tx) => {
+      await this.find(tx, auth, id);
+      const start = monthIndex(input.fromYear, input.fromMonth);
+      const rows = await tx.salary.findMany({ where: { workerId: id, companyId }, orderBy: SALARY_ORDER });
+      const inForce = rows.find((r) => monthIndex(r.fromYear, r.fromMonth) <= start) ?? null;
+      const next = rows.filter((r) => monthIndex(r.fromYear, r.fromMonth) > start).at(-1) ?? null;
+      await assertMonthsOpen(
+        tx,
+        companyId,
+        { year: input.fromYear, month: input.fromMonth },
+        next && { year: next.fromYear, month: next.fromMonth },
+      );
+      if (inForce && inForce.monthlySalary.toString() === input.monthlySalary) throw conflict('salary.unchanged');
+
+      const row = await tx.salary.create({
+        data: { companyId, workerId: id, ...input, setById: auth.user.id },
+      });
+      await this.record(tx, auth, 'salary.add', id, {
+        salaryId: row.id,
+        fromYear: input.fromYear,
+        fromMonth: input.fromMonth,
+        from: inForce ? inForce.monthlySalary.toString() : null,
+        to: input.monthlySalary,
+        reason: input.reason,
+      });
+      return { id: row.id };
+    });
+  }
+
   /** Ends a placement on `lastDay`, unless timesheet days already exist after it. */
   private async endPlacement(tx: Tx, companyId: string, assignmentId: string, lastDay: string) {
     await assertMonthsOpen(tx, companyId, monthOfDay(lastDay), null);
@@ -260,6 +341,14 @@ export class WorkersService {
             phone: w.phone,
           }
         : null,
+      salary:
+        seesPay(auth) && w.salaries[0]
+          ? {
+              fromYear: w.salaries[0].fromYear,
+              fromMonth: w.salaries[0].fromMonth,
+              monthlySalary: w.salaries[0].monthlySalary.toString(),
+            }
+          : null,
     };
   }
 

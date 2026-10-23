@@ -1,5 +1,6 @@
 import { Languages } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -9,10 +10,12 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { isLanguage, LANGUAGES, setLanguage } from '@/i18n';
+import { isLanguage, type Language, LANGUAGES, setLanguage } from '@/i18n';
 
 export function LanguageSwitcher() {
   const { t, i18n } = useTranslation();
+
+  const choose = (lang: Language) => setLanguage(lang).catch(() => toast.error(t('errors.unknown')));
 
   return (
     <DropdownMenu>
@@ -28,7 +31,7 @@ export function LanguageSwitcher() {
         <DropdownMenuLabel>{t('settings.language')}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={i18n.language}
-          onValueChange={(value) => isLanguage(value) && setLanguage(value)}
+          onValueChange={(value) => isLanguage(value) && choose(value)}
         >
           {Object.entries(LANGUAGES).map(([code, name]) => (
             <DropdownMenuRadioItem key={code} value={code} lang={code}>

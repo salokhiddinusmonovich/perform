@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
 import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
 import { LoadingState } from '@/components/loading-state';
+import { MonthPicker } from '@/components/month-picker';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
 import { StatusBadge } from '@/components/status-badge';
@@ -365,12 +366,6 @@ function PayRulesForm({
     },
   });
 
-  const years = useMemo(() => {
-    const now = new Date().getFullYear();
-    const list = Array.from({ length: 6 }, (_, i) => now - 3 + i);
-    return list.includes(from.year) ? list : [from.year, ...list].sort();
-  }, [from.year]);
-
   const decimal = (name: 'normalHoursPerDay' | 'overtimeMultiplier' | 'restDayMultiplier' | 'holidayMultiplier' | 'payRoundingStep', error?: FieldError) => (
     <Input {...fieldControlProps(name, error)} {...form.register(name)} inputMode="decimal" autoComplete="off" />
   );
@@ -399,40 +394,7 @@ function PayRulesForm({
 
           <fieldset className="space-y-1.5">
             <legend className="mb-1.5 text-sm font-medium">{t('payRules.appliesFrom')}</legend>
-            <div className="grid max-w-md grid-cols-2 gap-2">
-              <Select
-                value={String(from.month)}
-                onValueChange={(m) => setFrom({ ...from, month: Number(m) })}
-                disabled={editing.fixedFrom || readOnly}
-              >
-                <SelectTrigger className="w-full" aria-label={t('common.month')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <SelectItem key={m} value={String(m)}>
-                      {format.monthName(m)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={String(from.year)}
-                onValueChange={(y) => setFrom({ ...from, year: Number(y) })}
-                disabled={editing.fixedFrom || readOnly}
-              >
-                <SelectTrigger className="w-full" aria-label={t('common.year')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {years.map((y) => (
-                    <SelectItem key={y} value={String(y)}>
-                      {y}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <MonthPicker value={from} onChange={setFrom} disabled={editing.fixedFrom || readOnly} />
             <p className="text-sm text-muted-foreground">{t('payRules.appliesFromHint')}</p>
             {replaces && (
               <StatusBadge tone="warning">

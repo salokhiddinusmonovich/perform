@@ -18,6 +18,11 @@ export function seesPersonalData(auth: CompanyAuthContext): boolean {
   return !FIELD_ROLES.includes(auth.company.role);
 }
 
+/** Salaries and pay amounts: everyone but timekeepers and foremen (project managers for now too). */
+export function seesPay(auth: CompanyAuthContext): boolean {
+  return !FIELD_ROLES.includes(auth.company.role);
+}
+
 /** Owners and admins manage the whole company: sites, project managers, everything below. */
 export function isCompanyManager(auth: CompanyAuthContext): boolean {
   return auth.company.role === 'OWNER' || auth.company.role === 'ADMIN';

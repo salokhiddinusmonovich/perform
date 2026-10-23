@@ -276,7 +276,8 @@
     "leaveBeforeStart": "İlk iş gününden önce olamaz",
     "teamNotOnSite": "Bu ekip seçilen şantiyede değil",
     "amountRange": "0 veya daha fazla olmalı",
-    "workerLimitRange": "1 ile 1 000 000 arası"
+    "workerLimitRange": "1 ile 1 000 000 arası",
+    "salaryRange": "0'dan büyük olmalı"
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -370,6 +371,9 @@
     },
     "subscription": {
       "expired": "Şirketinizin aboneliği sona erdi, değişiklikler kaydedilemez. Görüntüleme ve dışa aktarma yapılabilir."
+    },
+    "salary": {
+      "unchanged": "Bu ay için zaten aynı maaş geçerli."
     }
   },
   "payRules": {
@@ -643,7 +647,25 @@
     "leave": "Ayrılışı kaydet",
     "changeLastDay": "Son iş gününü değiştir",
     "leaveHint": "Çalıştığı son gün. Sonraki günler artık ona ait değildir.",
-    "lastDay": "Son iş günü"
+    "lastDay": "Son iş günü",
+    "salary": "Aylık maaş",
+    "salaryFrom": "{{month}} itibarıyla",
+    "noSalary": "Maaş girilmedi",
+    "salaryAction": "Maaş",
+    "salaryTitle": "Aylık maaş",
+    "salaryHint": "Maaş seçilen aydan bir sonraki maaşa kadar geçerlidir. Maaşlar değiştirilmez: zam veya düzeltme yeni bir kayıt olarak eklenir.",
+    "salaryViewHint": "Maaş geçmişi. Maaşı sahip, yönetici veya muhasebeci ekler.",
+    "salaryFromMonth": "Hangi aydan itibaren",
+    "salaryCorrects": "{{month}} için zaten bir maaş var. Yenisi onu düzeltir.",
+    "monthlySalary": "Aylık maaş ({{currency}})",
+    "monthlySalaryHint": "Tüm iş günlerinde normal saat çalışan işçi tam olarak bu tutarı alır.",
+    "salaryReason": "Neden",
+    "salaryReasonHint": "İsteğe bağlı, örneğin: zam, hata düzeltme",
+    "addSalary": "Maaş ekle",
+    "salaryHistory": "Maaş geçmişi",
+    "noSalaryYet": "Henüz maaş girilmedi.",
+    "salaryFromAmount": "{{amount}} · {{month}} itibarıyla",
+    "salaryCorrected": "Düzeltildi"
   },
   "impersonation": {
     "banner": "{{name}} olarak giriş yaptınız.",

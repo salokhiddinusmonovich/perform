@@ -3,6 +3,7 @@ import {
   createWorkerSchema,
   leaveSchema,
   placementSchema,
+  salarySchema,
   siteSchema,
   staffSchema,
   teamSchema,
@@ -12,6 +13,7 @@ import {
   type CreateWorker,
   type Leave,
   type Placement,
+  type Salary,
   type Site,
   type Team,
   type UpdateSite,
@@ -21,7 +23,7 @@ import {
 import { CompanyAuth, ForModule, Roles, type CompanyAuthContext } from '../auth/auth.context';
 import { ZodPipe } from '../common/zod.pipe';
 import { SitesService, type SiteView, type StaffView } from './sites.service';
-import { WorkersService, type WorkerView } from './workers.service';
+import { WorkersService, type SalaryView, type WorkerView } from './workers.service';
 
 // Everyone in the company sees sites, teams and workers within their scope (access.ts).
 // Changing them is narrower; the services also check the caller's sites.
@@ -173,6 +175,24 @@ export class WorkersController {
     @Body(new ZodPipe(placementSchema)) body: Placement,
   ): Promise<void> {
     return this.workers.place(auth, id, body);
+  }
+
+  /** Salary history. Timekeepers and foremen never see salaries. */
+  @Get(':id/salaries')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER')
+  salaries(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<SalaryView[]> {
+    return this.workers.salaries(auth, id);
+  }
+
+  /** Salaries are only ever added (a raise or a correction is a new one); project managers only view them. */
+  @Post(':id/salaries')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  addSalary(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(salarySchema)) body: Salary,
+  ): Promise<{ id: string }> {
+    return this.workers.addSalary(auth, id, body);
   }
 
   @Post(':id/leave')
