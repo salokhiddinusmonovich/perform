@@ -1,11 +1,17 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import type { PayLine } from '@puantaj/payroll';
-import type { YearMonth } from '@puantaj/schemas';
+import { unlockSchema, type Unlock, type UnlockInput, type YearMonth } from '@puantaj/schemas';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { FileText } from 'lucide-react';
+import { FileText, Lock, LockOpen } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
+import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
 import { MonthSwitcher } from '@/components/month-switcher';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
@@ -13,25 +19,42 @@ import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { useFormat } from '@/hooks/use-format';
-import { canEnterMonthlyHours, seesPay, useMe } from '@/lib/auth';
+import { api } from '@/lib/api';
+import { canEnterMonthlyHours, canLockMonths, canUnlockMonths, seesPay, useMe, type Me } from '@/lib/auth';
+import { applyFieldErrors, errorMessage } from '@/lib/errors';
 import { workerName } from '@/lib/organisation';
-import { currentMonth, usePayroll, type PayrollPart, type PayrollProblem, type PayrollWorker } from '@/lib/payroll';
+import {
+  currentMonth,
+  MONTHLY_HOURS_KEY,
+  PAYROLL_KEY,
+  usePayroll,
+  type LockItem,
+  type PayrollMonth,
+  type PayrollPart,
+  type PayrollProblem,
+  type PayrollWorker,
+} from '@/lib/payroll';
 
 export function PayrollPage() {
   const { t } = useTranslation();
   return (
     <>
       <PageHeader title={t('payroll.title')} description={t('payroll.description')} />
-      <RequireAccess allowed={seesPay}>{(me) => <PayrollView currency={me.activeCompany!.currency} />}</RequireAccess>
+      <RequireAccess allowed={seesPay}>{(me) => <PayrollView me={me} />}</RequireAccess>
     </>
   );
 }
 
-function PayrollView({ currency }: { currency: string }) {
+function PayrollView({ me }: { me: Me }) {
   const { t } = useTranslation();
   const format = useFormat();
+  const queryClient = useQueryClient();
+  const currency = me.activeCompany!.currency;
   const [month, setMonth] = useState<YearMonth>(currentMonth);
+  const [locking, setLocking] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
   const [open, setOpen] = useState<PayrollWorker | null>(null);
   const data = usePayroll(month);
   const withProblems = data.data?.workers.filter((w) => w.problems.length > 0).length ?? 0;
@@ -97,22 +120,42 @@ function PayrollView({ currency }: { currency: string }) {
     [t, format, currency],
   );
 
+  const monthName = format.month(month.year, month.month);
+  /** After locking or unlocking: payroll, hours and settings pages show the month's state. */
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: PAYROLL_KEY }),
+      queryClient.invalidateQueries({ queryKey: MONTHLY_HOURS_KEY }),
+      queryClient.invalidateQueries({ queryKey: ['working-days'] }),
+    ]);
+
   return (
     <>
       {data.data && (
         <Card className="mb-4">
           <CardHeader>
-            <CardDescription>{t('payroll.totalFor', { month: format.month(month.year, month.month) })}</CardDescription>
+            <CardDescription>{t('payroll.totalFor', { month: monthName })}</CardDescription>
             <CardTitle className="tabular-nums">{format.money(data.data.total, currency)}</CardTitle>
           </CardHeader>
-          {(withProblems > 0 || data.data.locked) && (
-            <CardContent className="flex flex-wrap gap-2">
-              {data.data.locked && <StatusBadge tone="neutral">{t('monthlyHours.locked')}</StatusBadge>}
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {data.data.locked ? (
+                <StatusBadge tone="neutral">{t('monthlyHours.locked')}</StatusBadge>
+              ) : (
+                <StatusBadge tone="info">{t('payroll.open')}</StatusBadge>
+              )}
               {withProblems > 0 && (
                 <StatusBadge tone="warning">{t('payroll.workersWithProblems', { count: withProblems })}</StatusBadge>
               )}
-            </CardContent>
-          )}
+            </div>
+            <LockActions
+              me={me}
+              month={data.data}
+              withProblems={withProblems}
+              onLock={() => setLocking(true)}
+              onUnlock={() => setUnlocking(true)}
+            />
+          </CardContent>
         </Card>
       )}
       <DataTable
@@ -125,9 +168,182 @@ function PayrollView({ currency }: { currency: string }) {
         emptyTitle={t('payroll.emptyTitle')}
         emptyDescription={t('payroll.emptyDescription')}
       />
+      {data.data && data.data.locks.length > 0 && <LockHistory locks={data.data.locks} currency={currency} />}
       {open && <PayslipDialog worker={open} month={month} currency={currency} onClose={() => setOpen(null)} />}
+      {data.data && (
+        <ConfirmDialog
+          open={locking}
+          onOpenChange={setLocking}
+          title={t('payroll.lockTitle', { month: monthName })}
+          description={t('payroll.lockDescription', {
+            month: monthName,
+            count: data.data.workers.length,
+            total: format.money(data.data.total, currency),
+          })}
+          confirmLabel={t('payroll.lock')}
+          onConfirm={async () => {
+            await api.post(`/payroll/${month.year}/${month.month}/lock`);
+            toast.success(t('payroll.lockedToast', { month: monthName }));
+            await refresh();
+          }}
+        />
+      )}
+      {unlocking && (
+        <UnlockDialog
+          month={month}
+          onClose={() => setUnlocking(false)}
+          onSaved={async () => {
+            setUnlocking(false);
+            toast.success(t('payroll.unlockedToast', { month: monthName }));
+            await refresh();
+          }}
+        />
+      )}
     </>
   );
+}
+
+/** Lock or unlock the month, or say why it can't be locked yet. */
+function LockActions({
+  me,
+  month,
+  withProblems,
+  onLock,
+  onUnlock,
+}: {
+  me: Me;
+  month: PayrollMonth;
+  withProblems: number;
+  onLock: () => void;
+  onUnlock: () => void;
+}) {
+  const { t } = useTranslation();
+  if (month.locked) {
+    return canUnlockMonths(me) ? (
+      <Button variant="outline" onClick={onUnlock}>
+        <LockOpen aria-hidden />
+        {t('payroll.unlock')}
+      </Button>
+    ) : (
+      <p className="text-sm text-muted-foreground">{t('payroll.lockedHint')}</p>
+    );
+  }
+  if (!canLockMonths(me)) return null;
+  const blocked = !month.ended ? t('payroll.lockAfterEnd') : withProblems > 0 ? t('payroll.lockNeedsAll') : null;
+  return (
+    <div className="space-y-1.5">
+      <Button onClick={onLock} disabled={blocked !== null}>
+        <Lock aria-hidden />
+        {t('payroll.lock')}
+      </Button>
+      <p className="text-sm text-muted-foreground">{blocked ?? t('payroll.lockHint')}</p>
+    </div>
+  );
+}
+
+/** Reopening a locked month needs a reason, which goes into the audit log. */
+function UnlockDialog({ month, onClose, onSaved }: { month: YearMonth; onClose: () => void; onSaved: () => void }) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const [formError, setFormError] = useState<string>();
+  const form = useForm<UnlockInput, unknown, Unlock>({ resolver: zodResolver(unlockSchema), defaultValues: { reason: '' } });
+  const save = useMutation({
+    mutationFn: (values: Unlock) => api.post(`/payroll/${month.year}/${month.month}/unlock`, values),
+    onSuccess: onSaved,
+    onError: (error) => {
+      if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
+    },
+  });
+  const error = form.formState.errors.reason;
+  return (
+    <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('payroll.unlockTitle', { month: format.month(month.year, month.month) })}</DialogTitle>
+          <DialogDescription>{t('payroll.unlockHint')}</DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          noValidate
+          onSubmit={form.handleSubmit((values) => {
+            setFormError(undefined);
+            save.mutate(values);
+          })}
+        >
+          <FormError message={formError} />
+          <Field id="unlock-reason" label={t('payroll.unlockReason')} error={error}>
+            <Input {...fieldControlProps('unlock-reason', error)} {...form.register('reason')} autoComplete="off" />
+          </Field>
+          <FormActions submitLabel={t('payroll.unlock')} pending={save.isPending} onCancel={onClose} />
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Every lock of the month, what changed since the lock before, and why it was reopened. */
+function LockHistory({ locks, currency }: { locks: LockItem[]; currency: string }) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle>{t('payroll.lockHistory')}</CardTitle>
+        <CardDescription>{t('payroll.lockHistoryHint')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ol className="space-y-4 text-sm">
+          {[...locks].reverse().map((lock) => (
+            <li key={lock.lockNumber} className="space-y-2 border-b pb-4 last:border-b-0 last:pb-0">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="font-medium">
+                  {t('payroll.lockNumber', { number: lock.lockNumber })} ·{' '}
+                  <span className="tabular-nums">{format.money(lock.total, currency)}</span>
+                </span>
+                <span className="text-muted-foreground">
+                  {lock.lockedBy.fullName} · {format.date(lock.lockedAt)} {format.time(lock.lockedAt)}
+                </span>
+              </div>
+              {lock.changes !== null &&
+                (lock.changes.length === 0 ? (
+                  <p className="text-muted-foreground">{t('payroll.noChanges')}</p>
+                ) : (
+                  <ul className="divide-y rounded-md border">
+                    {lock.changes.map((c) => (
+                      <li key={c.worker.id} className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2">
+                        <span>{workerName(c.worker)}</span>
+                        <span className="tabular-nums">
+                          {c.before === null ? t('payroll.notInLock') : format.money(c.before, currency)} →{' '}
+                          {c.after === null ? t('payroll.notInLock') : format.money(c.after, currency)}
+                          {c.difference !== null && (
+                            <span className="ms-2 text-muted-foreground">
+                              ({signedMoney(c.difference, (v) => format.money(v, currency))})
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ))}
+              {lock.unlocked && (
+                <p>
+                  <StatusBadge tone="warning">{t('payroll.unlockedBadge')}</StatusBadge>{' '}
+                  <span className="text-muted-foreground">
+                    {lock.unlocked.by?.fullName} · {format.date(lock.unlocked.at)} · {lock.unlocked.reason}
+                  </span>
+                </p>
+              )}
+            </li>
+          ))}
+        </ol>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** "+300 000 soʻm" or "−300 000 soʻm" from the API's difference (a decimal string). */
+function signedMoney(difference: string, money: (value: string) => string): string {
+  return difference.startsWith('-') ? `−${money(difference.slice(1))}` : `+${money(difference)}`;
 }
 
 /** One worker's month: every amount with the hours, rate and rule it came from. */

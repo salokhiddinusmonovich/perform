@@ -326,7 +326,11 @@
       "notFound": "This invitation is no longer open."
     },
     "period": {
-      "locked": "This month is locked. Locked months can't be changed."
+      "locked": "This month is locked. Locked months can't be changed.",
+      "notEnded": "The month hasn’t ended yet. It can be locked once it has.",
+      "alreadyLocked": "This month is already locked.",
+      "notLocked": "This month isn’t locked.",
+      "hasProblems": "Workers who can’t be paid yet: {{workers}}. Fix them first."
     },
     "payRules": {
       "notFound": "These rules no longer exist.",
@@ -898,6 +902,26 @@
       "travelNoRoute": "Travel pay: days: {{count}}, no route set",
       "travelMonthly": "Travel pay (monthly amount)",
       "rounding": "Rounding to {{step}}"
-    }
+    },
+    "open": "Month open",
+    "lock": "Lock month",
+    "lockHint": "A locked month can't change. Its results are saved.",
+    "lockAfterEnd": "A month can be locked only after it has ended.",
+    "lockNeedsAll": "Every worker must be payable before the month can be locked.",
+    "lockedHint": "The month is locked. Only an owner can reopen it.",
+    "lockTitle": "Lock {{month}}?",
+    "lockDescription": "{{month}}: workers: {{count}}, total {{total}}. These results are saved and the month can no longer change.",
+    "lockedToast": "{{month}} locked",
+    "unlock": "Unlock month",
+    "unlockTitle": "Unlock {{month}}?",
+    "unlockHint": "An unlocked month can change again. The reason goes into the audit log, and the earlier results are kept.",
+    "unlockReason": "Reason",
+    "unlockedToast": "{{month}} unlocked",
+    "lockHistory": "Lock history",
+    "lockHistoryHint": "What each lock saved, and what changed since the lock before.",
+    "lockNumber": "Lock #{{number}}",
+    "noChanges": "No differences from the lock before.",
+    "notInLock": "none",
+    "unlockedBadge": "Unlocked"
   }
 }

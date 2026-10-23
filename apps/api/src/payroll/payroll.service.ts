@@ -11,10 +11,13 @@ import {
   type TravelInput,
 } from '@puantaj/payroll';
 import type { PayRules, YearMonth } from '@puantaj/schemas';
+import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
-import { inMonth, isoDay, monthSpan } from '../common/dates';
+import { conflict } from '../common/api-error';
+import { inMonth, isoDay, monthSpan, todayIn } from '../common/dates';
 import { seesPlacement } from '../organisation/access';
 import { SALARY_ORDER } from '../organisation/workers.service';
+import { lockCompanyMonths } from '../pay-rules/months';
 import { PayRulesService, type MonthRules } from '../pay-rules/pay-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { toTotals } from './monthly-hours.service';
@@ -66,14 +69,44 @@ export interface PayrollWorkerView {
   problems: PayrollProblem[];
 }
 
+/** A worker whose pay differs between one lock of a month and the one before. */
+export interface LockChangeView {
+  worker: PayrollWorkerView['worker'];
+  /** null: not in the earlier lock */
+  before: string | null;
+  /** null: not in this lock */
+  after: string | null;
+  /** after − before, when the worker is in both */
+  difference: string | null;
+}
+
+/** One lock of the month, and the unlock that followed it, if any. */
+export interface LockView {
+  lockNumber: number;
+  lockedAt: Date;
+  lockedBy: { fullName: string };
+  total: string;
+  /** Differences from the lock before; null for the first lock */
+  changes: LockChangeView[] | null;
+  unlocked: { at: Date; by: { fullName: string } | null; reason: string } | null;
+}
+
 export interface PayrollMonthView {
   year: number;
   month: number;
   locked: boolean;
+  /** The month is over in the company's time zone, so it can be locked */
+  ended: boolean;
   /** Sum of the workers that could be paid */
   total: string;
+  /** While locked: what the latest lock saved. Otherwise worked out now. */
   workers: PayrollWorkerView[];
+  /** Every lock of the month, oldest first */
+  locks: LockView[];
 }
+
+type Db = Prisma.TransactionClient | PrismaService;
+type Sees = (placement: { siteId: string; teamId: string | null }) => boolean;
 
 const PLACEMENT_INCLUDE = {
   worker: { select: { id: true, lastName: true, firstName: true, patronymic: true, position: true } },
@@ -96,13 +129,166 @@ export class PayrollService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly rules: PayRulesService,
+    private readonly audit: AuditService,
   ) {}
 
-  async month(auth: CompanyAuthContext, { year, month }: YearMonth): Promise<PayrollMonthView> {
+  /**
+   * The month's pay. Project managers see the workers with a placement on their sites
+   * this month; everyone else sees all.
+   */
+  async month(auth: CompanyAuthContext, ym: YearMonth): Promise<PayrollMonthView> {
     const companyId = auth.company.id;
+    const sees: Sees = (p) => seesPlacement(auth, p.siteId, p.teamId);
+    const period = await this.prisma.payrollPeriod.findUnique({
+      where: { companyId_year_month: { companyId, year: ym.year, month: ym.month } },
+    });
+    const snapshots = period
+      ? await this.prisma.payrollSnapshot.findMany({
+          where: { companyId, periodId: period.id },
+          orderBy: { lockNumber: 'asc' },
+          include: { lockedBy: { select: { fullName: true } }, workers: true },
+        })
+      : [];
+    const unlocks = period
+      ? await this.prisma.auditLog.findMany({
+          where: { companyId, action: 'period.unlock', entityType: 'PayrollPeriod', entityId: period.id },
+          include: { actor: { select: { fullName: true } } },
+        })
+      : [];
+
+    const locked = period?.status === 'LOCKED';
+    const visible = await this.visibleWorkers(companyId, ym, sees);
+    // A locked month shows what was locked; only who may see whom is worked out now.
+    const workers = locked
+      ? snapshots.at(-1)!.workers.filter((w) => visible.has(w.workerId)).map((w) => detailOf(w.detail))
+      : await this.calculate(this.prisma, companyId, ym, sees);
+
+    return {
+      year: ym.year,
+      month: ym.month,
+      locked,
+      ended: monthEnded(auth.company.timezone, ym),
+      total: sumTotals(workers),
+      workers,
+      locks: snapshots.map((snap, i) => {
+        const unlock = unlocks.find((u) => (u.data as { lockNumber?: number }).lockNumber === snap.lockNumber);
+        return {
+          lockNumber: snap.lockNumber,
+          lockedAt: snap.lockedAt,
+          lockedBy: snap.lockedBy,
+          total: snap.workers
+            .filter((w) => visible.has(w.workerId))
+            .reduce((sum, w) => sum.plus(w.total), new Prisma.Decimal(0))
+            .toFixed(2),
+          changes: i === 0 ? null : changesBetween(snapshots[i - 1].workers, snap.workers, visible),
+          unlocked: unlock
+            ? { at: unlock.createdAt, by: unlock.actor, reason: String((unlock.data as { reason?: string }).reason ?? '') }
+            : null,
+        };
+      }),
+    };
+  }
+
+  /**
+   * Locks a month that has ended and whose every worker can be paid, saving what it pays
+   * as the next snapshot (AGENTS.md: Data integrity). Owners, admins and accountants.
+   */
+  async lock(auth: CompanyAuthContext, ym: YearMonth): Promise<{ lockNumber: number }> {
+    const companyId = auth.company.id;
+    if (!monthEnded(auth.company.timezone, ym)) throw conflict('period.notEnded');
+    return this.prisma.$transaction(
+      async (tx) => {
+        // No change to the company's months runs while the month is worked out and locked.
+        await lockCompanyMonths(tx, companyId);
+        const key = { companyId_year_month: { companyId, year: ym.year, month: ym.month } };
+        const before = await tx.payrollPeriod.findUnique({ where: key });
+        if (before?.status === 'LOCKED') throw conflict('period.alreadyLocked');
+
+        const workers = await this.calculate(tx, companyId, ym, () => true);
+        const unpaid = workers.filter((w) => w.problems.length > 0).length;
+        if (unpaid > 0) throw conflict('period.hasProblems', { workers: unpaid });
+
+        const lockedAt = new Date();
+        const lockFields = { status: 'LOCKED' as const, lockedAt, lockedById: auth.user.id };
+        const period = await tx.payrollPeriod.upsert({
+          where: key,
+          create: { companyId, year: ym.year, month: ym.month, ...lockFields },
+          update: lockFields,
+        });
+        const lockNumber = (await tx.payrollSnapshot.count({ where: { periodId: period.id } })) + 1;
+        const total = sumTotals(workers);
+        const snapshot = await tx.payrollSnapshot.create({
+          data: { companyId, periodId: period.id, lockNumber, total, lockedById: auth.user.id, lockedAt },
+        });
+        await tx.payrollSnapshotWorker.createMany({
+          data: workers.map((w) => ({
+            companyId,
+            snapshotId: snapshot.id,
+            workerId: w.worker.id,
+            total: w.total!,
+            detail: JSON.parse(JSON.stringify(w)) as Prisma.InputJsonObject,
+          })),
+        });
+        await this.audit.record(
+          {
+            action: 'period.lock',
+            companyId,
+            auth,
+            entityType: 'PayrollPeriod',
+            entityId: period.id,
+            data: { year: ym.year, month: ym.month, lockNumber, snapshotId: snapshot.id, total, workers: workers.length },
+          },
+          tx,
+        );
+        return { lockNumber };
+      },
+      // Working out a large month takes longer than Prisma's default 5 seconds.
+      { timeout: 60_000 },
+    );
+  }
+
+  /** Reopens a locked month (owners only), with the reason in the audit log. Snapshots stay. */
+  async unlock(auth: CompanyAuthContext, ym: YearMonth, reason: string): Promise<void> {
+    const companyId = auth.company.id;
+    await this.prisma.$transaction(async (tx) => {
+      await lockCompanyMonths(tx, companyId);
+      const period = await tx.payrollPeriod.findUnique({
+        where: { companyId_year_month: { companyId, year: ym.year, month: ym.month } },
+      });
+      if (period?.status !== 'LOCKED') throw conflict('period.notLocked');
+      const lockNumber = await tx.payrollSnapshot.count({ where: { periodId: period.id } });
+      await tx.payrollPeriod.update({
+        where: { id: period.id },
+        data: { status: 'OPEN', lockedAt: null, lockedById: null },
+      });
+      await this.audit.record(
+        {
+          action: 'period.unlock',
+          companyId,
+          auth,
+          entityType: 'PayrollPeriod',
+          entityId: period.id,
+          data: { year: ym.year, month: ym.month, lockNumber, reason },
+        },
+        tx,
+      );
+    });
+  }
+
+  /** Workers with a placement in the month that the caller sees. */
+  private async visibleWorkers(companyId: string, { year, month }: YearMonth, sees: Sees): Promise<Set<string>> {
+    const rows = await this.prisma.assignment.findMany({
+      where: { AND: [{ companyId }, inMonth(year, month)] },
+      select: { workerId: true, siteId: true, teamId: true },
+    });
+    return new Set(rows.filter(sees).map((r) => r.workerId));
+  }
+
+  /** Every visible worker's pay for the month, worked out now. */
+  private async calculate(db: Db, companyId: string, { year, month }: YearMonth, sees: Sees): Promise<PayrollWorkerView[]> {
     const { first, last } = monthSpan(year, month);
-    const [rows, locked, period] = await Promise.all([
-      this.prisma.assignment.findMany({
+    const [rows, period] = await Promise.all([
+      db.assignment.findMany({
         where: { AND: [{ companyId }, inMonth(year, month)] },
         include: {
           ...PLACEMENT_INCLUDE,
@@ -110,12 +296,10 @@ export class PayrollService {
         },
         orderBy: { hiredOn: 'asc' },
       }),
-      this.prisma.payrollPeriod.count({ where: { companyId, year, month, status: 'LOCKED' } }),
-      this.prisma.payrollPeriod.findUnique({ where: { companyId_year_month: { companyId, year, month } } }),
+      db.payrollPeriod.findUnique({ where: { companyId_year_month: { companyId, year, month } } }),
     ]);
 
-    // Project managers see the workers with a placement on their sites this month.
-    const visible = new Set(rows.filter((p) => seesPlacement(auth, p.siteId, p.teamId)).map((p) => p.workerId));
+    const visible = new Set(rows.filter(sees).map((p) => p.workerId));
     const placements: Placement[] = rows
       .filter((p) => visible.has(p.workerId))
       .map(({ monthlyHours, ...p }) => ({ ...p, totals: monthlyHours[0] ? toTotals(monthlyHours[0]) : null }));
@@ -123,7 +307,7 @@ export class PayrollService {
     const workerIds = [...visible];
 
     const [salaries, entries, travelAdjustments] = await Promise.all([
-      this.prisma.salary.findMany({
+      db.salary.findMany({
         where: {
           companyId,
           workerId: { in: workerIds },
@@ -131,11 +315,11 @@ export class PayrollService {
         },
         orderBy: SALARY_ORDER,
       }),
-      this.prisma.timesheetEntry.findMany({
+      db.timesheetEntry.findMany({
         where: { companyId, assignmentId: { in: assignmentIds }, date: { gte: first, lte: last } },
       }),
       period
-        ? this.prisma.adjustment.findMany({
+        ? db.adjustment.findMany({
             where: { companyId, periodId: period.id, type: 'TRAVEL', assignmentId: { in: assignmentIds } },
           })
         : [],
@@ -145,10 +329,10 @@ export class PayrollService {
     const rulesAt = (siteId: string) => {
       let found = monthRules.get(siteId);
       if (!found) {
-        found = this.rules.ruleSetForSite(companyId, siteId).then(async (set) => ({
+        found = this.rules.ruleSetForSite(companyId, siteId, db).then(async (set) => ({
           ruleSetId: set?.id ?? null,
           siteId: set?.siteId ?? null,
-          month: set ? await this.rules.month(companyId, set.id, year, month) : null,
+          month: set ? await this.rules.month(companyId, set.id, year, month, db) : null,
         }));
         monthRules.set(siteId, found);
       }
@@ -244,7 +428,7 @@ export class PayrollService {
                 hours: e.hours.toString(),
               }));
             const siteIds = [...new Set(partEntries.map((e) => e.place))];
-            const siteNames = await this.siteNames(companyId, siteIds);
+            const siteNames = await this.siteNames(db, companyId, siteIds);
             for (const siteId of siteIds) places[siteId] = { siteName: siteNames.get(siteId)!, from: null, until: null };
             // A site's route is the worker's route on their placement there; elsewhere none.
             const routes = Object.fromEntries(
@@ -281,19 +465,11 @@ export class PayrollService {
       (a, b) =>
         collator.compare(a.worker.lastName, b.worker.lastName) || collator.compare(a.worker.firstName, b.worker.firstName),
     );
-    return {
-      year,
-      month,
-      locked: locked > 0,
-      total: totalOfParts(
-        workers.flatMap((w) => (w.total === null ? [] : w.parts.map((p) => p.result))),
-      ),
-      workers,
-    };
+    return workers;
   }
 
-  private async siteNames(companyId: string, ids: string[]) {
-    const sites = await this.prisma.site.findMany({ where: { companyId, id: { in: ids } }, select: { id: true, name: true } });
+  private async siteNames(db: Db, companyId: string, ids: string[]) {
+    const sites = await db.site.findMany({ where: { companyId, id: { in: ids } }, select: { id: true, name: true } });
     return new Map(sites.map((s) => [s.id, s.name]));
   }
 }
@@ -335,6 +511,45 @@ function travel(
     return { kind: 'MONTHLY_AMOUNT', amount: sum.toFixed(2) };
   }
   return null;
+}
+
+/** Sum of the totals of the workers that can be paid. */
+function sumTotals(workers: readonly PayrollWorkerView[]): string {
+  return workers
+    .reduce((sum, w) => (w.total === null ? sum : sum.plus(w.total)), new Prisma.Decimal(0))
+    .toFixed(2);
+}
+
+/** A snapshot's stored worker result (written by lock() from PayrollWorkerView). */
+function detailOf(detail: Prisma.JsonValue): PayrollWorkerView {
+  return detail as unknown as PayrollWorkerView;
+}
+
+/** The month's last day is before today in the company's time zone. */
+function monthEnded(timeZone: string, { year, month }: YearMonth): boolean {
+  return isoDay(monthSpan(year, month).last) < todayIn(timeZone);
+}
+
+/** Workers whose pay differs between two locks, among those the caller sees. */
+function changesBetween(
+  before: readonly { workerId: string; total: Prisma.Decimal; detail: Prisma.JsonValue }[],
+  after: readonly { workerId: string; total: Prisma.Decimal; detail: Prisma.JsonValue }[],
+  visible: ReadonlySet<string>,
+): LockChangeView[] {
+  const ids = [...new Set([...before, ...after].map((w) => w.workerId))].filter((id) => visible.has(id));
+  return ids.flatMap((id) => {
+    const b = before.find((w) => w.workerId === id);
+    const a = after.find((w) => w.workerId === id);
+    if (a && b && a.total.equals(b.total)) return [];
+    return [
+      {
+        worker: detailOf((a ?? b)!.detail).worker,
+        before: b ? b.total.toFixed(2) : null,
+        after: a ? a.total.toFixed(2) : null,
+        difference: a && b ? a.total.minus(b.total).toFixed(2) : null,
+      },
+    ];
+  });
 }
 
 function firstDay(placements: readonly Placement[], part: PayrollPartView): number {

@@ -164,6 +164,8 @@ async function removeDemoData(prisma: PrismaClient) {
     prisma.subscriptionPayment.deleteMany({ where: { OR: [inCompany, { recordedById: { in: userIds } }] } }),
     prisma.adjustment.deleteMany({ where: inCompany }),
     prisma.timesheetEntry.deleteMany({ where: inCompany }),
+    prisma.payrollSnapshotWorker.deleteMany({ where: inCompany }),
+    prisma.payrollSnapshot.deleteMany({ where: inCompany }),
     prisma.salary.deleteMany({ where: inCompany }),
     prisma.monthlyHours.deleteMany({ where: inCompany }),
     prisma.payrollPeriod.deleteMany({ where: inCompany }),

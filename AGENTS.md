@@ -221,6 +221,7 @@ shadcn does **not** keep the UI consistent by itself. These rules do:
 ## Data integrity
 
 - **Locked months are final.** Once a payroll period is locked, its timesheets and amounts can't change. Corrections go into the next open period as adjustments. The one exception: an **owner can unlock a month**, giving a reason that is stored in the audit log. Unlocking is rare and never silent.
+  - **A month can be locked only after it has ended** (in the company's time zone) **and when every worker in it can be paid** (decided 2026-10-23). Missing salaries, hours or pay rules are fixed first, so a locked month is always complete.
   - **Every lock saves a snapshot** of the month's results. When the month is locked again, the app shows the differences from the previous lock, per worker.
   - Differences are **not** carried into the next month automatically. The accountant decides and adds adjustments if needed.
 - **No silent data loss.** Workers, sites and teams are deactivated, not deleted, once they have timesheet or payroll history. Relations use `onDelete: NoAction` (not `Cascade`/`SetNull`, and not `Restrict`, whose Postgres error Prisma doesn't map to P2003), so a stray delete fails instead of taking history with it. Only `Session` cascades from `User`.

@@ -75,12 +75,28 @@ export interface PayrollWorker {
   problems: PayrollProblem[];
 }
 
+/** One lock of the month, and the unlock that followed it, if any. */
+export interface LockItem {
+  lockNumber: number;
+  lockedAt: string;
+  lockedBy: { fullName: string };
+  total: string;
+  /** Workers whose pay differs from the lock before; null for the first lock */
+  changes: { worker: WorkerName; before: string | null; after: string | null; difference: string | null }[] | null;
+  unlocked: { at: string; by: { fullName: string } | null; reason: string } | null;
+}
+
 export interface PayrollMonth {
   year: number;
   month: number;
   locked: boolean;
+  /** Over in the company's time zone, so it can be locked */
+  ended: boolean;
   total: string;
+  /** While locked: what the latest lock saved */
   workers: PayrollWorker[];
+  /** Oldest first */
+  locks: LockItem[];
 }
 
 export const MONTHLY_HOURS_KEY = ['monthly-hours'] as const;

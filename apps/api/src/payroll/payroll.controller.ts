@@ -1,5 +1,12 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
-import { monthlyHoursSchema, yearMonthSchema, type MonthlyHours, type YearMonth } from '@puantaj/schemas';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  monthlyHoursSchema,
+  unlockSchema,
+  yearMonthSchema,
+  type MonthlyHours,
+  type Unlock,
+  type YearMonth,
+} from '@puantaj/schemas';
 import { CompanyAuth, ForModule, Roles, type CompanyAuthContext } from '../auth/auth.context';
 import { ZodPipe } from '../common/zod.pipe';
 import { MonthlyHoursService, type MonthlyHoursMonthView } from './monthly-hours.service';
@@ -47,5 +54,27 @@ export class PayrollController {
     @Param(new ZodPipe(yearMonthSchema)) month: YearMonth,
   ): Promise<PayrollMonthView> {
     return this.payroll.month(auth, month);
+  }
+
+  /** Locks an ended month whose every worker can be paid, saving a snapshot of it. */
+  @Post(':year/:month/lock')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  lock(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param(new ZodPipe(yearMonthSchema)) month: YearMonth,
+  ): Promise<{ lockNumber: number }> {
+    return this.payroll.lock(auth, month);
+  }
+
+  /** Reopens a locked month. Owners only, with a reason. */
+  @Post(':year/:month/unlock')
+  @Roles('OWNER')
+  @HttpCode(204)
+  unlock(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param(new ZodPipe(yearMonthSchema)) month: YearMonth,
+    @Body(new ZodPipe(unlockSchema)) body: Unlock,
+  ): Promise<void> {
+    return this.payroll.unlock(auth, month, body.reason);
   }
 }

@@ -291,3 +291,97 @@ describe('payroll', () => {
     expect(await ctx.prisma.monthlyHours.count()).toBe(1);
   });
 });
+
+describe('locking a month', () => {
+  it('locks only an ended month whose every worker can be paid, and keeps it final', async () => {
+    const { company: c, agent, placementA, siteA } = await company();
+    const accountant = await member(c.id, 'ACCOUNTANT');
+    expect((await accountant.agent.post('/api/payroll/2100/12/lock').expect(409)).body.code).toBe('period.notEnded');
+    const gaps = await accountant.agent.post('/api/payroll/2026/9/lock').expect(409);
+    expect(gaps.body).toMatchObject({ code: 'period.hasProblems', workers: 1 });
+
+    await accountant.agent.post(`/api/monthly-hours/2026/9/${placementA}`).send(FULL_MONTH).expect(201);
+    expect((await accountant.agent.post('/api/payroll/2026/9/lock').expect(201)).body).toEqual({ lockNumber: 1 });
+    expect((await accountant.agent.post('/api/payroll/2026/9/lock').expect(409)).body.code).toBe('period.alreadyLocked');
+
+    const locked = (await agent.get('/api/payroll/2026/9').expect(200)).body;
+    expect(locked).toMatchObject({ locked: true, ended: true, total: '7500000.00' });
+    expect(locked.locks).toEqual([
+      {
+        lockNumber: 1,
+        lockedAt: expect.any(String),
+        lockedBy: { fullName: accountant.user.fullName },
+        total: '7500000.00',
+        changes: null,
+        unlocked: null,
+      },
+    ]);
+    // Nothing can change the month now.
+    const late = await agent.post(`/api/monthly-hours/2026/9/${placementA}`).send({ ...FULL_MONTH, normalHours: '216', workdaysWorked: 24 });
+    expect(late.status).toBe(409);
+    expect(late.body.code).toBe('period.locked');
+    await hire(agent, siteA, 'Latecomer', '2026-09-20').catch(() => undefined);
+    expect(await ctx.prisma.worker.count({ where: { lastName: 'Latecomer' } })).toBe(0);
+
+    // A locked month shows what was locked, even if data changes behind the API's back.
+    await ctx.prisma.salary.create({
+      data: { companyId: c.id, workerId: locked.workers[0].worker.id, fromYear: 2026, fromMonth: 9, monthlySalary: '9000000', setById: accountant.user.id },
+    });
+    expect((await agent.get('/api/payroll/2026/9').expect(200)).body.workers[0].total).toBe('7500000.00');
+
+    const log = await ctx.prisma.auditLog.findFirstOrThrow({ where: { action: 'period.lock' } });
+    expect(log.data).toMatchObject({ year: 2026, month: 9, lockNumber: 1, total: '7500000.00', workers: 1 });
+  });
+
+  it('lets only an owner unlock, with a reason, and shows what changed at the next lock', async () => {
+    const { company: c, agent, placementA, siteA } = await company();
+    const accountant = await member(c.id, 'ACCOUNTANT');
+    const admin = await member(c.id, 'ADMIN');
+    const second = await hire(agent, siteA, 'Second');
+    await agent.post(`/api/workers/${second}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '4500000' }).expect(201);
+    const secondPlacement = (await agent.get(`/api/workers/${second}`).expect(200)).body.placement.id;
+    await agent.post(`/api/monthly-hours/2026/9/${placementA}`).send(FULL_MONTH).expect(201);
+    await agent.post(`/api/monthly-hours/2026/9/${secondPlacement}`).send(FULL_MONTH).expect(201);
+    await accountant.agent.post('/api/payroll/2026/9/lock').expect(201);
+
+    for (const other of [accountant, admin]) {
+      await other.agent.post('/api/payroll/2026/9/unlock').send({ reason: 'Wrong hours' }).expect(403);
+    }
+    const noReason = await agent.post('/api/payroll/2026/9/unlock').send({ reason: ' ' }).expect(400);
+    expect(noReason.body.issues).toEqual([{ path: 'reason', message: 'validation.required' }]);
+    await agent.post('/api/payroll/2026/9/unlock').send({ reason: 'Wrong hours for Testov' }).expect(204);
+    expect((await agent.post('/api/payroll/2026/9/unlock').send({ reason: 'Again' }).expect(409)).body.code).toBe('period.notLocked');
+
+    // Open again: the correction goes in and the month is locked a second time.
+    await accountant.agent.post(`/api/monthly-hours/2026/9/${placementA}`).send({ ...FULL_MONTH, normalHours: '216', workdaysWorked: 24 }).expect(201);
+    expect((await accountant.agent.post('/api/payroll/2026/9/lock').expect(201)).body).toEqual({ lockNumber: 2 });
+
+    const { locks } = (await agent.get('/api/payroll/2026/9').expect(200)).body;
+    expect(locks).toHaveLength(2);
+    expect(locks[0].unlocked).toEqual({ at: expect.any(String), by: { fullName: expect.any(String) }, reason: 'Wrong hours for Testov' });
+    // 216 h × 7 500 000 ÷ 225 = 7 200 000; the second worker didn't change.
+    expect(locks[1]).toMatchObject({ lockNumber: 2, total: '11700000.00', unlocked: null });
+    expect(locks[1].changes).toEqual([
+      { worker: expect.objectContaining({ lastName: 'Testov' }), before: '7500000.00', after: '7200000.00', difference: '-300000.00' },
+    ]);
+    // Both snapshots are kept.
+    expect(await ctx.prisma.payrollSnapshot.count()).toBe(2);
+    expect((await ctx.prisma.auditLog.findFirstOrThrow({ where: { action: 'period.unlock' } })).data).toMatchObject({
+      lockNumber: 1,
+      reason: 'Wrong hours for Testov',
+    });
+  });
+
+  it('never lets timekeepers, foremen or project managers lock, and locks only the own company', async () => {
+    const a = await company();
+    const b = await company();
+    await a.agent.post(`/api/monthly-hours/2026/9/${a.placementA}`).send(FULL_MONTH).expect(201);
+    for (const role of ['TIMEKEEPER', 'FOREMAN', 'PROJECT_MANAGER'] as const) {
+      const m = await member(a.company.id, role);
+      await m.agent.post('/api/payroll/2026/9/lock').expect(403);
+    }
+    await a.agent.post('/api/payroll/2026/9/lock').expect(201);
+    expect((await b.agent.get('/api/payroll/2026/9').expect(200)).body).toMatchObject({ locked: false, locks: [] });
+    await b.agent.post('/api/payroll/2026/9/unlock').send({ reason: 'Not mine' }).expect(409);
+  });
+});

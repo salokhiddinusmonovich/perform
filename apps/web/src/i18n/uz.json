@@ -326,7 +326,11 @@
       "notFound": "Bu taklif endi amal qilmaydi."
     },
     "period": {
-      "locked": "Bu oy yopilgan. Yopilgan oylarni oʻzgartirib boʻlmaydi."
+      "locked": "Bu oy yopilgan. Yopilgan oylarni oʻzgartirib boʻlmaydi.",
+      "notEnded": "Oy hali tugamagan. Uni tugagandan keyin yopish mumkin.",
+      "alreadyLocked": "Bu oy allaqachon yopilgan.",
+      "notLocked": "Bu oy yopilmagan.",
+      "hasProblems": "Hisoblab boʻlmaydigan ishchilar bor: {{workers}}. Avval ularni tuzating."
     },
     "payRules": {
       "notFound": "Bu qoidalar endi mavjud emas.",
@@ -898,6 +902,26 @@
       "travelNoRoute": "Yoʻl haqi: kunlar: {{count}}, yoʻnalish belgilanmagan",
       "travelMonthly": "Yoʻl haqi (oylik summa)",
       "rounding": "{{step}} gacha yaxlitlash"
-    }
+    },
+    "open": "Oy ochiq",
+    "lock": "Oyni yopish",
+    "lockHint": "Yopilgan oy oʻzgarmaydi. Natijalar saqlanadi.",
+    "lockAfterEnd": "Oyni faqat u tugagandan keyin yopish mumkin.",
+    "lockNeedsAll": "Yopishdan oldin barcha ishchilarni hisoblab boʻladigan qiling.",
+    "lockedHint": "Oy yopilgan. Uni faqat egasi ochishi mumkin.",
+    "lockTitle": "{{month}} yopilsinmi?",
+    "lockDescription": "{{month}} uchun ishchilar: {{count}}, jami {{total}}. Bu natijalar saqlanadi va oyni endi oʻzgartirib boʻlmaydi.",
+    "lockedToast": "{{month}} yopildi",
+    "unlock": "Oyni ochish",
+    "unlockTitle": "{{month}} ochilsinmi?",
+    "unlockHint": "Ochilgan oyni yana oʻzgartirish mumkin. Sabab audit jurnalida saqlanadi, avvalgi natijalar ham saqlanib qoladi.",
+    "unlockReason": "Sabab",
+    "unlockedToast": "{{month}} ochildi",
+    "lockHistory": "Yopishlar tarixi",
+    "lockHistoryHint": "Har bir yopishda nima saqlangani va oldingisidan nima oʻzgargani.",
+    "lockNumber": "Yopish №{{number}}",
+    "noChanges": "Oldingi yopishdan farq yoʻq.",
+    "notInLock": "yoʻq",
+    "unlockedBadge": "Ochilgan"
   }
 }

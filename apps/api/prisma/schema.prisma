@@ -115,6 +115,7 @@ model User {
   payrollRules         PayrollRules[]
   salaries             Salary[]
   monthlyHours         MonthlyHours[]
+  payrollSnapshots     PayrollSnapshot[]
 }
 
 /// How a session's token is sent: the browser's httpOnly cookie, or the mobile app's
@@ -319,9 +320,10 @@ model Worker {
   isActive       Boolean        @default(true)
   createdAt      DateTime       @default(now())
 
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  assignments Assignment[]
-  salaries    Salary[]
+  company          Company                 @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  assignments      Assignment[]
+  salaries         Salary[]
+  payrollSnapshots PayrollSnapshotWorker[]
 
   @@unique([companyId, pinfl])
   @@unique([id, companyId])
@@ -567,13 +569,54 @@ model PayrollPeriod {
   lockedAt   DateTime?
   lockedById String?      @db.Uuid
 
-  company     Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  lockedBy    User?            @relation(fields: [lockedById], references: [id], onDelete: NoAction)
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  lockedBy    User?             @relation(fields: [lockedById], references: [id], onDelete: NoAction)
   entries     TimesheetEntry[]
   adjustments Adjustment[]
+  snapshots   PayrollSnapshot[]
 
   @@unique([companyId, year, month])
   @@unique([id, companyId])
+}
+
+/// What a month paid each time it was locked (AGENTS.md: Data integrity). Never changed
+/// or deleted: unlocking keeps it, and locking again adds the next one, so the app can
+/// show each lock's differences from the one before. While the month is locked, the
+/// latest snapshot is what the app shows.
+model PayrollSnapshot {
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @db.Uuid
+  periodId   String   @db.Uuid
+  /// 1 for the month's first lock, then 2, 3…
+  lockNumber Int
+  total      Decimal  @db.Decimal(14, 2)
+  lockedById String   @db.Uuid
+  lockedAt   DateTime @default(now())
+
+  period   PayrollPeriod           @relation(fields: [periodId, companyId], references: [id, companyId], onDelete: NoAction)
+  lockedBy User                    @relation(fields: [lockedById], references: [id], onDelete: NoAction)
+  workers  PayrollSnapshotWorker[]
+
+  @@unique([periodId, lockNumber])
+  @@unique([id, companyId])
+}
+
+/// One worker's pay in a snapshot.
+model PayrollSnapshotWorker {
+  id         String  @id @default(uuid()) @db.Uuid
+  companyId  String  @db.Uuid
+  snapshotId String  @db.Uuid
+  workerId   String  @db.Uuid
+  total      Decimal @db.Decimal(14, 2)
+  /// The worker's whole result as the payroll page shows it (parts, lines, inputs), so a
+  /// locked month keeps showing exactly what was locked.
+  detail     Json
+
+  snapshot PayrollSnapshot @relation(fields: [snapshotId, companyId], references: [id, companyId], onDelete: NoAction)
+  worker   Worker          @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+
+  @@unique([snapshotId, workerId])
+  @@index([companyId])
 }
 
 /// Mirrors DayStatus in @puantaj/payroll.

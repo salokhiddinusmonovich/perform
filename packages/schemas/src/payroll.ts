@@ -30,3 +30,14 @@ export const monthlyHoursSchema = z.object({
 });
 export type MonthlyHoursInput = z.input<typeof monthlyHoursSchema>;
 export type MonthlyHours = z.output<typeof monthlyHoursSchema>;
+
+/** Reopening a locked month: owners only, always with a reason (AGENTS.md: Data integrity). */
+export const unlockSchema = z.object({
+  reason: z
+    .string({ error: 'validation.required' })
+    .trim()
+    .min(1, { error: 'validation.required', abort: true })
+    .max(500, { error: 'validation.tooLong' }),
+});
+export type UnlockInput = z.input<typeof unlockSchema>;
+export type Unlock = z.output<typeof unlockSchema>;

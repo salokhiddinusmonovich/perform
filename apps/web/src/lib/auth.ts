@@ -108,6 +108,17 @@ export function canEnterMonthlyHours(me: Me | null | undefined): boolean {
   return role === 'OWNER' || role === 'ADMIN' || role === 'ACCOUNTANT';
 }
 
+/** Can lock an ended month (owners, admins, accountants). */
+export function canLockMonths(me: Me | null | undefined): boolean {
+  const role = me?.activeCompany?.role;
+  return role === 'OWNER' || role === 'ADMIN' || role === 'ACCOUNTANT';
+}
+
+/** Can reopen a locked month: owners only, always with a reason. */
+export function canUnlockMonths(me: Me | null | undefined): boolean {
+  return me?.activeCompany?.role === 'OWNER';
+}
+
 /** Any member of the active company (sites and workers are shown to everyone within their scope). */
 export function inCompany(me: Me | null | undefined): boolean {
   return Boolean(me?.activeCompany);

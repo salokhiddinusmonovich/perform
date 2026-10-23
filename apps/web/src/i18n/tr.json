@@ -326,7 +326,11 @@
       "notFound": "Bu davet artık geçerli değil."
     },
     "period": {
-      "locked": "Bu ay kapatıldı. Kapatılmış aylar değiştirilemez."
+      "locked": "Bu ay kapatıldı. Kapatılmış aylar değiştirilemez.",
+      "notEnded": "Ay henüz bitmedi. Bittikten sonra kilitlenebilir.",
+      "alreadyLocked": "Bu ay zaten kilitli.",
+      "notLocked": "Bu ay kilitli değil.",
+      "hasProblems": "Hesaplanamayan işçiler var: {{workers}}. Önce bunları düzeltin."
     },
     "payRules": {
       "notFound": "Bu kurallar artık yok.",
@@ -898,6 +902,26 @@
       "travelNoRoute": "Yol ücreti: gün: {{count}}, güzergâh yok",
       "travelMonthly": "Yol ücreti (aylık tutar)",
       "rounding": "{{step}} katına yuvarlama"
-    }
+    },
+    "open": "Ay açık",
+    "lock": "Ayı kilitle",
+    "lockHint": "Kilitli ay değişmez. Sonuçlar kaydedilir.",
+    "lockAfterEnd": "Ay ancak bittikten sonra kilitlenebilir.",
+    "lockNeedsAll": "Kilitlemeden önce tüm işçiler hesaplanabilir olmalı.",
+    "lockedHint": "Ay kilitli. Yalnızca sahip açabilir.",
+    "lockTitle": "{{month}} kilitlensin mi?",
+    "lockDescription": "{{month}}: işçi: {{count}}, toplam {{total}}. Bu sonuçlar kaydedilir ve ay artık değiştirilemez.",
+    "lockedToast": "{{month}} kilitlendi",
+    "unlock": "Ayın kilidini aç",
+    "unlockTitle": "{{month}} kilidi açılsın mı?",
+    "unlockHint": "Açılan ay yeniden değiştirilebilir. Neden denetim kaydında saklanır, önceki sonuçlar da kalır.",
+    "unlockReason": "Neden",
+    "unlockedToast": "{{month}} kilidi açıldı",
+    "lockHistory": "Kilitleme geçmişi",
+    "lockHistoryHint": "Her kilitlemede ne kaydedildiği ve öncekinden ne değiştiği.",
+    "lockNumber": "Kilitleme #{{number}}",
+    "noChanges": "Önceki kilitlemeden fark yok.",
+    "notInLock": "yok",
+    "unlockedBadge": "Kilidi açıldı"
   }
 }
