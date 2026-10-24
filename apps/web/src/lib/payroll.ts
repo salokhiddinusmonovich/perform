@@ -1,9 +1,9 @@
-import type { MonthlyTotals, PayResult, TotalsProblem } from '@puantaj/payroll';
-import type { YearMonth } from '@puantaj/schemas';
+import type { MonthlyTotals, PayOut, PayOutAdjustment, PayResult, TotalsProblem } from '@puantaj/payroll';
+import type { AdjustmentType, YearMonth } from '@puantaj/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
 
-// Monthly hours and the payroll run as the API returns them (apps/api/src/payroll).
+// Monthly hours, adjustments and the payroll run as the API returns them (apps/api/src/payroll).
 
 export interface MonthlyHoursEntry extends MonthlyTotals {
   id: string;
@@ -48,6 +48,7 @@ export type PayrollProblem =
   | { code: 'twoSources' }
   | { code: 'placementWithoutHours'; assignmentId: string; siteName: string; from: string }
   | { code: 'noRules'; siteNames: string[] }
+  | { code: 'noCompanyRules' }
   | { code: 'totalsInvalid'; issues: { siteName: string | null; problem: TotalsProblem }[] }
   | { code: 'invalidHours'; detail: string };
 
@@ -66,11 +67,18 @@ export interface PayrollPart {
   result: PayResult;
 }
 
+/** The parts' earned pay, the adjustments (signed, with their notes) and the rounding. */
+export interface PayrollPayOut extends Omit<PayOut, 'adjustments'> {
+  adjustments: (PayOutAdjustment & { note: string | null })[];
+}
+
 export interface PayrollWorker {
   worker: WorkerName;
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
   source: 'DAILY' | 'TOTALS' | null;
   parts: PayrollPart[];
+  payOut: PayrollPayOut | null;
+  /** The amount to pay out; null while there are problems. Below zero: the worker owes it. */
   total: string | null;
   problems: PayrollProblem[];
 }
@@ -99,7 +107,38 @@ export interface PayrollMonth {
   locks: LockItem[];
 }
 
+export interface AdjustmentItem {
+  id: string;
+  type: AdjustmentType;
+  /** Always positive; the type gives the sign */
+  amount: string;
+  /** Negative for advances and deductions */
+  signedAmount: string;
+  note: string | null;
+  setBy: { fullName: string };
+  setAt: string;
+  /** Cancelled adjustments stay visible but no longer count. */
+  cancelled: { reason: string; by: { fullName: string }; at: string } | null;
+}
+
+export interface AdjustmentsRow {
+  worker: WorkerName;
+  siteNames: string[];
+  /** Newest first */
+  adjustments: AdjustmentItem[];
+  /** Signed sum of the adjustments that count */
+  net: string;
+}
+
+export interface AdjustmentsMonth {
+  year: number;
+  month: number;
+  locked: boolean;
+  rows: AdjustmentsRow[];
+}
+
 export const MONTHLY_HOURS_KEY = ['monthly-hours'] as const;
+export const ADJUSTMENTS_KEY = ['adjustments'] as const;
 export const PAYROLL_KEY = ['payroll'] as const;
 
 export function useMonthlyHours({ year, month }: YearMonth) {
@@ -108,6 +147,16 @@ export function useMonthlyHours({ year, month }: YearMonth) {
     queryFn: () => api.get<MonthlyHoursMonth>(`/monthly-hours/${year}/${month}`),
   });
 }
+
+export function useAdjustments({ year, month }: YearMonth) {
+  return useQuery({
+    queryKey: [...ADJUSTMENTS_KEY, year, month],
+    queryFn: () => api.get<AdjustmentsMonth>(`/adjustments/${year}/${month}`),
+  });
+}
+
+/** Whether a signed amount from the API (a decimal string) is below zero. */
+export const isNegative = (amount: string) => amount.startsWith('-');
 
 export function usePayroll({ year, month }: YearMonth) {
   return useQuery({

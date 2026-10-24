@@ -7,6 +7,7 @@ import {
   formatMonth,
   formatMonthName,
   formatNumber,
+  formatSignedMoney,
   formatTime,
   formatWeekday,
   type DecimalInput,
@@ -20,6 +21,7 @@ export function useFormat() {
   return useMemo(
     () => ({
       money: (value: DecimalInput, currency: string) => formatMoney(value, currency, lang),
+      signedMoney: (value: string, currency: string) => formatSignedMoney(value, currency, lang),
       number: (value: DecimalInput, maxFractionDigits?: number) =>
         formatNumber(value, lang, maxFractionDigits),
       date: (value: string | Date) => formatDate(value, lang),

@@ -10,7 +10,7 @@ beforeAll(async () => (ctx = await startApp()));
 afterAll(async () => ctx.app.close());
 beforeEach(async () => resetDb(ctx.prisma));
 
-/** A company with one worker who has one timesheet day and one adjustment. */
+/** A company with one worker who has one timesheet day, a travel amount and a cancelled adjustment. */
 async function workerWithHistory() {
   const { prisma } = ctx;
   const company = await createCompany(prisma);
@@ -43,16 +43,22 @@ async function workerWithHistory() {
       hours: 9,
     },
   });
-  await prisma.adjustment.create({
-    data: { companyId: company.id, periodId: period.id, assignmentId: assignment.id, type: 'BONUS', amount: '100000' },
+  await prisma.travelAmount.create({
+    data: { companyId: company.id, assignmentId: assignment.id, year: 2026, month: 9, amount: '300000', setById: user.id },
   });
-  return { company, site, team, worker, assignment, period };
+  const adjustment = await prisma.adjustment.create({
+    data: { companyId: company.id, workerId: worker.id, year: 2026, month: 9, type: 'BONUS', amount: '100000', setById: user.id },
+  });
+  await prisma.adjustmentCancel.create({
+    data: { companyId: company.id, adjustmentId: adjustment.id, reason: 'Typed twice', cancelledById: user.id },
+  });
+  return { company, site, team, worker, assignment, period, adjustment, user };
 }
 
 describe('history is never deleted by accident', () => {
   it('refuses to delete anything that timesheets or payroll depend on', async () => {
     const { prisma } = ctx;
-    const { company, site, team, worker, assignment, period } = await workerWithHistory();
+    const { company, site, team, worker, assignment, period, adjustment } = await workerWithHistory();
 
     await expect(prisma.worker.delete({ where: { id: worker.id } })).rejects.toMatchObject(STILL_REFERENCED);
     await expect(prisma.assignment.delete({ where: { id: assignment.id } })).rejects.toMatchObject(STILL_REFERENCED);
@@ -61,11 +67,19 @@ describe('history is never deleted by accident', () => {
     await expect(prisma.site.delete({ where: { id: site.id } })).rejects.toMatchObject(STILL_REFERENCED);
     await expect(prisma.company.delete({ where: { id: company.id } })).rejects.toMatchObject(STILL_REFERENCED);
 
+    // A cancelled adjustment stays, with its cancel.
+    await expect(prisma.adjustment.delete({ where: { id: adjustment.id } })).rejects.toMatchObject(STILL_REFERENCED);
     expect(await prisma.salary.count()).toBe(1);
 
     await prisma.timesheetEntry.deleteMany();
-    await prisma.adjustment.deleteMany();
+    // The travel amount alone keeps the placement.
+    await expect(prisma.assignment.delete({ where: { id: assignment.id } })).rejects.toMatchObject(STILL_REFERENCED);
+    await prisma.travelAmount.deleteMany();
     await prisma.assignment.delete({ where: { id: assignment.id } });
+    // The adjustments alone keep the worker.
+    await expect(prisma.worker.delete({ where: { id: worker.id } })).rejects.toMatchObject(STILL_REFERENCED);
+    await prisma.adjustmentCancel.deleteMany();
+    await prisma.adjustment.deleteMany();
     // The salary history alone keeps the worker too.
     await expect(prisma.worker.delete({ where: { id: worker.id } })).rejects.toMatchObject(STILL_REFERENCED);
   });
@@ -190,7 +204,7 @@ describe('payroll rule sets', () => {
     }
     const created = await prisma.payrollRules.create({ data: rules(company.id, set.id, user.id) });
     expect(created.leaveHoursPerDay).toBeNull();
-    expect(created.payRoundingStep.toString()).toBe('1000');
+    expect(created.payRoundingStep?.toString()).toBe('1000');
   });
 });
 
@@ -254,7 +268,7 @@ describe('rows never mix two companies', () => {
     ).rejects.toMatchObject(STILL_REFERENCED);
   });
 
-  it("refuses timesheet days and adjustments in another company's period", async () => {
+  it("refuses timesheet days in another company's period, and adjustments and travel amounts of another company's worker", async () => {
     const { prisma } = ctx;
     const a = await workerWithHistory();
     const other = await createCompany(prisma);
@@ -271,12 +285,18 @@ describe('rows never mix two companies', () => {
       await expect(
         prisma.timesheetEntry.create({ data: { ...day, companyId, periodId: otherPeriod.id } }),
       ).rejects.toMatchObject(STILL_REFERENCED);
-      await expect(
-        prisma.adjustment.create({
-          data: { companyId, periodId: otherPeriod.id, assignmentId: a.assignment.id, type: 'BONUS', amount: '1' },
-        }),
-      ).rejects.toMatchObject(STILL_REFERENCED);
     }
+    const month = { year: 2026, month: 9, amount: '1', setById: a.user.id };
+    await expect(
+      prisma.adjustment.create({ data: { ...month, companyId: other.id, workerId: a.worker.id, type: 'BONUS' } }),
+    ).rejects.toMatchObject(STILL_REFERENCED);
+    await expect(
+      prisma.travelAmount.create({ data: { ...month, companyId: other.id, assignmentId: a.assignment.id } }),
+    ).rejects.toMatchObject(STILL_REFERENCED);
+    const second = await prisma.adjustment.create({ data: { ...month, companyId: a.company.id, workerId: a.worker.id, type: 'BONUS' } });
+    await expect(
+      prisma.adjustmentCancel.create({ data: { companyId: other.id, adjustmentId: second.id, reason: 'x', cancelledById: a.user.id } }),
+    ).rejects.toMatchObject(STILL_REFERENCED);
     await prisma.timesheetEntry.create({ data: { ...day, companyId: a.company.id, periodId: a.period.id } });
   });
 

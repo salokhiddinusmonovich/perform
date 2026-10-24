@@ -62,6 +62,17 @@ export function formatMoney(value: DecimalInput, currency: string, lang: Languag
   }).format(value as IntlDecimal);
 }
 
+/**
+ * A signed amount from the API (a decimal string) with its sign always shown, e.g.
+ * "+300 000 soʻm" or "−300 000 soʻm" (a real minus sign); zero has no sign.
+ */
+export function formatSignedMoney(value: string, currency: string, lang: Language): string {
+  const negative = value.startsWith('-');
+  const abs = negative ? value.slice(1) : value;
+  if (/^0+(.0+)?$/.test(abs)) return formatMoney(abs, currency, lang);
+  return `${negative ? '−' : '+'}${formatMoney(abs, currency, lang)}`;
+}
+
 export function formatNumber(value: DecimalInput, lang: Language, maxFractionDigits = 2): string {
   if (lang === 'uz') return uzNumber(value, 0, maxFractionDigits);
   return new Intl.NumberFormat(localeOf(lang), {

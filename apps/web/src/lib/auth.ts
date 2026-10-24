@@ -108,6 +108,12 @@ export function canEnterMonthlyHours(me: Me | null | undefined): boolean {
   return role === 'OWNER' || role === 'ADMIN' || role === 'ACCOUNTANT';
 }
 
+/** Can add and cancel adjustments (bonuses, advances, deductions). Project managers only view them. */
+export function canAddAdjustments(me: Me | null | undefined): boolean {
+  const role = me?.activeCompany?.role;
+  return role === 'OWNER' || role === 'ADMIN' || role === 'ACCOUNTANT';
+}
+
 /** Can lock an ended month (owners, admins, accountants). */
 export function canLockMonths(me: Me | null | undefined): boolean {
   const role = me?.activeCompany?.role;

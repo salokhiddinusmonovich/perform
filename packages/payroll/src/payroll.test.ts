@@ -3,7 +3,8 @@ import { buildMonthCalendar, countWorkdays, workingDays } from './calendar';
 import { divRound, fromUnits, toUnits } from './decimal';
 import { normalizeCode, parseCell, type CodeMap, type DayEntry } from './entry';
 import { missingMovingHolidays, uzbekistanFixedHolidays } from './holidays';
-import { calculatePay, totalOfParts, type PaySettings, type TravelInput } from './pay';
+import { calculatePay, type PaySettings, type TravelInput } from './pay';
+import { payOut } from './pay-out';
 import { checkTotals, summarizeMonth, type MonthlyTotals } from './summary';
 
 // September 2026: Sept 1 (Tue) is Independence Day, Sundays are 6/13/20/27.
@@ -54,7 +55,6 @@ const settings: PaySettings = {
     LEAVE: { paid: true, hoursPerDay: null },
     TRAVEL: { paid: false, hoursPerDay: null },
   },
-  payRoundingStep: '1000',
 };
 
 describe('decimals', () => {
@@ -272,18 +272,16 @@ describe('calculatePay', () => {
 
     // Also for salaries whose hourly rate has no exact decimal form.
     const odd = calculatePay({ ...base, monthlySalary: '7777777.77', entries: month('9') });
-    expect(odd.lines[0]).toMatchObject({ kind: 'NORMAL', amount: '7777777.77' });
-    expect(odd.lines[1]).toEqual({ type: 'ROUNDING', step: '1000.00', amount: '222.23' });
-    expect(odd.total).toBe('7778000.00');
+    expect(odd.lines).toEqual([expect.objectContaining({ kind: 'NORMAL', amount: '7777777.77' })]);
+    expect(odd.total).toBe('7777777.77');
   });
 
   it('pays exact hours: a 4-hour day pays 4 hours', () => {
     const result = calculatePay({ ...base, entries: [worked('2026-09-02', '4')] });
     expect(result.lines).toEqual([
       { type: 'HOURS', place: 'Site A', kind: 'NORMAL', hours: '4.00', multiplier: '1.00', amount: '133333.33' },
-      { type: 'ROUNDING', step: '1000.00', amount: '-333.33' },
     ]);
-    expect(result.total).toBe('133000.00');
+    expect(result.total).toBe('133333.33');
   });
 
   it('explains every amount of a mixed month', () => {
@@ -351,9 +349,9 @@ describe('calculatePay', () => {
 
   it('uses the admin override of working days for the hourly rate', () => {
     const result = calculatePay({ ...base, workingDays: workingDays(september, 26), entries: month('9') });
-    // 7 500 000 × 225 ÷ (26 × 9) = 7 211 538.4615…, rounded to 7 212 000
+    // 7 500 000 × 225 ÷ (26 × 9) = 7 211 538.4615…
     expect(result.lines[0]).toMatchObject({ kind: 'NORMAL', amount: '7211538.46' });
-    expect(result.total).toBe('7212000.00');
+    expect(result.total).toBe('7211538.46');
     expect(result.hourlyRate.rounded).toBe('32051.28');
     expect(result.hourlyRate.workingDays).toEqual({ calculated: 25, override: 26, effective: 26 });
   });
@@ -373,24 +371,6 @@ describe('calculatePay', () => {
     const result = calculatePay({ ...base, entries: month('9'), travel: { kind: 'MONTHLY_AMOUNT', amount: '350000' } });
     expect(result.lines.at(-1)).toEqual({ type: 'TRAVEL_MONTHLY', amount: '350000.00' });
     expect(result.total).toBe('7850000.00');
-  });
-
-  it('rounds the total to the nearest rounding step, halves up', () => {
-    const pay = (hours: string, payRoundingStep = '1000') =>
-      calculatePay({ ...base, settings: { ...settings, payRoundingStep }, entries: [worked('2026-09-02', hours)] });
-    expect(pay('0.01').total).toBe('0.00'); // 333.33
-    expect(pay('9').total).toBe('300000.00'); // already a multiple: no ROUNDING line
-    expect(pay('9').lines).toHaveLength(1);
-    expect(pay('1.5').total).toBe('50000.00');
-    expect(pay('0.03').total).toBe('1000.00'); // 1 000.00 exactly
-    expect(pay('0.02').total).toBe('1000.00'); // 666.67
-    expect(pay('4', '0.01').total).toBe('133333.33');
-    expect(() => pay('9', '0')).toThrow(RangeError);
-
-    // Exactly half a step rounds up.
-    const half = calculatePay({ ...base, entries: [], travel: { kind: 'MONTHLY_AMOUNT', amount: '500' } });
-    expect(half.lines.at(-1)).toEqual({ type: 'ROUNDING', step: '1000.00', amount: '500.00' });
-    expect(half.total).toBe('1000.00');
   });
 
   it('rejects settings it cannot pay from', () => {
@@ -638,16 +618,71 @@ describe('monthly totals', () => {
     expect(ok.total).toBe('7500000.00');
   });
 
-  it('adds up a month paid in parts, each rounded under its own rules', () => {
-    // Half the month under 9-hour days, the rest under 8-hour days with a 500 rounding step.
+  it('adds up a month paid in parts without rounding them on their own', () => {
+    // Half the month under 9-hour days, the rest under 8-hour days.
     const first = calculatePay({ ...base, totals: at({ ...FULL, normalHours: '100', workdaysWorked: 12 }) });
     const second = calculatePay({
       ...base,
-      settings: { ...settings, normalHoursPerDay: '8', payRoundingStep: '500' },
-      totals: at({ ...FULL, normalHours: '96', workdaysWorked: 12 }, 'Site B'),
+      settings: { ...settings, normalHoursPerDay: '8' },
+      totals: at({ ...FULL, normalHours: '95', workdaysWorked: 12 }, 'Site B'),
     });
-    // 100 h × 7 500 000 ÷ 225 = 3 333 333.33 → 3 333 000; 96 h × 7 500 000 ÷ 200 = 3 600 000
-    expect([first.total, second.total]).toEqual(['3333000.00', '3600000.00']);
-    expect(totalOfParts([first, second])).toBe('6933000.00');
+    // 100 h × 7 500 000 ÷ 225 = 3 333 333.33; 95 h × 7 500 000 ÷ 200 = 3 562 500
+    expect([first.total, second.total]).toEqual(['3333333.33', '3562500.00']);
+    // Rounded once: 6 895 833.33 → 6 896 000
+    expect(payOut([first, second], [], '1000')).toEqual({
+      earned: '6895833.33',
+      adjustments: [],
+      rounding: { step: '1000.00', amount: '166.67' },
+      total: '6896000.00',
+    });
+  });
+});
+
+describe('payOut', () => {
+  const base = { monthlySalary: '7500000', workingDays: workingDays(september), calendar: september, settings };
+  const earned = (amount: string) => calculatePay({ ...base, entries: [], travel: { kind: 'MONTHLY_AMOUNT', amount } });
+
+  it('adds bonuses and takes off advances and deductions, then rounds once', () => {
+    const result = payOut(
+      [earned('7500000')],
+      [
+        { id: 'b', type: 'BONUS', amount: '500000' },
+        { id: 'a', type: 'ADVANCE', amount: '2000000' },
+        { id: 'd', type: 'DEDUCTION', amount: '123456.78' },
+      ],
+      '1000',
+    );
+    expect(result).toEqual({
+      earned: '7500000.00',
+      adjustments: [
+        { id: 'b', type: 'BONUS', amount: '500000.00' },
+        { id: 'a', type: 'ADVANCE', amount: '-2000000.00' },
+        { id: 'd', type: 'DEDUCTION', amount: '-123456.78' },
+      ],
+      // 5 876 543.22 → 5 877 000
+      rounding: { step: '1000.00', amount: '456.78' },
+      total: '5877000.00',
+    });
+  });
+
+  it('rounds to the nearest step, halves up, with no rounding line when nothing changes', () => {
+    const total = (amount: string, step = '1000') => payOut([earned(amount)], [], step);
+    expect(total('333.33').total).toBe('0.00');
+    expect(total('300000')).toMatchObject({ rounding: null, total: '300000.00' });
+    expect(total('500')).toMatchObject({ rounding: { step: '1000.00', amount: '500.00' }, total: '1000.00' });
+    expect(total('499.99').total).toBe('0.00');
+    expect(total('133333.33', '0.01')).toMatchObject({ rounding: null, total: '133333.33' });
+    expect(() => total('9', '0')).toThrow(RangeError);
+  });
+
+  it('goes below zero when advances exceed what was earned: the worker owes it', () => {
+    const result = payOut([earned('1000000')], [{ id: 'a', type: 'ADVANCE', amount: '1500500' }], '1000');
+    // −500 500 → −501 000 (halves away from zero)
+    expect(result).toMatchObject({ rounding: { amount: '-500.00' }, total: '-501000.00' });
+  });
+
+  it('refuses amounts that are not positive', () => {
+    expect(() => payOut([earned('1')], [{ id: 'a', type: 'BONUS', amount: '0' }], '1000')).toThrow(RangeError);
+    expect(() => payOut([earned('1')], [{ id: 'a', type: 'BONUS', amount: '-5' }], '1000')).toThrow(RangeError);
   });
 });

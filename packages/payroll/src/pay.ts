@@ -25,8 +25,6 @@ export interface PaySettings {
   normalHoursPerDay: string;
   multipliers: Record<HourKind, string>;
   absence: Record<AbsenceType, AbsenceRule>;
-  /** The total is rounded to the nearest multiple of this (e.g. "1000" soʻm). */
-  payRoundingStep: string;
 }
 
 /** A travel route and its pay per day worked. */
@@ -110,13 +108,7 @@ export type PayLine =
       amountPerDay: string;
       amount: string;
     }
-  | { type: 'TRAVEL_MONTHLY'; amount: string }
-  | {
-      type: 'ROUNDING';
-      step: string;
-      /** rounded total − sum of the other lines (may be negative) */
-      amount: string;
-    };
+  | { type: 'TRAVEL_MONTHLY'; amount: string };
 
 interface PayResultBase {
   /** hourly rate = monthlySalary ÷ (workingDays.effective × normalHoursPerDay) */
@@ -131,7 +123,7 @@ interface PayResultBase {
     rounded: string;
   };
   lines: PayLine[];
-  /** Sum of the line amounts, a multiple of settings.payRoundingStep. */
+  /** Sum of the line amounts. Not rounded: only the amount to pay out is (payOut). */
   total: string;
 }
 
@@ -156,8 +148,8 @@ const MAX_DAY = BigInt(MAX_HOURS_PER_DAY) * SCALE;
  * - worked hours: hours × hourly rate × the multiplier for their kind
  * - paid absences: absence days × hours paid per day × hourly rate
  * - travel: working days worked × the route's amount per day, or the monthly amount
- * - the total is rounded to the nearest payRoundingStep (halves up), shown as a
- *   ROUNDING line.
+ * The total is not rounded: payOut rounds the amount to pay out once, after the parts
+ * of a split month and the adjustments are added up.
  * Hours, absences and travel days are charged to the place they were entered at;
  * summarizeUnits explains how a day worked at several places is split.
  * Each line is computed as one exact fraction and rounded once to 0.01
@@ -261,13 +253,7 @@ export function calculatePay(input: PayInput): PayResult {
     lines.push({ type: 'TRAVEL_MONTHLY', amount: fromUnits(nonNegative(travel.amount, 'travel.amount')) });
   }
 
-  const step = toUnits(settings.payRoundingStep, 'payRoundingStep');
-  if (step <= 0n) throw new RangeError('payRoundingStep must be more than 0');
-  const exact = lines.reduce((sum, line) => sum + toUnits(line.amount), 0n);
-  const total = divRound(exact, step) * step;
-  if (total !== exact) {
-    lines.push({ type: 'ROUNDING', step: fromUnits(step), amount: fromUnits(total - exact) });
-  }
+  const total = lines.reduce((sum, line) => sum + toUnits(line.amount), 0n);
   const base: PayResultBase = {
     hourlyRate: {
       monthlySalary: fromUnits(salary),
@@ -281,15 +267,6 @@ export function calculatePay(input: PayInput): PayResult {
   return daily
     ? { source: 'DAILY', summary: daily.summary, ...base }
     : { source: 'TOTALS', totals: (input as TotalsPayInput).totals, ...base };
-}
-
-/**
- * A worker's month paid in parts, one per rule set their placements fall under
- * (AGENTS.md: split by placement). Each part is computed and rounded under its own
- * rules; the month's total is their sum.
- */
-export function totalOfParts(parts: readonly PayResult[]): string {
-  return fromUnits(parts.reduce((sum, part) => sum + toUnits(part.total), 0n));
 }
 
 function nonNegative(value: string, what: string): Units {

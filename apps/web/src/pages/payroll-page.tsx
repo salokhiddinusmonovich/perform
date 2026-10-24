@@ -22,17 +22,20 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
-import { canEnterMonthlyHours, canLockMonths, canUnlockMonths, seesPay, useMe, type Me } from '@/lib/auth';
+import { canAddAdjustments, canEnterMonthlyHours, canLockMonths, canUnlockMonths, seesPay, useMe, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
 import { workerName } from '@/lib/organisation';
 import {
+  ADJUSTMENTS_KEY,
   currentMonth,
+  isNegative,
   MONTHLY_HOURS_KEY,
   PAYROLL_KEY,
   usePayroll,
   type LockItem,
   type PayrollMonth,
   type PayrollPart,
+  type PayrollPayOut,
   type PayrollProblem,
   type PayrollWorker,
 } from '@/lib/payroll';
@@ -101,7 +104,10 @@ function PayrollView({ me }: { me: Me }) {
         header: t('payroll.pay'),
         cell: ({ row }) =>
           row.original.total !== null ? (
-            <span className="font-semibold tabular-nums">{format.money(row.original.total, currency)}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold tabular-nums">{format.money(row.original.total, currency)}</span>
+              {isNegative(row.original.total) && <StatusBadge tone="warning">{t('payroll.owes')}</StatusBadge>}
+            </div>
           ) : (
             <StatusBadge tone="warning">{t('payroll.problemCount', { count: row.original.problems.length })}</StatusBadge>
           ),
@@ -121,11 +127,12 @@ function PayrollView({ me }: { me: Me }) {
   );
 
   const monthName = format.month(month.year, month.month);
-  /** After locking or unlocking: payroll, hours and settings pages show the month's state. */
+  /** After locking or unlocking: payroll, hours, adjustments and settings pages show the month's state. */
   const refresh = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: PAYROLL_KEY }),
       queryClient.invalidateQueries({ queryKey: MONTHLY_HOURS_KEY }),
+      queryClient.invalidateQueries({ queryKey: ADJUSTMENTS_KEY }),
       queryClient.invalidateQueries({ queryKey: ['working-days'] }),
     ]);
 
@@ -316,9 +323,7 @@ function LockHistory({ locks, currency }: { locks: LockItem[]; currency: string 
                           {c.before === null ? t('payroll.notInLock') : format.money(c.before, currency)} →{' '}
                           {c.after === null ? t('payroll.notInLock') : format.money(c.after, currency)}
                           {c.difference !== null && (
-                            <span className="ms-2 text-muted-foreground">
-                              ({signedMoney(c.difference, (v) => format.money(v, currency))})
-                            </span>
+                            <span className="ms-2 text-muted-foreground">({format.signedMoney(c.difference, currency)})</span>
                           )}
                         </span>
                       </li>
@@ -339,11 +344,6 @@ function LockHistory({ locks, currency }: { locks: LockItem[]; currency: string 
       </CardContent>
     </Card>
   );
-}
-
-/** "+300 000 soʻm" or "−300 000 soʻm" from the API's difference (a decimal string). */
-function signedMoney(difference: string, money: (value: string) => string): string {
-  return difference.startsWith('-') ? `−${money(difference.slice(1))}` : `+${money(difference)}`;
 }
 
 /** One worker's month: every amount with the hours, rate and rule it came from. */
@@ -392,10 +392,12 @@ function PayslipDialog({
             {worker.parts.map((part, i) => (
               <PartView key={i} part={part} currency={currency} showRules={worker.parts.length > 1 || part.ruleSetSiteName !== null} />
             ))}
-            <div className="flex items-baseline justify-between border-t pt-4">
-              <span className="font-medium">{t('payroll.monthTotal')}</span>
-              <span className="text-lg font-semibold tabular-nums">{format.money(worker.total!, currency)}</span>
-            </div>
+            <PayOutView payOut={worker.payOut!} currency={currency} showEarned={worker.parts.length > 1} />
+            {canAddAdjustments(me) && (
+              <Link to="/adjustments" className="text-sm underline underline-offset-4">
+                {t('payroll.goToAdjustments')}
+              </Link>
+            )}
           </>
         )}
       </DialogContent>
@@ -471,8 +473,6 @@ function PartView({ part, currency, showRules }: { part: PayrollPart; currency: 
           : t('payroll.lines.travelNoRoute', { count: line.days });
       case 'TRAVEL_MONTHLY':
         return t('payroll.lines.travelMonthly');
-      case 'ROUNDING':
-        return t('payroll.lines.rounding', { step: format.money(line.step, currency) });
     }
   };
 
@@ -513,6 +513,67 @@ function PartView({ part, currency, showRules }: { part: PayrollPart; currency: 
           <span>{t('payroll.partTotal')}</span>
           <span className="font-medium tabular-nums">{format.money(result.total, currency)}</span>
         </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * From earned pay to the amount to pay out: the adjustments of the month and the one
+ * rounding (AGENTS.md: Adjustments). Earned pay gets its own line when the month has
+ * several parts; otherwise the part's lines above already add up to it.
+ */
+function PayOutView({ payOut, currency, showEarned }: { payOut: PayrollPayOut; currency: string; showEarned: boolean }) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const owes = isNegative(payOut.total);
+  const lines = [
+    ...(showEarned ? [{ key: 'earned', label: t('payroll.earned'), note: null, amount: payOut.earned, signed: false }] : []),
+    ...payOut.adjustments.map((a) => ({
+      key: a.id,
+      label: t(`adjustments.types.${a.type}`),
+      note: a.note,
+      amount: a.amount,
+      signed: true,
+    })),
+    ...(payOut.rounding
+      ? [
+          {
+            key: 'rounding',
+            label: t('payroll.lines.rounding', { step: format.money(payOut.rounding.step, currency) }),
+            note: null,
+            amount: payOut.rounding.amount,
+            signed: true,
+          },
+        ]
+      : []),
+  ];
+  return (
+    <section className="space-y-3 border-t pt-4">
+      {lines.length > 0 && (
+        <ul className="divide-y rounded-md border text-sm">
+          {lines.map((line) => (
+            <li key={line.key} className="flex items-start justify-between gap-4 px-3 py-2">
+              <span>
+                {line.label}
+                {line.note && <span className="block text-muted-foreground">{line.note}</span>}
+              </span>
+              <span className="shrink-0 tabular-nums">
+                {line.signed ? format.signedMoney(line.amount, currency) : format.money(line.amount, currency)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-baseline justify-between">
+        <span className="font-medium">{t('payroll.payOutTotal')}</span>
+        <span className="text-lg font-semibold tabular-nums">{format.money(payOut.total, currency)}</span>
+      </div>
+      {owes && (
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          <StatusBadge tone="warning">{t('payroll.owes')}</StatusBadge>
+          <span className="text-muted-foreground">{t('payroll.owesHint')}</span>
+        </p>
       )}
     </section>
   );

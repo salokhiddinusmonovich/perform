@@ -26,6 +26,7 @@
     "plans": "Paketler",
     "payroll": "Maaş",
     "monthlyHours": "Aylık saatler",
+    "adjustments": "Ek ödeme ve kesintiler",
     "payrollRun": "Maaş hesabı"
   },
   "settings": {
@@ -284,6 +285,7 @@
     "amountRange": "0 veya daha fazla olmalı",
     "workerLimitRange": "1 ile 1 000 000 arası",
     "salaryRange": "0'dan büyük olmalı",
+    "adjustmentRange": "0'dan büyük olmalı",
     "monthHoursRange": "0 ile 744 arasında olmalı",
     "daysRange": "0 ile 31 arasında olmalı",
     "normalAboveDaysWorked": "Çalışılan iş günü × günlük normal saatten fazla",
@@ -399,6 +401,11 @@
       "notInMonth": "İşçi bu ay bu şantiyede çalışmadı.",
       "unchanged": "Bu ay için tam olarak aynı saatler zaten girildi."
     },
+    "adjustment": {
+      "notInMonth": "İşçi bu ay çalışmadı.",
+      "notFound": "Böyle bir kayıt yok.",
+      "alreadyCancelled": "Bu kayıt zaten iptal edildi."
+    },
     "hours": {
       "otherSource": "İşçinin bu ay için günlük puantajı var. Bir ayın saatleri yalnızca tek bir kaynaktan gelir."
     }
@@ -474,8 +481,8 @@
       "MONTHLY_AMOUNT": "Muhasebeci her ay her işçi için yol ücreti tutarını girer."
     },
     "rounding": "Yuvarlama",
-    "roundingStep": "Net ücret yuvarlama adımı ({{currency}})",
-    "roundingHint": "Net ücret bu tutarın en yakın katına yuvarlanır (yarım yukarı). Fark ayrı bir satırda gösterilir.",
+    "roundingStep": "Ödenecek tutarı yuvarlama adımı ({{currency}})",
+    "roundingHint": "Ödenecek tutar (ücret ve primler, avans ve kesintiler düşülerek) bu tutarın en yakın katına bir kez yuvarlanır (yarım yukarı). Kendi kuralları olan şantiyeler dahil tüm şirket için geçerlidir. Fark ayrı bir satırda gösterilir.",
     "confirmDelete": {
       "title": "Bu kurallar silinsin mi?",
       "description": "Başlangıcı {{month}} olan kurallar silinecek. O aydan itibaren önceki kurallar (başlangıç: {{previous}}) geçerli olacak.",
@@ -843,6 +850,40 @@
     "noteHint": "İsteğe bağlı, örneğin: neden düzeltildi",
     "history": "Kayıtlar"
   },
+  "adjustments": {
+    "title": "Ek ödeme ve kesintiler",
+    "description": "Her işçinin ayı için primler, avanslar ve kesintiler",
+    "entries": "Kayıtlar",
+    "net": "Toplam",
+    "editFor": "Ek ödeme ve kesintiler: {{name}}",
+    "viewFor": "Görüntüle: {{name}}",
+    "emptyTitle": "Bu ay işçi yok",
+    "emptyDescription": "Ayın en az bir gününde çalışan işçiler burada görünür.",
+    "none": "Yok",
+    "types": {
+      "BONUS": "Prim",
+      "ADVANCE": "Avans",
+      "DEDUCTION": "Kesinti"
+    },
+    "dialogTitle": "{{month}} ek ödeme ve kesintileri",
+    "type": "Tür",
+    "chooseType": "Tür seçin",
+    "amount": "Tutar ({{currency}})",
+    "noteHint": "İsteğe bağlı, örneğin primin nedeni veya avans makbuzu numarası.",
+    "addHint": "Prim ücrete eklenir, avans ve kesinti düşülür. Tutarı eksi işareti olmadan girin.",
+    "add": "Ekle",
+    "added": "Kayıt eklendi",
+    "lockedHint": "Ay kilitli, kayıt eklenemez veya iptal edilemez.",
+    "viewOnlyHint": "Kayıtları yalnızca sahip, yönetici veya muhasebeci ekleyip iptal edebilir.",
+    "thisMonth": "Bu ay",
+    "cancelled": "İptal edildi",
+    "cancelFor": "Kaydı iptal et: {{type}}",
+    "cancelledToast": "Kayıt iptal edildi",
+    "cancelTitle": "{{name}} için {{amount}} tutarındaki «{{type}}» iptal edilsin mi?",
+    "cancelHint": "Kayıt listede «iptal edildi» olarak kalır ve artık ücrete sayılmaz. Neden denetim kaydına yazılır.",
+    "cancelReason": "Neden",
+    "cancelSubmit": "Kaydı iptal et"
+  },
   "payroll": {
     "title": "Maaş hesabı",
     "description": "Her işçinin aylık maaşı ve her tutarın nereden geldiği",
@@ -860,7 +901,6 @@
     "emptyDescription": "Ayın en az bir günü çalışan işçiler burada hesaplanır.",
     "cannotPay": "Henüz hesaplanamıyor:",
     "goToMonthlyHours": "Aylık saatlere git",
-    "monthTotal": "Ay toplamı",
     "partTotal": "Bu bölüm için",
     "allPlacements": "Tüm görevlendirmeler birlikte",
     "problems": {
@@ -869,6 +909,7 @@
       "twoSources": "Bu ay için hem günlük puantaj hem aylık saatler var. Birini bırakın.",
       "placementWithoutHours": "{{site}} ({{date}} itibarıyla) için saat girilmedi.",
       "noRules": "Bu ay için ödeme kuralı yok: {{sites}}.",
+      "noCompanyRules": "Şirketin bu ay için ödeme kuralları yok. Yuvarlama adımı bu kurallarda.",
       "totalsInvalid": "Aylık saatler aya uymuyor (ödeme kuralları değişmiş olabilir):",
       "invalidHours": "Günlük puantaj kayıtları birbiriyle çelişiyor."
     },
@@ -922,6 +963,11 @@
     "lockNumber": "Kilitleme #{{number}}",
     "noChanges": "Önceki kilitlemeden fark yok.",
     "notInLock": "yok",
-    "unlockedBadge": "Kilidi açıldı"
+    "unlockedBadge": "Kilidi açıldı",
+    "owes": "Borçlu",
+    "owesHint": "Avans ve kesintiler bu ayın ücretinden fazla. Hiçbir şey kendiliğinden sonraki aya aktarılmaz.",
+    "earned": "Hak edilen",
+    "payOutTotal": "Ödenecek",
+    "goToAdjustments": "Ek ödeme ve kesintilere git"
   }
 }

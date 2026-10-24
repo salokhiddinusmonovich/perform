@@ -4,6 +4,7 @@ import {
   CalendarCheck,
   CalendarDays,
   Clock,
+  Coins,
   CreditCard,
   HardHat,
   LayoutDashboard,
@@ -47,6 +48,7 @@ export const NAV_SECTIONS: NavSection[] = [
     titleKey: 'nav.payroll',
     items: [
       { path: '/monthly-hours', labelKey: 'nav.monthlyHours', icon: Clock, visible: canEnterMonthlyHours },
+      { path: '/adjustments', labelKey: 'nav.adjustments', icon: Coins, visible: seesPay },
       { path: '/payroll', labelKey: 'nav.payrollRun', icon: Wallet, visible: seesPay },
     ],
   },

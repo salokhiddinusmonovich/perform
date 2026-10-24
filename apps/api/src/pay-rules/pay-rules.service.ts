@@ -23,10 +23,16 @@ export interface PayRulesVersionView {
   setAt: Date;
 }
 
+/**
+ * Rules as stored. Rounding is company-wide (AGENTS.md: Pay model): only the company
+ * default rule set has a rounding step; site rule sets have null.
+ */
+export type StoredPayRules = Omit<PayRules, 'payRoundingStep'> & { payRoundingStep: string | null };
+
 /** One month of a rule set, with everything its working days were worked out from. */
 export interface MonthRules {
   /** The version that applies, or null when no rules are set for the month yet. */
-  rules: { fromYear: number; fromMonth: number; settings: PayRules } | null;
+  rules: { fromYear: number; fromMonth: number; settings: StoredPayRules } | null;
   calendar: CalendarDay[] | null;
   workingDays: WorkingDays | null;
 }
@@ -70,7 +76,7 @@ export class PayRulesService {
     return rows.map((row) => ({
       fromYear: row.fromYear,
       fromMonth: row.fromMonth,
-      rules: toPayRules(row),
+      rules: defaultRules(row),
       setBy: row.setBy,
       setAt: row.setAt,
     }));
@@ -102,7 +108,7 @@ export class PayRulesService {
           data: {
             fromYear: from.year,
             fromMonth: from.month,
-            before: before ? (toPayRules(before) as unknown as Prisma.InputJsonObject) : null,
+            before: before ? (defaultRules(before) as unknown as Prisma.InputJsonObject) : null,
             after: rules as unknown as Prisma.InputJsonObject,
           },
         },
@@ -133,7 +139,7 @@ export class PayRulesService {
           data: {
             fromYear: from.year,
             fromMonth: from.month,
-            before: toPayRules(row) as unknown as Prisma.InputJsonObject,
+            before: defaultRules(row) as unknown as Prisma.InputJsonObject,
           },
         },
         tx,
@@ -201,7 +207,14 @@ export class PayRulesService {
   }
 }
 
-function toPayRules(row: RulesRow): PayRules {
+/** A version of the company default rule set, which always has a rounding step. */
+function defaultRules(row: RulesRow): PayRules {
+  const rules = toPayRules(row);
+  if (rules.payRoundingStep === null) throw new Error(`Rules ${row.id} of a company default rule set have no rounding step`);
+  return { ...rules, payRoundingStep: rules.payRoundingStep };
+}
+
+function toPayRules(row: RulesRow): StoredPayRules {
   return {
     restWeekdays: [...row.restWeekdays].sort((a, b) => a - b),
     normalHoursPerDay: row.normalHoursPerDay.toString(),
@@ -214,7 +227,7 @@ function toPayRules(row: RulesRow): PayRules {
       TRAVEL: { paid: row.travelDayPaid, hoursPerDay: row.travelDayHoursPerDay?.toString() ?? null },
     },
     travelPayMode: row.travelPayMode,
-    payRoundingStep: row.payRoundingStep.toString(),
+    payRoundingStep: row.payRoundingStep?.toString() ?? null,
   };
 }
 

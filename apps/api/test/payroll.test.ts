@@ -64,6 +64,34 @@ async function member(companyId: string, role: Role) {
   return { user, agent: await loginAs(ctx.app, user.email!) };
 }
 
+/**
+ * Own pay rules for a site (8-hour days), written directly: there is no site rules API
+ * yet. Like every site rule set, it has no rounding step.
+ */
+async function siteRules(companyId: string, siteId: string) {
+  const user = await createUser(ctx.prisma);
+  const set = await ctx.prisma.payrollRuleSet.create({ data: { companyId, siteId } });
+  await ctx.prisma.payrollRules.create({
+    data: {
+      companyId,
+      ruleSetId: set.id,
+      fromYear: 2026,
+      fromMonth: 1,
+      restWeekdays: [7],
+      normalHoursPerDay: '8',
+      overtimeMultiplier: '1.5',
+      restDayMultiplier: '2',
+      holidayMultiplier: '2',
+      leavePaid: true,
+      sickPaid: true,
+      sickHoursPerDay: '8',
+      travelDayPaid: false,
+      travelPayMode: 'NONE',
+      setById: user.id,
+    },
+  });
+}
+
 /** A daily timesheet entry, written directly: there is no hour entry API yet. */
 async function dailyEntry(companyId: string, assignmentId: string, siteId: string, date: string) {
   const period =
@@ -180,33 +208,12 @@ describe('payroll', () => {
     expect(w.parts[0].result.summary).toMatchObject({ normalHours: '9.00', workdaysWorked: 1 });
   });
 
-  it('pays a worker who moved to a site with its own rules in two parts', async () => {
+  it('pays a worker who moved to a site with its own rules in two parts, rounded once', async () => {
     const { company: c, agent, siteB, workerId, placementA } = await company();
     await agent.post(`/api/workers/${workerId}/placements`).send({ siteId: siteB, from: '2026-09-16', shift: 'DAY' }).expect(204);
     const placementB = (await agent.get(`/api/workers/${workerId}`).expect(200)).body.placement.id as string;
-    // Site B's own rules: 8-hour days, rounded to 500.
-    const user = await createUser(ctx.prisma);
-    const set = await ctx.prisma.payrollRuleSet.create({ data: { companyId: c.id, siteId: siteB } });
-    await ctx.prisma.payrollRules.create({
-      data: {
-        companyId: c.id,
-        ruleSetId: set.id,
-        fromYear: 2026,
-        fromMonth: 1,
-        restWeekdays: [7],
-        normalHoursPerDay: '8',
-        overtimeMultiplier: '1.5',
-        restDayMultiplier: '2',
-        holidayMultiplier: '2',
-        leavePaid: true,
-        sickPaid: true,
-        sickHoursPerDay: '8',
-        travelDayPaid: false,
-        travelPayMode: 'NONE',
-        payRoundingStep: '500',
-        setById: user.id,
-      },
-    });
+    // Site B's own rules: 8-hour days.
+    await siteRules(c.id, siteB);
 
     await agent.post(`/api/monthly-hours/2026/9/${placementA}`).send({ ...FULL_MONTH, normalHours: '100', workdaysWorked: 12 }).expect(201);
     // Placement B has no hours yet: missing data is never guessed.
@@ -217,15 +224,22 @@ describe('payroll', () => {
     await agent.post(`/api/monthly-hours/2026/9/${placementB}`).send({ ...FULL_MONTH, normalHours: '97', workdaysWorked: 12 }).expect(400);
     await agent.post(`/api/monthly-hours/2026/9/${placementB}`).send({ ...FULL_MONTH, normalHours: '96', workdaysWorked: 12 }).expect(201);
     const [w] = (await agent.get('/api/payroll/2026/9').expect(200)).body.workers;
-    // A: 100 h × 7 500 000 ÷ (25 × 9) = 3 333 333.33 → 3 333 000. B: 96 h × 7 500 000 ÷ (25 × 8) = 3 600 000.
+    // A: 100 h × 7 500 000 ÷ (25 × 9) = 3 333 333.33. B: 96 h × 7 500 000 ÷ (25 × 8) = 3 600 000.
     expect(w.parts.map((p: { ruleSetSiteName: string | null; result: { total: string; hourlyRate: { rounded: string } } }) => [
       p.ruleSetSiteName,
       p.result.hourlyRate.rounded,
       p.result.total,
     ])).toEqual([
-      [null, '33333.33', '3333000.00'],
+      [null, '33333.33', '3333333.33'],
       ['Site B', '37500.00', '3600000.00'],
     ]);
+    // The parts aren't rounded on their own: 6 933 333.33 is rounded once, with the company step.
+    expect(w.payOut).toEqual({
+      earned: '6933333.33',
+      adjustments: [],
+      rounding: { step: '1000.00', amount: '-333.33' },
+      total: '6933000.00',
+    });
     expect(w.total).toBe('6933000.00');
   });
 
@@ -289,6 +303,171 @@ describe('payroll', () => {
     const payroll = (await a.agent.get('/api/payroll/2026/9').expect(200)).body;
     expect(payroll.workers.map((w: { worker: { id: string } }) => w.worker.id)).toEqual([a.workerId]);
     expect(await ctx.prisma.monthlyHours.count()).toBe(1);
+  });
+});
+
+describe('adjustments', () => {
+  const url = (workerId: string) => `/api/adjustments/2026/9/${workerId}`;
+  const hoursUrl = (placementId: string) => `/api/monthly-hours/2026/9/${placementId}`;
+
+  it('lets an accountant add bonuses, advances and deductions that payroll adds up and rounds once', async () => {
+    const { company: c, agent, placementA, workerId } = await company();
+    const accountant = await member(c.id, 'ACCOUNTANT');
+    await agent.post(hoursUrl(placementA)).send(FULL_MONTH).expect(201);
+    const bonus = (await accountant.agent.post(url(workerId)).send({ type: 'BONUS', amount: '500 000', note: 'Good work' }).expect(201)).body.id;
+    const advance = (await accountant.agent.post(url(workerId)).send({ type: 'ADVANCE', amount: '2000000' }).expect(201)).body.id;
+    const deduction = (await accountant.agent.post(url(workerId)).send({ type: 'DEDUCTION', amount: '123456.78' }).expect(201)).body.id;
+
+    const month = (await accountant.agent.get('/api/adjustments/2026/9').expect(200)).body;
+    expect(month).toMatchObject({ year: 2026, month: 9, locked: false });
+    expect(month.rows).toEqual([
+      {
+        worker: expect.objectContaining({ id: workerId, lastName: 'Testov' }),
+        siteNames: ['Site A'],
+        adjustments: [
+          expect.objectContaining({ id: deduction, type: 'DEDUCTION', amount: '123456.78', signedAmount: '-123456.78', note: null, cancelled: null }),
+          expect.objectContaining({ id: advance, type: 'ADVANCE', amount: '2000000' }),
+          expect.objectContaining({ id: bonus, type: 'BONUS', amount: '500000', signedAmount: '500000.00', note: 'Good work', setBy: { fullName: accountant.user.fullName } }),
+        ],
+        net: '-1623456.78',
+      },
+    ]);
+
+    const [w] = (await agent.get('/api/payroll/2026/9').expect(200)).body.workers;
+    // 7 500 000 + 500 000 − 2 000 000 − 123 456.78 = 5 876 543.22 → 5 877 000
+    expect(w.payOut).toEqual({
+      earned: '7500000.00',
+      adjustments: [
+        { id: bonus, type: 'BONUS', amount: '500000.00', note: 'Good work' },
+        { id: advance, type: 'ADVANCE', amount: '-2000000.00', note: null },
+        { id: deduction, type: 'DEDUCTION', amount: '-123456.78', note: null },
+      ],
+      rounding: { step: '1000.00', amount: '456.78' },
+      total: '5877000.00',
+    });
+    expect(w.total).toBe('5877000.00');
+
+    const log = await ctx.prisma.auditLog.findMany({ where: { action: 'adjustment.add' }, orderBy: { createdAt: 'asc' } });
+    expect(log).toHaveLength(3);
+    expect(log[0]).toMatchObject({
+      actorUserId: accountant.user.id,
+      entityType: 'Worker',
+      entityId: workerId,
+      data: { adjustmentId: bonus, year: 2026, month: 9, type: 'BONUS', amount: '500000', note: 'Good work' },
+    });
+  });
+
+  it('cancels a mistake with a reason: it stays visible and no longer counts', async () => {
+    const { company: c, agent, placementA, workerId } = await company();
+    const accountant = await member(c.id, 'ACCOUNTANT');
+    await agent.post(hoursUrl(placementA)).send(FULL_MONTH).expect(201);
+    const id = (await accountant.agent.post(url(workerId)).send({ type: 'BONUS', amount: '500000' }).expect(201)).body.id;
+
+    const noReason = await accountant.agent.post(`/api/adjustments/${id}/cancel`).send({ reason: ' ' }).expect(400);
+    expect(noReason.body.issues).toEqual([{ path: 'reason', message: 'validation.required' }]);
+    await accountant.agent.post(`/api/adjustments/${id}/cancel`).send({ reason: 'Typed twice' }).expect(204);
+    const again = await agent.post(`/api/adjustments/${id}/cancel`).send({ reason: 'Again' }).expect(409);
+    expect(again.body.code).toBe('adjustment.alreadyCancelled');
+
+    const [row] = (await agent.get('/api/adjustments/2026/9').expect(200)).body.rows;
+    expect(row.net).toBe('0.00');
+    expect(row.adjustments).toEqual([
+      expect.objectContaining({
+        id,
+        amount: '500000',
+        cancelled: { reason: 'Typed twice', by: { fullName: accountant.user.fullName }, at: expect.any(String) },
+      }),
+    ]);
+    const [w] = (await agent.get('/api/payroll/2026/9').expect(200)).body.workers;
+    expect(w.payOut).toMatchObject({ adjustments: [], total: '7500000.00' });
+    expect(await ctx.prisma.adjustment.count()).toBe(1);
+    expect((await ctx.prisma.auditLog.findFirstOrThrow({ where: { action: 'adjustment.cancel' } })).data).toMatchObject({
+      adjustmentId: id,
+      type: 'BONUS',
+      amount: '500000',
+      reason: 'Typed twice',
+    });
+  });
+
+  it("refuses adjustments outside the worker's placements, in a locked month, or with a wrong amount", async () => {
+    const { company: c, agent, placementA, workerId, siteA } = await company();
+    const invalid = await agent.post(url(workerId)).send({ type: 'TRAVEL', amount: '0' }).expect(400);
+    expect(invalid.body.issues).toEqual([
+      { path: 'type', message: 'validation.required' },
+      { path: 'amount', message: 'validation.adjustmentRange' },
+    ]);
+    const later = await hire(agent, siteA, 'Later', '2026-10-05');
+    expect((await agent.post(url(later)).send({ type: 'BONUS', amount: '1' }).expect(409)).body.code).toBe('adjustment.notInMonth');
+    const nobody = '00000000-0000-4000-8000-000000000000';
+    expect((await agent.post(url(nobody)).send({ type: 'BONUS', amount: '1' }).expect(404)).body.code).toBe('worker.notFound');
+
+    const id = (await agent.post(url(workerId)).send({ type: 'BONUS', amount: '1000' }).expect(201)).body.id;
+    await agent.post(hoursUrl(placementA)).send(FULL_MONTH).expect(201);
+    await agent.post('/api/payroll/2026/9/lock').expect(201);
+    expect((await agent.post(url(workerId)).send({ type: 'BONUS', amount: '1' }).expect(409)).body.code).toBe('period.locked');
+    expect((await agent.post(`/api/adjustments/${id}/cancel`).send({ reason: 'Late' }).expect(409)).body.code).toBe('period.locked');
+    expect((await agent.get('/api/adjustments/2026/9').expect(200)).body.locked).toBe(true);
+    expect(await ctx.prisma.adjustment.count({ where: { companyId: c.id } })).toBe(1);
+    expect(await ctx.prisma.adjustmentCancel.count()).toBe(0);
+  });
+
+  it('shows pay out below zero when advances exceed what was earned, and still locks', async () => {
+    const { agent, placementA, workerId } = await company();
+    await agent.post(hoursUrl(placementA)).send({ ...FULL_MONTH, normalHours: '90', workdaysWorked: 10 }).expect(201);
+    await agent.post(url(workerId)).send({ type: 'ADVANCE', amount: '4000000' }).expect(201);
+    const payroll = (await agent.get('/api/payroll/2026/9').expect(200)).body;
+    // 90 h × 33 333.33… = 3 000 000, minus 4 000 000
+    expect(payroll.workers[0]).toMatchObject({ problems: [], total: '-1000000.00' });
+    expect(payroll.total).toBe('-1000000.00');
+    await agent.post('/api/payroll/2026/9/lock').expect(201);
+  });
+
+  it('needs the company rules for the rounding step even when a site has its own rules', async () => {
+    const { company: c, agent, siteB } = await company();
+    await siteRules(c.id, siteB);
+    const onB = await hire(agent, siteB, 'Bsite');
+    await agent.post(`/api/workers/${onB}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '6000000' }).expect(201);
+    const placement = (await agent.get(`/api/workers/${onB}`).expect(200)).body.placement.id;
+    await agent.post(hoursUrl(placement)).send({ ...FULL_MONTH, normalHours: '200' }).expect(201);
+    expect((await agent.get('/api/payroll/2026/9').expect(200)).body.workers.find((x: { worker: { id: string } }) => x.worker.id === onB)).toMatchObject({
+      problems: [],
+      total: '6000000.00',
+    });
+    await agent.delete('/api/pay-rules/2026/9').expect(204);
+    const w = (await agent.get('/api/payroll/2026/9').expect(200)).body.workers.find((x: { worker: { id: string } }) => x.worker.id === onB);
+    expect(w).toMatchObject({ total: null, payOut: null, problems: [{ code: 'noCompanyRules' }] });
+  });
+
+  it('never shows adjustments to timekeepers or foremen, and lets project managers only view their sites', async () => {
+    const { company: c, agent, siteB, workerId } = await company();
+    const elsewhere = await hire(agent, siteB, 'Elsewhere');
+    const id = (await agent.post(url(elsewhere)).send({ type: 'BONUS', amount: '1000' }).expect(201)).body.id;
+    await agent.post(url(workerId)).send({ type: 'BONUS', amount: '2000' }).expect(201);
+    for (const role of ['TIMEKEEPER', 'FOREMAN'] as const) {
+      const field = await member(c.id, role);
+      await field.agent.get('/api/adjustments/2026/9').expect(403);
+      await field.agent.post(url(elsewhere)).send({ type: 'BONUS', amount: '1' }).expect(403);
+      await field.agent.post(`/api/adjustments/${id}/cancel`).send({ reason: 'x' }).expect(403);
+    }
+    const pm = await member(c.id, 'PROJECT_MANAGER');
+    await agent.post(`/api/sites/${siteB}/staff`).send({ userId: pm.user.id }).expect(204);
+    const rows = (await pm.agent.get('/api/adjustments/2026/9').expect(200)).body.rows;
+    expect(rows.map((r: { worker: { lastName: string }; net: string }) => [r.worker.lastName, r.net])).toEqual([['Elsewhere', '1000.00']]);
+    await pm.agent.post(url(elsewhere)).send({ type: 'BONUS', amount: '1' }).expect(403);
+    await pm.agent.post(`/api/adjustments/${id}/cancel`).send({ reason: 'x' }).expect(403);
+    expect(await ctx.prisma.adjustment.count()).toBe(2);
+  });
+
+  it("never shows, adds to or cancels another company's adjustments", async () => {
+    const a = await company();
+    const b = await company();
+    const id = (await b.agent.post(url(b.workerId)).send({ type: 'BONUS', amount: '1000' }).expect(201)).body.id;
+    expect((await a.agent.post(url(b.workerId)).send({ type: 'BONUS', amount: '1' }).expect(404)).body.code).toBe('worker.notFound');
+    expect((await a.agent.post(`/api/adjustments/${id}/cancel`).send({ reason: 'x' }).expect(404)).body.code).toBe('adjustment.notFound');
+    const rows = (await a.agent.get('/api/adjustments/2026/9').expect(200)).body.rows;
+    expect(rows).toEqual([expect.objectContaining({ worker: expect.objectContaining({ id: a.workerId }), adjustments: [] })]);
+    expect(await ctx.prisma.adjustment.count()).toBe(1);
+    expect(await ctx.prisma.adjustmentCancel.count()).toBe(0);
   });
 });
 

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  adjustmentSchema,
+  cancelAdjustmentSchema,
   changePasswordSchema,
   companySettingsSchema,
   contactSchema,
@@ -165,6 +167,24 @@ describe('holidaySchema', () => {
     for (const date of ['2026-02-29', '2026-13-01', '26-01-01', '1999-01-01']) {
       expect(messages(holidaySchema.safeParse({ date, kind: 'COMPANY_DAY_OFF' }))).toEqual(['validation.dateInvalid']);
     }
+  });
+});
+
+describe('adjustmentSchema', () => {
+  it('takes a positive amount as typed, with the type giving the sign', () => {
+    expect(adjustmentSchema.parse({ type: 'ADVANCE', amount: '1 500 000,50', note: ' ' })).toEqual({
+      type: 'ADVANCE',
+      amount: '1500000.5',
+      note: null,
+    });
+    expect(messages(adjustmentSchema.safeParse({ type: 'BONUS', amount: '0' }))).toEqual(['validation.adjustmentRange']);
+    expect(messages(adjustmentSchema.safeParse({ type: 'BONUS', amount: '-5' }))).toEqual(['validation.decimalInvalid']);
+    expect(messages(adjustmentSchema.safeParse({ type: 'TRAVEL', amount: '5' }))).toEqual(['validation.required']);
+  });
+
+  it('needs a reason to cancel one', () => {
+    expect(messages(cancelAdjustmentSchema.safeParse({ reason: '  ' }))).toEqual(['validation.required']);
+    expect(cancelAdjustmentSchema.parse({ reason: ' Typed twice ' })).toEqual({ reason: 'Typed twice' });
   });
 });
 

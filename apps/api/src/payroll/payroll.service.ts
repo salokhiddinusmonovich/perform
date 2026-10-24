@@ -3,14 +3,16 @@ import { Prisma } from '@prisma/client';
 import {
   calculatePay,
   checkTotals,
-  totalOfParts,
+  payOut,
   type DayEntry,
+  type PayOut,
+  type PayOutAdjustment,
   type PayResult,
   type PaySettings,
   type TotalsProblem,
   type TravelInput,
 } from '@puantaj/payroll';
-import type { PayRules, YearMonth } from '@puantaj/schemas';
+import type { YearMonth } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict } from '../common/api-error';
@@ -18,8 +20,9 @@ import { inMonth, isoDay, monthSpan, todayIn } from '../common/dates';
 import { seesPlacement } from '../organisation/access';
 import { SALARY_ORDER } from '../organisation/workers.service';
 import { lockCompanyMonths } from '../pay-rules/months';
-import { PayRulesService, type MonthRules } from '../pay-rules/pay-rules.service';
+import { PayRulesService, type MonthRules, type StoredPayRules } from '../pay-rules/pay-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { COUNTING_ADJUSTMENTS } from './adjustments.service';
 import { toTotals } from './monthly-hours.service';
 
 /** Why a worker's month can't be paid yet. Missing or contradictory data is never guessed. */
@@ -32,6 +35,8 @@ export type PayrollProblem =
   | { code: 'placementWithoutHours'; assignmentId: string; siteName: string; from: string }
   /** No pay rules for the month at these sites */
   | { code: 'noRules'; siteNames: string[] }
+  /** The company default rules, which hold the rounding step, are not set for the month */
+  | { code: 'noCompanyRules' }
   /** siteName null: the placements' totals together don't fit */
   | { code: 'totalsInvalid'; issues: { siteName: string | null; problem: TotalsProblem }[] }
   /** Daily entries that contradict each other (the engine says how) */
@@ -57,6 +62,11 @@ export interface PayrollPartView {
   result: PayResult;
 }
 
+/** The pay-out with each adjustment's note, so the payslip can explain it. */
+export interface PayOutView extends Omit<PayOut, 'adjustments'> {
+  adjustments: (PayOutAdjustment & { note: string | null })[];
+}
+
 export interface PayrollWorkerView {
   worker: { id: string; lastName: string; firstName: string; patronymic: string | null; position: string | null };
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
@@ -64,7 +74,9 @@ export interface PayrollWorkerView {
   source: 'DAILY' | 'TOTALS' | null;
   /** Empty while there are problems */
   parts: PayrollPartView[];
-  /** Sum of the parts; null while there are problems */
+  /** Earned pay of the parts, adjustments and rounding; null while there are problems */
+  payOut: PayOutView | null;
+  /** The amount to pay out (payOut.total); null while there are problems. Below zero: the worker owes it. */
   total: string | null;
   problems: PayrollProblem[];
 }
@@ -122,7 +134,8 @@ type Placement = Prisma.AssignmentGetPayload<{ include: typeof PLACEMENT_INCLUDE
  * Works out every worker's pay for a month with @puantaj/payroll, from salaries, hours
  * (daily entries or monthly totals), pay rules and travel pay. Split by placement
  * (AGENTS.md: Pay model): the worker's placements are grouped by the rule set of their
- * site, and each group is a part paid and rounded under its own rules.
+ * site, and each group is a part paid under its own rules. The parts and the worker's
+ * adjustments make the amount to pay out, rounded once with the company's step.
  */
 @Injectable()
 export class PayrollService {
@@ -287,17 +300,14 @@ export class PayrollService {
   /** Every visible worker's pay for the month, worked out now. */
   private async calculate(db: Db, companyId: string, { year, month }: YearMonth, sees: Sees): Promise<PayrollWorkerView[]> {
     const { first, last } = monthSpan(year, month);
-    const [rows, period] = await Promise.all([
-      db.assignment.findMany({
-        where: { AND: [{ companyId }, inMonth(year, month)] },
-        include: {
-          ...PLACEMENT_INCLUDE,
-          monthlyHours: { where: { year, month }, orderBy: { seq: 'desc' }, take: 1 },
-        },
-        orderBy: { hiredOn: 'asc' },
-      }),
-      db.payrollPeriod.findUnique({ where: { companyId_year_month: { companyId, year, month } } }),
-    ]);
+    const rows = await db.assignment.findMany({
+      where: { AND: [{ companyId }, inMonth(year, month)] },
+      include: {
+        ...PLACEMENT_INCLUDE,
+        monthlyHours: { where: { year, month }, orderBy: { seq: 'desc' }, take: 1 },
+      },
+      orderBy: { hiredOn: 'asc' },
+    });
 
     const visible = new Set(rows.filter(sees).map((p) => p.workerId));
     const placements: Placement[] = rows
@@ -306,7 +316,7 @@ export class PayrollService {
     const assignmentIds = placements.map((p) => p.id);
     const workerIds = [...visible];
 
-    const [salaries, entries, travelAdjustments] = await Promise.all([
+    const [salaries, entries, travelAmounts, adjustments, companyRules] = await Promise.all([
       db.salary.findMany({
         where: {
           companyId,
@@ -318,12 +328,21 @@ export class PayrollService {
       db.timesheetEntry.findMany({
         where: { companyId, assignmentId: { in: assignmentIds }, date: { gte: first, lte: last } },
       }),
-      period
-        ? db.adjustment.findMany({
-            where: { companyId, periodId: period.id, type: 'TRAVEL', assignmentId: { in: assignmentIds } },
-          })
-        : [],
+      // The newest amount of each placement counts.
+      db.travelAmount.findMany({
+        where: { companyId, year, month, assignmentId: { in: assignmentIds } },
+        orderBy: { seq: 'desc' },
+        distinct: ['assignmentId'],
+      }),
+      db.adjustment.findMany({
+        where: { companyId, year, month, workerId: { in: workerIds }, ...COUNTING_ADJUSTMENTS },
+        orderBy: { seq: 'asc' },
+      }),
+      this.rules
+        .defaultRuleSet(companyId, db)
+        .then((set) => (set ? this.rules.month(companyId, set.id, year, month, db) : null)),
     ]);
+    const roundingStep = companyRules?.rules?.settings.payRoundingStep ?? null;
 
     const monthRules = new Map<string, Promise<{ ruleSetId: string | null; siteId: string | null; month: MonthRules | null }>>();
     const rulesAt = (siteId: string) => {
@@ -353,6 +372,7 @@ export class PayrollService {
         },
         source: null,
         parts: [],
+        payOut: null,
         total: null,
         problems: [],
       };
@@ -386,6 +406,7 @@ export class PayrollService {
         else groups.set(r.ruleSetId, { rules: r, placements: [p] });
       }
       if (withoutRules.length > 0) view.problems.push({ code: 'noRules', siteNames: [...new Set(withoutRules)] });
+      else if (roundingStep === null) view.problems.push({ code: 'noCompanyRules' });
       if (view.problems.length > 0 || !salary) continue;
 
       for (const { rules, placements: inPart } of groups.values()) {
@@ -416,7 +437,7 @@ export class PayrollService {
               places[p.id] = { siteName: p.site.name, from: isoDay(p.hiredOn), until: p.leftOn ? isoDay(p.leftOn) : null };
             }
             const routes = Object.fromEntries(inPart.map((p) => [p.id, route(p)]));
-            result = calculatePay({ ...base, totals, travel: travel(settings, routes, inPart, travelAdjustments) });
+            result = calculatePay({ ...base, totals, travel: travel(settings, routes, inPart, travelAmounts) });
           } else {
             const partEntries: DayEntry[] = ownEntries
               .filter((e) => ids.has(e.assignmentId))
@@ -437,7 +458,7 @@ export class PayrollService {
                 return [siteId, p ? route(p) : null];
               }),
             );
-            result = calculatePay({ ...base, entries: partEntries, travel: travel(settings, routes, inPart, travelAdjustments) });
+            result = calculatePay({ ...base, entries: partEntries, travel: travel(settings, routes, inPart, travelAmounts) });
           }
         } catch (error) {
           if (!(error instanceof RangeError)) throw error;
@@ -456,7 +477,17 @@ export class PayrollService {
       else {
         // Parts in the order of their first placement.
         view.parts.sort((a, b) => firstDay(own, a) - firstDay(own, b));
-        view.total = totalOfParts(view.parts.map((p) => p.result));
+        const ownAdjustments = adjustments.filter((a) => a.workerId === workerId);
+        const out = payOut(
+          view.parts.map((p) => p.result),
+          ownAdjustments.map((a) => ({ id: a.id, type: a.type, amount: a.amount.toString() })),
+          roundingStep!,
+        );
+        view.payOut = {
+          ...out,
+          adjustments: out.adjustments.map((a) => ({ ...a, note: ownAdjustments.find((o) => o.id === a.id)!.note })),
+        };
+        view.total = out.total;
       }
     }
 
@@ -475,7 +506,7 @@ export class PayrollService {
 }
 
 /** Pay rules (Settings) as the engine takes them. Normal hours are always paid at × 1. */
-function paySettings(rules: PayRules): PaySettings {
+function paySettings(rules: StoredPayRules): PaySettings {
   return {
     normalHoursPerDay: rules.normalHoursPerDay,
     multipliers: {
@@ -485,7 +516,6 @@ function paySettings(rules: PayRules): PaySettings {
       HOLIDAY: rules.holidayMultiplier,
     },
     absence: rules.absence,
-    payRoundingStep: rules.payRoundingStep,
   };
 }
 
@@ -498,14 +528,14 @@ function route(p: Placement) {
  * monthly amounts the accountant entered for these placements (none entered: none paid).
  */
 function travel(
-  rules: PayRules,
+  rules: StoredPayRules,
   routes: Record<string, ReturnType<typeof route>>,
   inPart: readonly Placement[],
-  adjustments: readonly { assignmentId: string; amount: Prisma.Decimal }[],
+  amounts: readonly { assignmentId: string; amount: Prisma.Decimal }[],
 ): TravelInput | null {
   if (rules.travelPayMode === 'PER_DAY_WORKED') return { kind: 'PER_DAY_WORKED', routes };
   if (rules.travelPayMode === 'MONTHLY_AMOUNT') {
-    const own = adjustments.filter((a) => inPart.some((p) => p.id === a.assignmentId));
+    const own = amounts.filter((a) => inPart.some((p) => p.id === a.assignmentId));
     if (own.length === 0) return null;
     const sum = own.reduce((acc, a) => acc.plus(a.amount), new Prisma.Decimal(0));
     return { kind: 'MONTHLY_AMOUNT', amount: sum.toFixed(2) };

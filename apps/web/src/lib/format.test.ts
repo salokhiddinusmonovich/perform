@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatMoney, formatMonth, formatMonthName, formatNumber, formatTime, formatWeekday } from './format';
+import {
+  formatDate,
+  formatMoney,
+  formatMonth,
+  formatMonthName,
+  formatNumber,
+  formatSignedMoney,
+  formatTime,
+  formatWeekday,
+} from './format';
 
 // Intl uses non-breaking spaces as group separators; compare with plain spaces.
 const plain = (s: string) => s.replace(/[  ]/g, ' ');
@@ -15,6 +24,15 @@ describe('formatMoney', () => {
   it('keeps real fractions and formats decimal strings exactly', () => {
     expect(plain(formatMoney('33333.33', 'UZS', 'en'))).toBe('UZS 33,333.33');
     expect(plain(formatMoney('12345678901234.56', 'UZS', 'en'))).toBe('UZS 12,345,678,901,234.56');
+  });
+});
+
+describe('formatSignedMoney', () => {
+  it('always shows the sign, with a real minus, and none on zero', () => {
+    expect(plain(formatSignedMoney('-300000.00', 'UZS', 'uz'))).toBe('−300 000 soʻm');
+    expect(plain(formatSignedMoney('500000.50', 'UZS', 'uz'))).toBe('+500 000,5 soʻm');
+    expect(plain(formatSignedMoney('0.00', 'UZS', 'en'))).toBe('UZS 0');
+    expect(plain(formatSignedMoney('-0.00', 'UZS', 'en'))).toBe('UZS 0');
   });
 });
 

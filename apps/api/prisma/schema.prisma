@@ -116,6 +116,9 @@ model User {
   salaries             Salary[]
   monthlyHours         MonthlyHours[]
   payrollSnapshots     PayrollSnapshot[]
+  adjustments          Adjustment[]
+  adjustmentCancels    AdjustmentCancel[]
+  travelAmounts        TravelAmount[]
 }
 
 /// How a session's token is sent: the browser's httpOnly cookie, or the mobile app's
@@ -324,6 +327,7 @@ model Worker {
   assignments      Assignment[]
   salaries         Salary[]
   payrollSnapshots PayrollSnapshotWorker[]
+  adjustments      Adjustment[]
 
   @@unique([companyId, pinfl])
   @@unique([id, companyId])
@@ -353,13 +357,13 @@ model Assignment {
   shift         Shift     @default(DAY)
   createdAt     DateTime  @default(now())
 
-  worker       Worker           @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
-  site         Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
-  team         Team?            @relation(fields: [teamId, companyId], references: [id, companyId], onDelete: NoAction)
-  travelRoute  TravelRoute?     @relation(fields: [travelRouteId, companyId], references: [id, companyId], onDelete: NoAction)
-  entries      TimesheetEntry[]
-  adjustments  Adjustment[]
-  monthlyHours MonthlyHours[]
+  worker        Worker           @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+  site          Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  team          Team?            @relation(fields: [teamId, companyId], references: [id, companyId], onDelete: NoAction)
+  travelRoute   TravelRoute?     @relation(fields: [travelRouteId, companyId], references: [id, companyId], onDelete: NoAction)
+  entries       TimesheetEntry[]
+  monthlyHours  MonthlyHours[]
+  travelAmounts TravelAmount[]
 
   @@unique([id, companyId])
   @@index([companyId])
@@ -428,7 +432,7 @@ enum TravelPayMode {
   NONE
   /// Days worked × the amount per day of the worker's route (Assignment.travelRoute)
   PER_DAY_WORKED
-  /// A monthly amount the accountant enters per worker (Adjustment of type TRAVEL)
+  /// A monthly amount the accountant enters per placement (TravelAmount)
   MONTHLY_AMOUNT
 }
 
@@ -483,8 +487,10 @@ model PayrollRules {
   travelDayPaid        Boolean
   travelDayHoursPerDay Decimal?      @db.Decimal(4, 2)
   travelPayMode        TravelPayMode
-  /// Final pay is rounded to the nearest multiple of this (halves up)
-  payRoundingStep      Decimal       @db.Decimal(14, 2)
+  /// The amount to pay out is rounded to the nearest multiple of this (halves up).
+  /// Company-wide: set only in the company default rule set, null in site rule sets
+  /// (AGENTS.md: Pay model). The API is the only writer and keeps it that way.
+  payRoundingStep      Decimal?      @db.Decimal(14, 2)
   /// Who saved this version last (owners and admins may replace it). Every change is
   /// also in AuditLog.
   setById              String        @db.Uuid
@@ -569,11 +575,10 @@ model PayrollPeriod {
   lockedAt   DateTime?
   lockedById String?      @db.Uuid
 
-  company     Company           @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  lockedBy    User?             @relation(fields: [lockedById], references: [id], onDelete: NoAction)
-  entries     TimesheetEntry[]
-  adjustments Adjustment[]
-  snapshots   PayrollSnapshot[]
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  lockedBy  User?             @relation(fields: [lockedById], references: [id], onDelete: NoAction)
+  entries   TimesheetEntry[]
+  snapshots PayrollSnapshot[]
 
   @@unique([companyId, year, month])
   @@unique([id, companyId])
@@ -702,27 +707,78 @@ model MonthlyHours {
 }
 
 enum AdjustmentType {
-  TRAVEL
+  /// Added to pay
   BONUS
+  /// Money already handed over, taken off pay
   ADVANCE
+  /// Taken off pay
   DEDUCTION
 }
 
-/// Money added to or taken from a worker's pay for one period. A TRAVEL adjustment is
-/// the monthly travel amount entered by the accountant (travel pay MONTHLY_AMOUNT).
-/// companyId must match both the period's and the assignment's (composite foreign keys).
+/// Money added to or taken from a worker's pay for one month (AGENTS.md: Adjustments).
+/// It belongs to the worker, not to a placement. The amount is always positive; the
+/// type gives the sign. Only ever added: a mistake is cancelled (AdjustmentCancel),
+/// never edited or deleted. The amount range is a CHECK constraint in the migration.
 model Adjustment {
-  id           String         @id @default(uuid()) @db.Uuid
-  companyId    String         @db.Uuid
-  periodId     String         @db.Uuid
-  assignmentId String         @db.Uuid
-  type         AdjustmentType
-  amount       Decimal        @db.Decimal(14, 2)
+  id        String         @id @default(uuid()) @db.Uuid
+  companyId String         @db.Uuid
+  workerId  String         @db.Uuid
+  year      Int
+  /// 1-based
+  month     Int
+  type      AdjustmentType
+  amount    Decimal        @db.Decimal(14, 2)
+  note      String?
+  seq       BigInt         @unique @default(autoincrement())
+  setById   String         @db.Uuid
+  setAt     DateTime       @default(now())
+
+  worker Worker            @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+  setBy  User              @relation(fields: [setById], references: [id], onDelete: NoAction)
+  cancel AdjustmentCancel?
+
+  @@unique([id, companyId])
+  @@index([workerId, year, month])
+  @@index([companyId, year, month])
+}
+
+/// Cancels one adjustment, which then no longer counts but stays visible. Never changed
+/// or deleted; an adjustment is cancelled at most once.
+model AdjustmentCancel {
+  id            String   @id @default(uuid()) @db.Uuid
+  companyId     String   @db.Uuid
+  adjustmentId  String   @db.Uuid
+  reason        String
+  cancelledById String   @db.Uuid
+  cancelledAt   DateTime @default(now())
+
+  adjustment  Adjustment @relation(fields: [adjustmentId, companyId], references: [id, companyId], onDelete: NoAction)
+  cancelledBy User       @relation(fields: [cancelledById], references: [id], onDelete: NoAction)
+
+  /// One cancel per adjustment (an adjustment id belongs to one company)
+  @@unique([adjustmentId, companyId])
+  @@index([companyId])
+}
+
+/// A placement's monthly travel amount, entered by the accountant when travel pay is
+/// MONTHLY_AMOUNT. Only ever added: a correction is a newer row, and the newest (highest
+/// seq) of a placement and month counts. The amount range is a CHECK constraint.
+model TravelAmount {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String   @db.Uuid
+  assignmentId String   @db.Uuid
+  year         Int
+  /// 1-based
+  month        Int
+  amount       Decimal  @db.Decimal(14, 2)
   note         String?
-  createdAt    DateTime       @default(now())
+  seq          BigInt   @unique @default(autoincrement())
+  setById      String   @db.Uuid
+  setAt        DateTime @default(now())
 
-  period     PayrollPeriod @relation(fields: [periodId, companyId], references: [id, companyId], onDelete: NoAction)
-  assignment Assignment    @relation(fields: [assignmentId, companyId], references: [id, companyId], onDelete: NoAction)
+  assignment Assignment @relation(fields: [assignmentId, companyId], references: [id, companyId], onDelete: NoAction)
+  setBy      User       @relation(fields: [setById], references: [id], onDelete: NoAction)
 
-  @@index([periodId, assignmentId])
+  @@index([assignmentId, year, month])
+  @@index([companyId, year, month])
 }

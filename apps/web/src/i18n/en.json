@@ -26,6 +26,7 @@
     "plans": "Plans",
     "payroll": "Payroll",
     "monthlyHours": "Monthly hours",
+    "adjustments": "Adjustments",
     "payrollRun": "Pay calculation"
   },
   "settings": {
@@ -284,6 +285,7 @@
     "amountRange": "Must be 0 or more",
     "workerLimitRange": "From 1 to 1 000 000",
     "salaryRange": "Must be more than 0",
+    "adjustmentRange": "Must be more than 0",
     "monthHoursRange": "Must be from 0 to 744",
     "daysRange": "Must be from 0 to 31",
     "normalAboveDaysWorked": "More than the working days worked × normal hours per day",
@@ -399,6 +401,11 @@
       "notInMonth": "The worker wasn’t at this site in this month.",
       "unchanged": "These hours are already entered for this month."
     },
+    "adjustment": {
+      "notInMonth": "The worker wasn’t employed in this month.",
+      "notFound": "This adjustment doesn’t exist.",
+      "alreadyCancelled": "This adjustment is already cancelled."
+    },
     "hours": {
       "otherSource": "The worker has daily timesheet entries this month. A month’s hours come from one source only."
     }
@@ -474,8 +481,8 @@
       "MONTHLY_AMOUNT": "The accountant enters a travel amount for each worker every month."
     },
     "rounding": "Rounding",
-    "roundingStep": "Round final pay to the nearest ({{currency}})",
-    "roundingHint": "Final pay is rounded to the nearest multiple of this amount, halves up. The difference is shown as its own line.",
+    "roundingStep": "Round the amount to pay out to the nearest ({{currency}})",
+    "roundingHint": "The amount to pay out (pay plus bonuses, minus advances and deductions) is rounded once to the nearest multiple of this amount, halves up. It applies to the whole company, also at sites with their own rules. The difference is shown as its own line.",
     "confirmDelete": {
       "title": "Delete these rules?",
       "description": "The rules from {{month}} will be removed. From then on, the rules from {{previous}} will apply.",
@@ -843,6 +850,40 @@
     "noteHint": "Optional, e.g. why it was corrected",
     "history": "Entries"
   },
+  "adjustments": {
+    "title": "Adjustments",
+    "description": "Bonuses, advances and deductions for each worker’s month",
+    "entries": "Adjustments",
+    "net": "Total",
+    "editFor": "Adjustments: {{name}}",
+    "viewFor": "View adjustments: {{name}}",
+    "emptyTitle": "No workers this month",
+    "emptyDescription": "Workers employed on at least one day of the month show here.",
+    "none": "None",
+    "types": {
+      "BONUS": "Bonus",
+      "ADVANCE": "Advance",
+      "DEDUCTION": "Deduction"
+    },
+    "dialogTitle": "Adjustments for {{month}}",
+    "type": "Type",
+    "chooseType": "Choose a type",
+    "amount": "Amount ({{currency}})",
+    "noteHint": "Optional, e.g. what the bonus is for or the advance receipt number.",
+    "addHint": "Bonuses are added to pay; advances and deductions are taken off it. Enter the amount without a minus sign.",
+    "add": "Add",
+    "added": "Adjustment added",
+    "lockedHint": "The month is locked, so adjustments can’t be added or cancelled.",
+    "viewOnlyHint": "Only an owner, administrator or accountant can add or cancel adjustments.",
+    "thisMonth": "This month",
+    "cancelled": "Cancelled",
+    "cancelFor": "Cancel this entry: {{type}}",
+    "cancelledToast": "Adjustment cancelled",
+    "cancelTitle": "Cancel the {{type}} of {{amount}} for {{name}}?",
+    "cancelHint": "The entry stays in the list, marked as cancelled, and no longer counts in pay. The reason goes into the audit log.",
+    "cancelReason": "Reason",
+    "cancelSubmit": "Cancel entry"
+  },
   "payroll": {
     "title": "Pay calculation",
     "description": "Each worker’s pay for the month, and where every amount comes from",
@@ -860,7 +901,6 @@
     "emptyDescription": "Workers employed on at least one day of the month are paid here.",
     "cannotPay": "Can’t be paid yet:",
     "goToMonthlyHours": "Go to monthly hours",
-    "monthTotal": "Total for the month",
     "partTotal": "For this part",
     "allPlacements": "All placements together",
     "problems": {
@@ -869,6 +909,7 @@
       "twoSources": "This month has both daily timesheet entries and monthly hours. Keep only one.",
       "placementWithoutHours": "No hours for {{site}} (from {{date}}).",
       "noRules": "No pay rules for this month: {{sites}}.",
+      "noCompanyRules": "The company’s pay rules for this month are missing. They hold the rounding step.",
       "totalsInvalid": "The monthly hours don’t fit the month (the pay rules may have changed):",
       "invalidHours": "The daily timesheet entries contradict each other."
     },
@@ -922,6 +963,11 @@
     "lockNumber": "Lock #{{number}}",
     "noChanges": "No differences from the lock before.",
     "notInLock": "none",
-    "unlockedBadge": "Unlocked"
+    "unlockedBadge": "Unlocked",
+    "owes": "Owes",
+    "owesHint": "Advances and deductions are more than the pay for this month. Nothing is carried to the next month by itself.",
+    "earned": "Earned",
+    "payOutTotal": "To pay out",
+    "goToAdjustments": "Go to adjustments"
   }
 }

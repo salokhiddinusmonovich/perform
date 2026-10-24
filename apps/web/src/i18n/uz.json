@@ -26,6 +26,7 @@
     "plans": "Tariflar",
     "payroll": "Ish haqi",
     "monthlyHours": "Oylik soatlar",
+    "adjustments": "Qoʻshimcha va ushlanmalar",
     "payrollRun": "Ish haqi hisobi"
   },
   "settings": {
@@ -284,6 +285,7 @@
     "amountRange": "0 yoki undan koʻp boʻlishi kerak",
     "workerLimitRange": "1 dan 1 000 000 gacha",
     "salaryRange": "0 dan katta boʻlishi kerak",
+    "adjustmentRange": "0 dan katta boʻlishi kerak",
     "monthHoursRange": "0 dan 744 gacha boʻlishi kerak",
     "daysRange": "0 dan 31 gacha boʻlishi kerak",
     "normalAboveDaysWorked": "Ishlangan ish kunlari × kunlik normal soatdan koʻp",
@@ -399,6 +401,11 @@
       "notInMonth": "Ishchi bu oyda ushbu obyektda ishlamagan.",
       "unchanged": "Bu oy uchun aynan shu soatlar allaqachon kiritilgan."
     },
+    "adjustment": {
+      "notInMonth": "Ishchi bu oyda ishlamagan.",
+      "notFound": "Bunday yozuv yoʻq.",
+      "alreadyCancelled": "Bu yozuv allaqachon bekor qilingan."
+    },
     "hours": {
       "otherSource": "Bu oy uchun ishchining kunlik tabeli bor. Bir oyda soatlar faqat bitta manbadan olinadi."
     }
@@ -474,8 +481,8 @@
       "MONTHLY_AMOUNT": "Buxgalter har oy har bir ishchi uchun yoʻl haqi summasini kiritadi."
     },
     "rounding": "Yaxlitlash",
-    "roundingStep": "Yakuniy summani yaxlitlash qadami ({{currency}})",
-    "roundingHint": "Yakuniy ish haqi shu summaning eng yaqin karralisiga yaxlitlanadi (yarmi yuqoriga). Farq alohida qatorda koʻrsatiladi.",
+    "roundingStep": "Toʻlanadigan summani yaxlitlash qadami ({{currency}})",
+    "roundingHint": "Toʻlanadigan summa (ish haqi va mukofotlar, ayirilgan avans va ushlanmalar) bir marta shu summaning eng yaqin karralisiga yaxlitlanadi (yarmi yuqoriga). Butun kompaniyaga, oʻz qoidalari bor obyektlarga ham amal qiladi. Farq alohida qatorda koʻrsatiladi.",
     "confirmDelete": {
       "title": "Bu qoidalarni oʻchirasizmi?",
       "description": "Boshlanishi {{month}} boʻlgan qoidalar oʻchiriladi. Oʻsha oydan boshlab oldingi qoidalar (boshlanishi: {{previous}}) amal qiladi.",
@@ -843,6 +850,40 @@
     "noteHint": "Ixtiyoriy, masalan: nima uchun tuzatildi",
     "history": "Kiritilganlar"
   },
+  "adjustments": {
+    "title": "Qoʻshimcha va ushlanmalar",
+    "description": "Har bir ishchining oyi uchun mukofotlar, avanslar va ushlanmalar",
+    "entries": "Yozuvlar",
+    "net": "Jami",
+    "editFor": "Qoʻshimcha va ushlanmalar: {{name}}",
+    "viewFor": "Koʻrish: {{name}}",
+    "emptyTitle": "Bu oyda ishchilar yoʻq",
+    "emptyDescription": "Oyning kamida bir kunida ishlagan ishchilar shu yerda koʻrinadi.",
+    "none": "Yoʻq",
+    "types": {
+      "BONUS": "Mukofot",
+      "ADVANCE": "Avans",
+      "DEDUCTION": "Ushlanma"
+    },
+    "dialogTitle": "{{month}} uchun qoʻshimcha va ushlanmalar",
+    "type": "Turi",
+    "chooseType": "Turini tanlang",
+    "amount": "Summa ({{currency}})",
+    "noteHint": "Ixtiyoriy, masalan mukofot nima uchunligi yoki avans kvitansiyasi raqami.",
+    "addHint": "Mukofot ish haqiga qoʻshiladi, avans va ushlanma ayiriladi. Summani minus belgisisiz kiriting.",
+    "add": "Qoʻshish",
+    "added": "Yozuv qoʻshildi",
+    "lockedHint": "Oy yopilgan, yozuv qoʻshib yoki bekor qilib boʻlmaydi.",
+    "viewOnlyHint": "Yozuvlarni faqat egasi, administrator yoki buxgalter qoʻshadi va bekor qiladi.",
+    "thisMonth": "Shu oy",
+    "cancelled": "Bekor qilingan",
+    "cancelFor": "Yozuvni bekor qilish: {{type}}",
+    "cancelledToast": "Yozuv bekor qilindi",
+    "cancelTitle": "{{name}}: {{amount}} miqdoridagi «{{type}}» bekor qilinsinmi?",
+    "cancelHint": "Yozuv roʻyxatda «bekor qilingan» belgisi bilan qoladi va ish haqida hisoblanmaydi. Sabab audit jurnaliga yoziladi.",
+    "cancelReason": "Sabab",
+    "cancelSubmit": "Yozuvni bekor qilish"
+  },
   "payroll": {
     "title": "Ish haqi hisobi",
     "description": "Oy boʻyicha har bir ishchining ish haqi, har bir summa qayerdan kelgani bilan",
@@ -860,7 +901,6 @@
     "emptyDescription": "Oyda kamida bir kun ishlagan ishchilar shu yerda hisoblanadi.",
     "cannotPay": "Hali hisoblab boʻlmaydi:",
     "goToMonthlyHours": "Oylik soatlarga oʻtish",
-    "monthTotal": "Oy uchun jami",
     "partTotal": "Bu qism uchun",
     "allPlacements": "Barcha joylashuvlar birga",
     "problems": {
@@ -869,6 +909,7 @@
       "twoSources": "Bu oy uchun ham kunlik tabel, ham oylik soatlar bor. Bittasini qoldiring.",
       "placementWithoutHours": "{{site}} ({{date}} dan) uchun soatlar kiritilmagan.",
       "noRules": "Bu oy uchun toʻlov qoidalari yoʻq: {{sites}}.",
+      "noCompanyRules": "Kompaniyaning shu oy uchun toʻlov qoidalari yoʻq. Yaxlitlash qadami ularda.",
       "totalsInvalid": "Oylik soatlar oyga mos kelmaydi (balki toʻlov qoidalari oʻzgargandir):",
       "invalidHours": "Kunlik tabel yozuvlari bir-biriga zid."
     },
@@ -922,6 +963,11 @@
     "lockNumber": "Yopish №{{number}}",
     "noChanges": "Oldingi yopishdan farq yoʻq.",
     "notInLock": "yoʻq",
-    "unlockedBadge": "Ochilgan"
+    "unlockedBadge": "Ochilgan",
+    "owes": "Qarzdor",
+    "owesHint": "Avans va ushlanmalar shu oydagi ish haqidan koʻp. Hech narsa keyingi oyga oʻzi oʻtmaydi.",
+    "earned": "Hisoblangan",
+    "payOutTotal": "Toʻlanadi",
+    "goToAdjustments": "Qoʻshimcha va ushlanmalarga oʻtish"
   }
 }
