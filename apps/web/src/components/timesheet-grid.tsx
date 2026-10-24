@@ -1,5 +1,5 @@
 import { normalizeCode, type DayKind } from '@puantaj/payroll';
-import { dayHoursSchema, type EntryStatus } from '@puantaj/schemas';
+import { dayHoursSchema, GRID_CODE_STATUSES, type EntryStatus } from '@puantaj/schemas';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CellStyleModule,
@@ -27,12 +27,12 @@ import { isoWeekday } from '@/lib/format';
 import { workerName } from '@/lib/organisation';
 import { MONTHLY_HOURS_KEY, PAYROLL_KEY } from '@/lib/payroll';
 import {
-  CODE_STATUSES,
   deleteEntry,
   employedOn,
   monthDays,
   putEntry,
   timesheetKey,
+  type TimesheetCodeItem,
   type TimesheetEntryItem,
   type TimesheetMonth,
   type TimesheetRow,
@@ -93,16 +93,18 @@ const rowKey = (r: Pick<TimesheetRow, 'worker' | 'teamId'>) => `${r.worker.id}:$
 
 interface TimesheetGridProps {
   data: TimesheetMonth;
+  /** The company's own codes */
+  codes: TimesheetCodeItem[];
   /** Name shown on optimistic entries until the API answers */
   myName: string;
 }
 
 /**
  * A site's month: one row per worker and team, one column per day. A cell takes hours
- * ("9", "7,5"), a letter code for an absence, or nothing to remove the entry. Each
+ * ("9", "7,5"), one of the company's codes for an absence, or nothing to remove the entry. Each
  * change is saved at once; a stale or refused change is shown and the month reloaded.
  */
-export function TimesheetGrid({ data, myName }: TimesheetGridProps) {
+export function TimesheetGrid({ data, codes: companyCodes, myName }: TimesheetGridProps) {
   const { t } = useTranslation();
   const format = useFormat();
   const queryClient = useQueryClient();
@@ -112,11 +114,17 @@ export function TimesheetGrid({ data, myName }: TimesheetGridProps) {
   // Changes being saved, by row and day: shown at once, replaced by the API's answer.
   const [optimistic, setOptimistic] = useState<ReadonlyMap<string, TimesheetEntryItem | null>>(new Map());
 
-  /** Letter codes in the current language, e.g. "K" → ABSENT. */
-  const codes = useMemo(
-    () => new Map(CODE_STATUSES.map((s) => [normalizeCode(t(`timesheet.code.${s}`)), s] as const)),
-    [t],
-  );
+  /** The company's codes typed in the grid, e.g. "IZ" → LEAVE, and the one shown per status. */
+  const { codes, shown } = useMemo(() => {
+    const grid = companyCodes.flatMap((c) => {
+      const status = GRID_CODE_STATUSES.find((s) => s === c.status);
+      return status ? [{ ...c, status }] : [];
+    });
+    return {
+      codes: new Map(grid.map((c) => [normalizeCode(c.code), c.status] as const)),
+      shown: new Map<string, string>(grid.filter((c) => c.inGrid).map((c) => [c.status, c.code])),
+    };
+  }, [companyCodes]);
 
   const rows = useMemo<GridRow[]>(
     () =>
@@ -191,7 +199,9 @@ export function TimesheetGrid({ data, myName }: TimesheetGridProps) {
     /** Text a cell shows (and starts editing with). */
     const cellText = (entry: TimesheetEntryItem | null | undefined) => {
       if (!entry) return '';
-      return entry.status === 'WORKED' ? format.number(entry.hours) : t(`timesheet.code.${entry.status}`);
+      if (entry.status === 'WORKED') return format.number(entry.hours);
+      // A status whose code was removed since shows by name.
+      return shown.get(entry.status) ?? t(`timesheet.status.${entry.status}`);
     };
     const parse = (text: unknown): CellInput | null => {
       const value = typeof text === 'string' ? text.trim() : '';
@@ -202,7 +212,7 @@ export function TimesheetGrid({ data, myName }: TimesheetGridProps) {
       return hours.success ? { status: 'WORKED', hours: hours.data } : null;
     };
     const open = (r: GridRow, day: string) =>
-      r.row.canEnter && !r.row.hasMonthlyTotals && employedOn(r.row, day) && day <= data.today && !r.pending.has(day);
+      r.row.canEnter && !r.row.hasMonthlyTotals && employedOn(r.row, day) && !r.pending.has(day);
 
     const dayColumn = (day: string): ColDef<GridRow> => {
       const kind: DayKind = kinds.get(day) ?? 'WORKDAY';
@@ -322,7 +332,7 @@ export function TimesheetGrid({ data, myName }: TimesheetGridProps) {
         },
       },
     ];
-  }, [codes, data.today, days, format, kinds, myName, save, t]);
+  }, [codes, days, format, kinds, myName, save, shown, t]);
 
   return (
     <div className="w-full">

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Role } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { dayToDate, isoDay, todayIn } from '../src/common/dates';
 import { addMember, createPlan, createUser, givePlan, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
 
 let ctx: TestContext;
@@ -132,13 +133,22 @@ describe('daily hour entry', () => {
       'timesheet.entryMismatch',
     );
 
-    // Not employed yet, a day still to come, a closed team.
+    // Not employed yet, a closed team.
     const late = await hire(agent, siteA, teamA, 'Late', '2026-09-10');
     expect((await put({ ...day, workerId: late, status: 'WORKED', hours: '9' }).expect(409)).body.code).toBe('timesheet.notEmployed');
-    expect((await put({ ...day, date: '2099-01-02', status: 'WORKED', hours: '9' }).expect(409)).body.code).toBe('timesheet.futureDay');
     const closed = (await agent.post('/api/teams').send({ siteId: siteA, name: 'Closed' }).expect(201)).body.id as string;
     await agent.patch(`/api/teams/${closed}`).send({ isActive: false }).expect(204);
     expect((await put({ ...day, teamId: closed, status: 'WORKED', hours: '1' }).expect(409)).body.code).toBe('team.inactive');
+  });
+
+  it('takes hours and absences for days that have not come yet', async () => {
+    const { agent, siteA, teamA, workerId } = await company();
+    const later = dayToDate(todayIn('Asia/Tashkent'));
+    later.setUTCDate(later.getUTCDate() + 40);
+    const cell = { workerId, siteId: siteA, teamId: teamA };
+    await agent.put(entryUrl(randomUUID())).send({ ...cell, date: isoDay(later), status: 'WORKED', hours: '9' }).expect(200);
+    later.setUTCDate(later.getUTCDate() + 1);
+    await agent.put(entryUrl(randomUUID())).send({ ...cell, date: isoDay(later), status: 'LEAVE' }).expect(200);
   });
 
   it('keeps one source of hours per worker-month', async () => {
@@ -319,6 +329,65 @@ describe('tenant isolation', () => {
     expect(await ctx.prisma.timesheetEntry.count({ where: { id } })).toBe(1);
     await b.agent.put('/api/timesheet/settings').send({ entryRoles: ['FOREMAN'] }).expect(204);
     expect((await a.agent.get('/api/timesheet/settings').expect(200)).body.entryRoles).toEqual(['TIMEKEEPER']);
+    await a.agent.put('/api/timesheet-codes').send({ codes: [{ code: 'IZ', status: 'LEAVE', inGrid: true }] }).expect(204);
+    await b.agent.put('/api/timesheet-codes').send({ codes: [] }).expect(204);
+    expect((await a.agent.get('/api/timesheet-codes').expect(200)).body).toEqual([{ code: 'IZ', status: 'LEAVE', inGrid: true }]);
+  });
+});
+
+describe("the company's own codes", () => {
+  const CODES = [
+    { code: ' iz ', status: 'LEAVE', inGrid: true },
+    { code: 'OT', status: 'LEAVE', inGrid: false },
+    { code: 'b', status: 'SICK', inGrid: true },
+    { code: 'B/T', status: 'OFF', inGrid: false },
+  ];
+
+  it('are set by owners and admins, normalized and audited, and read by everyone', async () => {
+    const { agent, company: c } = await company();
+    await agent.put('/api/timesheet-codes').send({ codes: CODES }).expect(204);
+    const list = [
+      { code: 'IZ', status: 'LEAVE', inGrid: true },
+      { code: 'OT', status: 'LEAVE', inGrid: false },
+      { code: 'B', status: 'SICK', inGrid: true },
+      { code: 'B/T', status: 'OFF', inGrid: false },
+    ];
+    expect((await agent.get('/api/timesheet-codes').expect(200)).body).toEqual(list);
+
+    const foreman = await member(c.id, 'FOREMAN');
+    expect((await foreman.agent.get('/api/timesheet-codes').expect(200)).body).toEqual(list);
+    await foreman.agent.put('/api/timesheet-codes').send({ codes: [] }).expect(403);
+    const accountant = await member(c.id, 'ACCOUNTANT');
+    await accountant.agent.put('/api/timesheet-codes').send({ codes: [] }).expect(403);
+
+    await agent.put('/api/timesheet-codes').send({ codes: [{ code: 'Y', status: 'ABSENT', inGrid: true }] }).expect(204);
+    const log = await ctx.prisma.auditLog.findMany({ where: { action: 'timesheetCodes.set', companyId: c.id }, orderBy: { createdAt: 'asc' } });
+    expect(log.map((l) => l.data)).toEqual([
+      { from: [], to: list },
+      { from: expect.arrayContaining(list), to: [{ code: 'Y', status: 'ABSENT', inGrid: true }] },
+    ]);
+  });
+
+  it('refuses a code twice, a number, and a grid code that is missing, doubled or not typed in the grid', async () => {
+    const { agent } = await company();
+    const issues = async (codes: unknown[]) => (await agent.put('/api/timesheet-codes').send({ codes }).expect(400)).body.issues;
+    expect(await issues([...CODES, { code: 'IZ', status: 'SICK', inGrid: false }])).toEqual([{ path: 'codes.4.code', message: 'validation.codeTaken' }]);
+    expect(await issues([{ code: '8', status: 'ABSENT', inGrid: true }])).toEqual([{ path: 'codes.0.code', message: 'validation.codeIsNumber' }]);
+    expect(await issues([{ code: 'OT', status: 'LEAVE', inGrid: false }])).toEqual([{ path: 'codes.0.inGrid', message: 'validation.gridCodeOne' }]);
+    expect(
+      await issues([
+        { code: 'OT', status: 'LEAVE', inGrid: true },
+        { code: 'IZ', status: 'LEAVE', inGrid: true },
+      ]),
+    ).toEqual([{ path: 'codes.0.inGrid', message: 'validation.gridCodeOne' }]);
+    expect(await issues([{ code: 'V', status: 'OFF', inGrid: true }])).toEqual([{ path: 'codes.0.inGrid', message: 'validation.gridCodeNotForStatus' }]);
+    expect(await ctx.prisma.timesheetCode.count()).toBe(0);
+  });
+
+  it('belong to Payroll, so a company without the Timesheet module has them too', async () => {
+    const { agent } = await company({ timesheetModule: false });
+    await agent.put('/api/timesheet-codes').send({ codes: CODES }).expect(204);
+    expect((await agent.get('/api/timesheet-codes').expect(200)).body).toHaveLength(4);
   });
 });
 

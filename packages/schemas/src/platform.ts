@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ROLES } from './company.js';
 import { contactSchema } from './contact.js';
-import { decimalSchema, isoDateSchema } from './pay-rules.js';
+import { decimalSchema, isoDateSchema, yearMonthSchema } from './pay-rules.js';
 
 // What the platform admin (the product operator) manages: user accounts, plans and
 // subscription payments (AGENTS.md: Platform admin). Amounts are in soʻm.
@@ -68,11 +68,11 @@ export const updatePlanSchema = planSchema
 export type UpdatePlanInput = z.input<typeof updatePlanSchema>;
 export type UpdatePlan = z.output<typeof updatePlanSchema>;
 
-/** A payment made outside the app; it sets the company's paid-until date. */
+/** A payment made outside the app; it sets the month the company is paid through. */
 export const subscriptionPaymentSchema = z.object({
   amount: somSchema,
   paidOn: isoDateSchema,
-  paidUntil: isoDateSchema,
+  paidThrough: yearMonthSchema,
   note: optionalNote,
 });
 export type SubscriptionPaymentInput = z.input<typeof subscriptionPaymentSchema>;

@@ -70,3 +70,53 @@ export type EntryVersionQuery = z.output<typeof entryVersionQuerySchema>;
 /** `?siteId=…` of the month's grid. */
 export const timesheetQuerySchema = z.object({ siteId: z.uuid({ error: 'validation.required' }) });
 export type TimesheetQuery = z.output<typeof timesheetQuerySchema>;
+
+/** What a company's own code can stand for (DayStatus without WORKED: hours are typed as a number). */
+export const CODE_STATUSES = ['ABSENT', 'LEAVE', 'SICK', 'TRAVEL', 'OFF', 'NOT_EMPLOYED'] as const;
+export type CodeStatus = (typeof CODE_STATUSES)[number];
+
+/** Statuses typed with a code in the daily grid. OFF and NOT_EMPLOYED codes are for Excel imports only. */
+export const GRID_CODE_STATUSES = ['ABSENT', 'LEAVE', 'SICK', 'TRAVEL'] as const satisfies readonly CodeStatus[];
+
+const isGridStatus = (status: CodeStatus) => (GRID_CODE_STATUSES as readonly CodeStatus[]).includes(status);
+
+/**
+ * A company's own codes (Settings, owners and admins), the same list for the grid and for
+ * Excel imports, so everyone types the same letters in any language. Each grid status
+ * that has codes shows with exactly one of them (inGrid). The API also refuses two codes
+ * that are the same once normalized (normalizeCode in @puantaj/payroll), e.g. "iz" and "IZ".
+ */
+export const timesheetCodesSchema = z
+  .object({
+    codes: z
+      .array(
+        z.object({
+          code: z
+            .string({ error: 'validation.required' })
+            .trim()
+            .min(1, { error: 'validation.required' })
+            .max(10, { error: 'validation.tooLong' })
+            // A number in a cell is hours worked.
+            .refine((code) => !/^\d+(?:[.,]\d*)?$/.test(code), { error: 'validation.codeIsNumber' }),
+          status: z.enum(CODE_STATUSES, { error: 'validation.required' }),
+          inGrid: z.boolean(),
+        }),
+      )
+      .max(100, { error: 'validation.tooMany' }),
+  })
+  .superRefine(({ codes }, ctx) => {
+    for (const status of GRID_CODE_STATUSES) {
+      const rows = codes.flatMap((c, i) => (c.status === status ? [{ ...c, i }] : []));
+      const shown = rows.filter((c) => c.inGrid);
+      if (rows.length > 0 && shown.length !== 1) {
+        ctx.addIssue({ code: 'custom', path: ['codes', rows[0].i, 'inGrid'], message: 'validation.gridCodeOne' });
+      }
+    }
+    codes.forEach((c, i) => {
+      if (c.inGrid && !isGridStatus(c.status)) {
+        ctx.addIssue({ code: 'custom', path: ['codes', i, 'inGrid'], message: 'validation.gridCodeNotForStatus' });
+      }
+    });
+  });
+export type TimesheetCodesInput = z.input<typeof timesheetCodesSchema>;
+export type TimesheetCodes = z.output<typeof timesheetCodesSchema>;

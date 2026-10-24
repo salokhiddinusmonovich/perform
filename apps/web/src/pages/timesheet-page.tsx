@@ -1,7 +1,8 @@
-import type { YearMonth } from '@puantaj/schemas';
+import { GRID_CODE_STATUSES, type YearMonth } from '@puantaj/schemas';
 import { CalendarX, Info, MapPin, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
 import { LoadingState } from '@/components/loading-state';
@@ -12,10 +13,10 @@ import { StatusBadge } from '@/components/status-badge';
 import { TimesheetGrid } from '@/components/timesheet-grid';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { hasTimesheet, type Me } from '@/lib/auth';
+import { canManageCompany, hasTimesheet, type Me } from '@/lib/auth';
 import { useSites } from '@/lib/organisation';
 import { currentMonth } from '@/lib/payroll';
-import { CODE_STATUSES, useTimesheet, type TimesheetMonth } from '@/lib/timesheet';
+import { useTimesheet, useTimesheetCodes, type TimesheetCodeItem, type TimesheetMonth } from '@/lib/timesheet';
 
 export function TimesheetPage() {
   const { t } = useTranslation();
@@ -36,9 +37,11 @@ function TimesheetView({ me }: { me: Me }) {
   const choices = sites.data?.filter((s) => s.isActive || s.id === chosenSite) ?? [];
   const siteId = chosenSite ?? choices[0]?.id ?? null;
   const data = useTimesheet(month, siteId);
+  const codes = useTimesheetCodes();
 
-  if (sites.isPending) return <LoadingState />;
+  if (sites.isPending || codes.isPending) return <LoadingState />;
   if (sites.isError) return <ErrorState onRetry={() => sites.refetch()} />;
+  if (codes.isError) return <ErrorState onRetry={() => codes.refetch()} />;
   if (choices.length === 0) {
     return <EmptyState icon={MapPin} title={t('timesheet.noSitesTitle')} description={t('timesheet.noSitesDescription')} />;
   }
@@ -66,14 +69,16 @@ function TimesheetView({ me }: { me: Me }) {
       ) : data.isError ? (
         <ErrorState onRetry={() => data.refetch()} />
       ) : (
-        <MonthView data={data.data} myName={me.user.fullName} />
+        <MonthView data={data.data} codes={codes.data} me={me} />
       )}
     </div>
   );
 }
 
-function MonthView({ data, myName }: { data: TimesheetMonth; myName: string }) {
+function MonthView({ data, codes, me }: { data: TimesheetMonth; codes: TimesheetCodeItem[]; me: Me }) {
   const { t } = useTranslation();
+  // The code each absence shows with; statuses without one can't be typed yet.
+  const shown = GRID_CODE_STATUSES.flatMap((s) => codes.filter((c) => c.status === s && c.inGrid));
   if (data.rows.length === 0) {
     return <EmptyState icon={CalendarX} title={t('timesheet.emptyTitle')} description={t('timesheet.emptyDescription')} />;
   }
@@ -102,16 +107,30 @@ function MonthView({ data, myName }: { data: TimesheetMonth; myName: string }) {
           </AlertDescription>
         </Alert>
       )}
-      <TimesheetGrid data={data} myName={myName} />
+      {canEnter && shown.length < GRID_CODE_STATUSES.length && (
+        <Alert>
+          <Info aria-hidden />
+          <AlertTitle>{t('timesheet.codesMissingTitle')}</AlertTitle>
+          <AlertDescription>
+            <p>{canManageCompany(me) ? t('timesheet.codesMissingManager') : t('timesheet.codesMissingMember')}</p>
+            {canManageCompany(me) && (
+              <Link to="/settings/codes" className="font-medium underline underline-offset-4">
+                {t('timesheet.goToCodes')}
+              </Link>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+      <TimesheetGrid data={data} codes={codes} myName={me.user.fullName} />
       <section aria-labelledby="timesheet-legend" className="space-y-1 text-sm text-muted-foreground">
         <h2 id="timesheet-legend" className="font-medium text-foreground">
           {t('timesheet.legendTitle')}
         </h2>
         {canEnter && <p>{t('timesheet.howToEnter')}</p>}
         <ul className="flex flex-wrap gap-x-4 gap-y-1">
-          {CODE_STATUSES.map((s) => (
-            <li key={s}>
-              <span className="font-semibold text-foreground">{t(`timesheet.code.${s}`)}</span> — {t(`timesheet.status.${s}`)}
+          {shown.map((c) => (
+            <li key={c.status}>
+              <span className="font-semibold text-foreground">{c.code}</span> — {t(`timesheet.status.${c.status}`)}
             </li>
           ))}
           <li>

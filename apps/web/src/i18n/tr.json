@@ -29,7 +29,8 @@
     "adjustments": "Ek ödeme ve kesintiler",
     "payrollRun": "Maaş hesabı",
     "timesheet": "Puantaj",
-    "timesheetSettings": "Puantaj girişi"
+    "timesheetSettings": "Puantaj girişi",
+    "codes": "Kodlar"
   },
   "settings": {
     "language": "Dil",
@@ -242,12 +243,12 @@
     "planChangeHint": "Yeni paket gelecek ayın 1’inde başlar. Henüz başlamamış bir değişikliği iptal etmek için mevcut paketi seçin.",
     "activeWorkers": "Bu ay işçi: {{active}} / {{limit}}",
     "subscription": "Abonelik",
-    "paidUntil": "{{date}} tarihine kadar ödendi",
+    "paidThrough": "Son ödenen ay: {{month}}",
     "graceUntil": "Ödenmedi, {{date}} tarihinden sonra salt okunur",
     "readOnlySince": "{{date}} tarihinden beri salt okunur",
-    "noPaidUntil": "Bitiş tarihi yok",
-    "firstPaidUntil": "Ödemenin geçerli olduğu son gün",
-    "firstPaidUntilHint": "İlk ödenen dönemin veya deneme süresinin sonu.",
+    "noPaidThrough": "Bitiş tarihi yok",
+    "firstPaidThrough": "Son ödenen ay",
+    "firstPaidThroughHint": "İlk ödemenin veya deneme süresinin son ayı. Ay, son gününe kadar tam sayılır.",
     "payments": "Ödemeler",
     "recordPayment": "Ödemeyi kaydet",
     "paymentRecorded": "Ödeme kaydedildi",
@@ -255,7 +256,7 @@
     "amountSom": "Tutar, som",
     "amountHint": "Ücretsiz uzatma için 0",
     "paidOn": "Ödeme tarihi",
-    "newPaidUntil": "Ödemenin geçerli olduğu son gün",
+    "newPaidThrough": "Son ödenen ay",
     "note": "Not",
     "noPayments": "Henüz kayıtlı ödeme yok"
   },
@@ -298,7 +299,12 @@
     "restDayHoursAboveRestDays": "Ayın dinlenme günleri × 24'ten fazla",
     "holidayHoursAboveHolidays": "Ayın tatil günleri × 24'ten fazla",
     "dayHoursRange": "0 ile 24 arasında saat girin.",
-    "entryRolesRequired": "En az bir rol seçin."
+    "entryRolesRequired": "En az bir rol seçin.",
+    "codeIsNumber": "Sayı çalışılan saat demektir; kod için harf kullanın",
+    "codeTaken": "Bu kod listede zaten var",
+    "gridCodeOne": "Bu devamsızlığın puantajda görünecek tam olarak bir kodunu işaretleyin",
+    "gridCodeNotForStatus": "Puantajda yalnızca devamsızlıklar görünür",
+    "tooMany": "Çok fazla kayıt"
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -418,7 +424,6 @@
       "monthlyTotalsEntered": "İşçinin bu ay için aylık toplamları var. Bir ayın saatleri yalnızca tek bir kaynaktan gelir."
     },
     "timesheet": {
-      "futureDay": "Henüz gelmemiş bir güne saat girilemez.",
       "entryNotFound": "Böyle bir puantaj günü yok.",
       "entryMismatch": "Bu kayıt başka bir işçiye, güne veya yere ait.",
       "staleVersion": "Bu günü bu arada başka biri değiştirdi. Puantaj artık kaydedileni gösteriyor.",
@@ -725,7 +730,7 @@
     "end": "Kendi hesabıma dön"
   },
   "subscription": {
-    "graceTitle": "Abonelik {{date}} tarihinde sona erdi",
+    "graceTitle": "Abonelik yenilenmedi. Son ödenen ay: {{month}}",
     "graceDescription": "Her şey {{date}} tarihine kadar çalışır. Sonrasında ödeme alınana kadar şirket yalnızca görüntülenebilir. Ödeme için sistem operatörüyle iletişime geçin.",
     "readOnlyTitle": "Yalnızca görüntüleme: abonelik sona erdi",
     "readOnlyOwner": "Her şeyi görüntüleyip dışa aktarabilirsiniz ama hiçbir şey değiştirilemez. Ödeme için sistem operatörüyle iletişime geçin.",
@@ -1010,17 +1015,11 @@
     "moduleOffHint": "Bu ayın paketinde Puantaj modülü yok. Saatleri görebilirsiniz ama giremezsiniz.",
     "monthlyTotalsHint": "Bazı işçilerin bu ay için aylık toplamları var, bu yüzden günleri burada girilemez.",
     "legendTitle": "Puantaj nasıl okunur",
-    "howToEnter": "Bir gün seçip saati (örneğin 9 veya 7,5) ya da harf kodunu yazın ve Enter’a basın. Delete günü temizler.",
+    "howToEnter": "Bir gün seçip saati (örneğin 9 veya 7,5) ya da aşağıdaki kodlardan birini yazın ve Enter’a basın. Delete günü temizler.",
     "notEmployed": "o gün çalışmıyordu",
     "invalidCell": "0 ile 24 arasında saat (örneğin 9 veya 7,5) ya da harf kodlarından birini yazın.",
     "hoursWorked": "{{hours}} saat çalıştı",
     "changedBy": "Son değiştiren {{name}}, {{date}}",
-    "code": {
-      "ABSENT": "D",
-      "LEAVE": "İ",
-      "SICK": "R",
-      "TRAVEL": "G"
-    },
     "status": {
       "ABSENT": "Devamsız",
       "LEAVE": "İzin",
@@ -1031,7 +1030,11 @@
       "REST_DAY": "Tatil günü",
       "HOLIDAY": "Resmî tatil"
     },
-    "monthlyTotals": "aylık toplam"
+    "monthlyTotals": "aylık toplam",
+    "codesMissingTitle": "Bazı devamsızlıkların henüz kodu yok",
+    "codesMissingManager": "Saatler şimdiden girilebilir. Devamsızlıkları girmek için şirketin kodlarını ekleyin.",
+    "codesMissingMember": "Saatler şimdiden girilebilir. Kodu olmayan devamsızlıklar, bir sahip veya yönetici şirketin kodlarını ekledikten sonra girilebilir.",
+    "goToCodes": "Kodlara git"
   },
   "timesheetSettings": {
     "title": "Puantaj girişi",
@@ -1043,5 +1046,25 @@
       "FOREMAN": "Kendi ekipleri için"
     },
     "lastChanged": "Son değiştiren {{name}}, {{date}}"
+  },
+  "codes": {
+    "title": "Kodlar",
+    "description": "Şirketinizin puantajda devamsızlıklar için kullandığı harfler.",
+    "hint": "Şirketteki herkes, hangi dilde çalışırsa çalışsın, aynı kodları yazar. Saatler sayı olarak yazılır. Her devamsızlık puantajda onun için işaretlenen kodla görünür; diğer kodları da yazılabilir. Bir kodu değiştirmek girilmiş saatleri değiştirmez.",
+    "code": "Kod",
+    "status": "Anlamı",
+    "inGrid": "Puantajda görünür",
+    "inGridFor": "{{code}} puantajda görünsün",
+    "importOnly": "Yalnızca Excel içe aktarma",
+    "remove": "{{code}} kodunu kaldır",
+    "add": "Kod ekle",
+    "statuses": {
+      "ABSENT": "Devamsız",
+      "LEAVE": "İzin",
+      "SICK": "Raporlu",
+      "TRAVEL": "Görev / transfer",
+      "OFF": "Tatil (hafta tatili veya bayram)",
+      "NOT_EMPLOYED": "Çalışmıyor"
+    }
   }
 }

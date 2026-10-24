@@ -75,7 +75,8 @@ export interface PaymentRow {
   /** Decimal string, soʻm */
   amount: string;
   paidOn: string;
-  paidUntil: string;
+  /** "YYYY-MM-01" */
+  paidThrough: string;
   note: string | null;
   recordedBy: string;
   createdAt: string;

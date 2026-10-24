@@ -1,5 +1,5 @@
 import type { DayKind, DayStatus } from '@puantaj/payroll';
-import type { EntryRole, EntryStatus, TimesheetEntryInput, YearMonth } from '@puantaj/schemas';
+import type { CodeStatus, EntryRole, TimesheetEntryInput, YearMonth } from '@puantaj/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
 import type { WorkerName } from './payroll';
@@ -39,8 +39,6 @@ export interface TimesheetMonth {
   locked: boolean;
   /** This month's plan has the Timesheet module; without it no hours are entered */
   timesheetModule: boolean;
-  /** Today in the company's time zone */
-  today: string;
   /** null while no pay rules are set for the month */
   calendar: { date: string; kind: DayKind }[] | null;
   rows: TimesheetRow[];
@@ -52,11 +50,17 @@ export interface TimesheetSettingsItem {
   setAt: string | null;
 }
 
-/** Statuses entered with a letter code (hours are typed as a number). */
-export const CODE_STATUSES = ['ABSENT', 'LEAVE', 'SICK', 'TRAVEL'] as const satisfies readonly EntryStatus[];
+/** One of the company's own codes (apps/api/src/timesheet/timesheet-codes.service.ts). */
+export interface TimesheetCodeItem {
+  code: string;
+  status: CodeStatus;
+  /** The code the grid shows for its status */
+  inGrid: boolean;
+}
 
 export const TIMESHEET_KEY = ['timesheet'] as const;
 export const TIMESHEET_SETTINGS_KEY = ['timesheet', 'settings'] as const;
+export const TIMESHEET_CODES_KEY = ['timesheet', 'codes'] as const;
 
 export const timesheetKey = ({ year, month }: YearMonth, siteId: string) => [...TIMESHEET_KEY, year, month, siteId] as const;
 
@@ -66,6 +70,10 @@ export function useTimesheet(month: YearMonth, siteId: string | null) {
     queryFn: () => api.get<TimesheetMonth>(`/timesheet/${month.year}/${month.month}?siteId=${siteId}`),
     enabled: siteId !== null,
   });
+}
+
+export function useTimesheetCodes() {
+  return useQuery({ queryKey: TIMESHEET_CODES_KEY, queryFn: () => api.get<TimesheetCodeItem[]>('/timesheet-codes') });
 }
 
 export function useTimesheetSettings() {

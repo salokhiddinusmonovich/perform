@@ -44,7 +44,8 @@ export interface PaymentView {
   /** Decimal string, soʻm */
   amount: string;
   paidOn: string;
-  paidUntil: string;
+  /** "YYYY-MM-01" */
+  paidThrough: string;
   note: string | null;
   recordedBy: string;
   createdAt: Date;
@@ -85,7 +86,7 @@ export class PlatformService {
           owners: c.memberships.map((m) => ({ fullName: m.user.fullName, email: m.user.email, phone: m.user.phone })),
           plan: plan && planSummary(plan),
           nextPlan: next && { ...planSummary(next.plan), fromMonth: next.fromMonth },
-          subscription: subscriptionState({ paidUntil: c.paidUntil, plan }, today),
+          subscription: subscriptionState({ paidThrough: c.paidThrough, plan }, today),
           activeWorkers: await countActiveWorkers(this.prisma, c.id, year, month),
         };
       }),
@@ -106,7 +107,7 @@ export class PlatformService {
           currency: input.currency,
           timezone: input.timezone,
           slug: await uniqueSlug(tx, input.name),
-          paidUntil: dayToDate(input.paidUntil),
+          paidThrough: dayToDate(firstOfMonth(input.paidThrough)),
           plans: {
             create: {
               planId: plan.id,
@@ -133,7 +134,7 @@ export class PlatformService {
             ownerUserId: user.id,
             newOwnerAccount: temporaryPassword !== undefined,
             planId: plan.id,
-            paidUntil: input.paidUntil,
+            paidThrough: firstOfMonth(input.paidThrough),
           },
         },
         tx,
@@ -196,28 +197,29 @@ export class PlatformService {
       id: p.id,
       amount: p.amount.toString(),
       paidOn: isoDay(p.paidOn),
-      paidUntil: isoDay(p.paidUntil),
+      paidThrough: isoDay(p.paidThrough),
       note: p.note,
       recordedBy: p.recordedBy.fullName,
       createdAt: p.createdAt,
     }));
   }
 
-  /** Records a payment made outside the app; it sets the company's paid-until date. */
+  /** Records a payment made outside the app; it sets the month the company is paid through. */
   async recordPayment(auth: AuthContext, companyId: string, input: SubscriptionPayment): Promise<{ id: string }> {
     return this.prisma.$transaction(async (tx) => {
       const company = await findCompany(tx, companyId);
+      const paidThrough = firstOfMonth(input.paidThrough);
       const payment = await tx.subscriptionPayment.create({
         data: {
           companyId,
           amount: input.amount,
           paidOn: dayToDate(input.paidOn),
-          paidUntil: dayToDate(input.paidUntil),
+          paidThrough: dayToDate(paidThrough),
           note: input.note,
           recordedById: auth.user.id,
         },
       });
-      await tx.company.update({ where: { id: companyId }, data: { paidUntil: dayToDate(input.paidUntil) } });
+      await tx.company.update({ where: { id: companyId }, data: { paidThrough: dayToDate(paidThrough) } });
       await this.audit.record(
         {
           action: 'company.payment',
@@ -225,7 +227,11 @@ export class PlatformService {
           auth,
           entityType: 'SubscriptionPayment',
           entityId: payment.id,
-          data: { ...input, previousPaidUntil: company.paidUntil ? isoDay(company.paidUntil) : null },
+          data: {
+            ...input,
+            paidThrough,
+            previousPaidThrough: company.paidThrough ? isoDay(company.paidThrough) : null,
+          },
         },
         tx,
       );

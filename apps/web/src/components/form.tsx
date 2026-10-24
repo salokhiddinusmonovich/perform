@@ -1,6 +1,8 @@
+import type { YearMonth } from '@puantaj/schemas';
 import type { ReactNode } from 'react';
 import type { FieldError } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { MonthPicker } from '@/components/month-picker';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -33,6 +35,42 @@ export function Field({ id, label, error, hint, children }: FieldProps) {
         hint && <p className="text-sm text-muted-foreground">{hint}</p>
       )}
     </div>
+  );
+}
+
+/**
+ * A month and year picked together (a salary's first month, a paid-through month), with
+ * its error or hint below, like Field. The two selects are named by the legend.
+ */
+export function MonthField({
+  legend,
+  value,
+  onChange,
+  error,
+  hint,
+}: {
+  legend: string;
+  value: YearMonth;
+  onChange: (value: YearMonth) => void;
+  /** The year's or month's error (schemas coerce them, so their form errors are loosely typed) */
+  error?: { message?: string };
+  hint?: ReactNode;
+}) {
+  const { t } = useTranslation();
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="mb-1.5 text-sm font-medium">{legend}</legend>
+      <MonthPicker value={value} onChange={onChange} />
+      {error?.message ? (
+        <p role="alert" className="text-sm text-destructive">
+          {t(error.message)}
+        </p>
+      ) : typeof hint === 'string' ? (
+        <p className="text-sm text-muted-foreground">{hint}</p>
+      ) : (
+        hint
+      )}
+    </fieldset>
   );
 }
 

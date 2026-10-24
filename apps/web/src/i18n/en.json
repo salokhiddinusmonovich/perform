@@ -29,7 +29,8 @@
     "adjustments": "Adjustments",
     "payrollRun": "Pay calculation",
     "timesheet": "Timesheet",
-    "timesheetSettings": "Timesheet entry"
+    "timesheetSettings": "Timesheet entry",
+    "codes": "Codes"
   },
   "settings": {
     "language": "Language",
@@ -242,12 +243,12 @@
     "planChangeHint": "A new plan starts on the 1st of next month. Choose the current plan to cancel a change that hasn’t started.",
     "activeWorkers": "Workers this month: {{active}} of {{limit}}",
     "subscription": "Subscription",
-    "paidUntil": "Paid until {{date}}",
+    "paidThrough": "Paid through {{month}}",
     "graceUntil": "Unpaid, read-only from {{date}}",
     "readOnlySince": "Read-only since {{date}}",
-    "noPaidUntil": "No end date",
-    "firstPaidUntil": "Paid until",
-    "firstPaidUntilHint": "The end of the first paid period or of the trial.",
+    "noPaidThrough": "No end date",
+    "firstPaidThrough": "Paid through",
+    "firstPaidThroughHint": "The last month of the first payment or of the trial. The month counts in full, to its last day.",
     "payments": "Payments",
     "recordPayment": "Record payment",
     "paymentRecorded": "Payment recorded",
@@ -255,7 +256,7 @@
     "amountSom": "Amount, soʻm",
     "amountHint": "0 for a free extension",
     "paidOn": "Paid on",
-    "newPaidUntil": "Paid until",
+    "newPaidThrough": "Paid through",
     "note": "Note",
     "noPayments": "No payments recorded yet"
   },
@@ -298,7 +299,12 @@
     "restDayHoursAboveRestDays": "More than the month’s rest days × 24",
     "holidayHoursAboveHolidays": "More than the month’s holidays × 24",
     "dayHoursRange": "Enter hours from 0 to 24.",
-    "entryRolesRequired": "Choose at least one role."
+    "entryRolesRequired": "Choose at least one role.",
+    "codeIsNumber": "A number means hours worked; use letters for a code",
+    "codeTaken": "This code is already in the list",
+    "gridCodeOne": "Tick exactly one code of this absence to show in the timesheet",
+    "gridCodeNotForStatus": "Only absences are shown in the timesheet",
+    "tooMany": "Too many entries"
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -418,7 +424,6 @@
       "monthlyTotalsEntered": "The worker has monthly totals for this month. A month’s hours come from one source only."
     },
     "timesheet": {
-      "futureDay": "Hours can’t be entered for a day that hasn’t come yet.",
       "entryNotFound": "This timesheet day doesn’t exist.",
       "entryMismatch": "This entry belongs to another worker, day or place.",
       "staleVersion": "Someone changed this day meanwhile. The timesheet now shows what is saved.",
@@ -725,7 +730,7 @@
     "end": "Back to my account"
   },
   "subscription": {
-    "graceTitle": "The subscription ended on {{date}}",
+    "graceTitle": "The subscription was not renewed. Last month paid: {{month}}",
     "graceDescription": "Everything still works until {{date}}. After that the company becomes read-only until the payment is received. Contact the system operator to pay.",
     "readOnlyTitle": "Read-only: the subscription has ended",
     "readOnlyOwner": "You can view and export everything, but nothing can be changed. Contact the system operator to pay.",
@@ -1010,17 +1015,11 @@
     "moduleOffHint": "This month’s plan doesn’t include the Timesheet module. You can view the hours, but not enter them.",
     "monthlyTotalsHint": "Some workers have monthly totals for this month, so their days can’t be entered here.",
     "legendTitle": "How to read the timesheet",
-    "howToEnter": "Select a day and type the hours (for example 9 or 7,5) or a letter code, then press Enter. Delete clears the day.",
+    "howToEnter": "Select a day and type the hours (for example 9 or 7,5) or one of the codes below, then press Enter. Delete clears the day.",
     "notEmployed": "not employed on that day",
     "invalidCell": "Type hours from 0 to 24 (for example 9 or 7,5) or one of the letter codes.",
     "hoursWorked": "{{hours}} h worked",
     "changedBy": "Last changed by {{name}}, {{date}}",
-    "code": {
-      "ABSENT": "A",
-      "LEAVE": "L",
-      "SICK": "S",
-      "TRAVEL": "T"
-    },
     "status": {
       "ABSENT": "Absent",
       "LEAVE": "Leave",
@@ -1031,7 +1030,11 @@
       "REST_DAY": "Rest day",
       "HOLIDAY": "Public holiday"
     },
-    "monthlyTotals": "monthly totals"
+    "monthlyTotals": "monthly totals",
+    "codesMissingTitle": "Some absences have no code yet",
+    "codesMissingManager": "Hours can be entered already. To enter absences, add your company’s codes for them.",
+    "codesMissingMember": "Hours can be entered already. Absences without a code can be entered once an owner or administrator adds the company’s codes.",
+    "goToCodes": "Go to codes"
   },
   "timesheetSettings": {
     "title": "Timesheet entry",
@@ -1043,5 +1046,25 @@
       "FOREMAN": "For their own teams"
     },
     "lastChanged": "Last changed by {{name}}, {{date}}"
+  },
+  "codes": {
+    "title": "Codes",
+    "description": "The letters your company uses for absences in the timesheet.",
+    "hint": "Everyone in the company types the same codes, whatever their language. Hours are typed as a number. Each absence shows in the timesheet with the code ticked for it; its other codes can be typed too. Changing a code changes no hours already entered.",
+    "code": "Code",
+    "status": "Means",
+    "inGrid": "Shown in the timesheet",
+    "inGridFor": "Show {{code}} in the timesheet",
+    "importOnly": "Excel import only",
+    "remove": "Remove code {{code}}",
+    "add": "Add code",
+    "statuses": {
+      "ABSENT": "Absent",
+      "LEAVE": "Leave",
+      "SICK": "Sick",
+      "TRAVEL": "Travel / transfer",
+      "OFF": "Day off (rest day or holiday)",
+      "NOT_EMPLOYED": "Not employed"
+    }
   }
 }

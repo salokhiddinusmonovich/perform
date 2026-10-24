@@ -32,13 +32,14 @@ export interface Me {
 }
 
 /**
- * NONE: no paid-until date (never expires). GRACE: unpaid, still working (14 days).
+ * NONE: not paid through any month (never expires). GRACE: unpaid, still working (14 days).
  * READ_ONLY: the grace period is over; nothing can be changed.
  */
 export interface Subscription {
   status: 'NONE' | 'ACTIVE' | 'GRACE' | 'READ_ONLY';
   planName: string | null;
-  paidUntil: string | null;
+  /** The last month paid for, "YYYY-MM-01" */
+  paidThrough: string | null;
   graceEndsOn: string | null;
 }
 

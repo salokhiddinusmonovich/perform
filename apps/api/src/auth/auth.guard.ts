@@ -180,7 +180,7 @@ export class AuthGuard implements CanActivate {
       modules: timesheet ? ['PAYROLL', 'TIMESHEET'] : ['PAYROLL'],
       siteIds: SITE_SCOPED.includes(membership.role) ? membership.sites.map((s) => s.siteId) : null,
       teamIds: membership.role === 'FOREMAN' ? membership.teams.map((t) => t.teamId) : null,
-      subscription: subscriptionState({ paidUntil: company.paidUntil, plan }, today),
+      subscription: subscriptionState({ paidThrough: company.paidThrough, plan }, today),
     };
   }
 }

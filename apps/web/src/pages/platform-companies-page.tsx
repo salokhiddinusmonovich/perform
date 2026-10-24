@@ -6,6 +6,7 @@ import {
   type CreateCompanyInput,
   type SubscriptionPaymentInput,
   type UpdatePlatformCompanyInput,
+  type YearMonth,
 } from '@puantaj/schemas';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -17,7 +18,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
 import { DatePicker } from '@/components/date-picker';
-import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
+import { Field, fieldControlProps, FormActions, FormError, MonthField } from '@/components/form';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
 import { StatusBadge } from '@/components/status-badge';
@@ -37,7 +38,7 @@ import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { isPlatformAdmin, ME_KEY, useMe, type Subscription } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { today } from '@/lib/format';
+import { monthAfter, today } from '@/lib/format';
 import {
   PLATFORM_CURRENCY,
   PLATFORM_KEY,
@@ -117,7 +118,7 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
             <div className="mt-1">
               <StatusBadge tone="warning">
                 {t('platform.nextPlan', {
-                  month: format.month(Number(nextPlan.fromMonth.slice(0, 4)), Number(nextPlan.fromMonth.slice(5, 7))),
+                  month: format.monthOf(nextPlan.fromMonth),
                   name: nextPlan.name,
                 })}
               </StatusBadge>
@@ -271,16 +272,16 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
 function SubscriptionStatus({ subscription }: { subscription: Subscription }) {
   const { t } = useTranslation();
   const format = useFormat();
-  const { status, paidUntil, graceEndsOn } = subscription;
+  const { status, paidThrough, graceEndsOn } = subscription;
   switch (status) {
     case 'ACTIVE':
-      return <StatusBadge tone="success">{t('platform.paidUntil', { date: format.date(paidUntil!) })}</StatusBadge>;
+      return <StatusBadge tone="success">{t('platform.paidThrough', { month: format.monthOf(paidThrough!) })}</StatusBadge>;
     case 'GRACE':
       return <StatusBadge tone="warning">{t('platform.graceUntil', { date: format.date(graceEndsOn!) })}</StatusBadge>;
     case 'READ_ONLY':
       return <StatusBadge tone="danger">{t('platform.readOnlySince', { date: format.date(graceEndsOn!) })}</StatusBadge>;
     case 'NONE':
-      return <StatusBadge tone="neutral">{t('platform.noPaidUntil')}</StatusBadge>;
+      return <StatusBadge tone="neutral">{t('platform.noPaidThrough')}</StatusBadge>;
   }
 }
 
@@ -344,7 +345,7 @@ function CreateCompanyDialog({
       timezone: 'Asia/Tashkent',
       owner: { fullName: '', phone: '', email: '' },
       planId: '',
-      paidUntil: '',
+      paidThrough: monthAfter(today(), 0),
     },
   });
   const { errors } = form.formState;
@@ -397,11 +398,15 @@ function CreateCompanyDialog({
           />
           <Controller
             control={form.control}
-            name="paidUntil"
+            name="paidThrough"
             render={({ field }) => (
-              <Field id="c-paid-until" label={t('platform.firstPaidUntil')} error={errors.paidUntil} hint={t('platform.firstPaidUntilHint')}>
-                <DatePicker id="c-paid-until" value={field.value} onChange={field.onChange} invalid={!!errors.paidUntil} />
-              </Field>
+              <MonthField
+                legend={t('platform.firstPaidThrough')}
+                value={field.value as YearMonth}
+                onChange={field.onChange}
+                error={errors.paidThrough?.year ?? errors.paidThrough?.month}
+                hint={t('platform.firstPaidThroughHint')}
+              />
             )}
           />
           <Separator />
@@ -523,9 +528,13 @@ function EditCompanyDialog({
   );
 }
 
-const NEW_PAYMENT = (): SubscriptionPaymentInput => ({ amount: '', paidOn: today(), paidUntil: '', note: '' });
+/** A new payment; by default it pays the month after the one already paid (or this month). */
+const NEW_PAYMENT = (company: CompanyRow | null): SubscriptionPaymentInput => {
+  const paidThrough = company?.subscription.paidThrough;
+  return { amount: '', paidOn: today(), paidThrough: paidThrough ? monthAfter(paidThrough, 1) : monthAfter(today(), 0), note: '' };
+};
 
-/** Records a payment made outside the app (it sets the paid-until date) and lists earlier ones. */
+/** Records a payment made outside the app (it sets the month paid through) and lists earlier ones. */
 function PaymentsDialog({
   company,
   onClose,
@@ -547,12 +556,12 @@ function PaymentsDialog({
   const [formError, setFormError] = useState<string>();
   const form = useForm<SubscriptionPaymentInput>({
     resolver: zodResolver(subscriptionPaymentSchema),
-    defaultValues: NEW_PAYMENT(),
+    values: NEW_PAYMENT(company),
   });
   const { errors } = form.formState;
 
   const close = () => {
-    form.reset(NEW_PAYMENT());
+    form.reset(NEW_PAYMENT(company));
     setFormError(undefined);
     onClose();
   };
@@ -560,7 +569,7 @@ function PaymentsDialog({
   const record = useMutation({
     mutationFn: (values: SubscriptionPaymentInput) => api.post(`/platform/companies/${company!.id}/payments`, values),
     onSuccess: async () => {
-      form.reset(NEW_PAYMENT());
+      form.reset(NEW_PAYMENT(company));
       toast.success(t('platform.paymentRecorded'));
       await Promise.all([queryClient.invalidateQueries({ queryKey: paymentsKey }), onRecorded()]);
     },
@@ -578,9 +587,9 @@ function PaymentsDialog({
         cell: ({ row }) => format.money(row.original.amount, PLATFORM_CURRENCY),
       },
       {
-        accessorKey: 'paidUntil',
-        header: t('platform.newPaidUntil'),
-        cell: ({ row }) => format.date(row.original.paidUntil),
+        accessorKey: 'paidThrough',
+        header: t('platform.newPaidThrough'),
+        cell: ({ row }) => format.monthOf(row.original.paidThrough),
       },
       {
         id: 'note',
@@ -619,7 +628,7 @@ function PaymentsDialog({
           })}
         >
           <FormError message={formError} />
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field id="pay-amount" label={t('platform.amountSom')} error={errors.amount} hint={t('platform.amountHint')}>
               <Input {...fieldControlProps('pay-amount', errors.amount)} {...form.register('amount')} inputMode="decimal" autoComplete="off" />
             </Field>
@@ -632,22 +641,19 @@ function PaymentsDialog({
                 </Field>
               )}
             />
-            <Controller
-              control={form.control}
-              name="paidUntil"
-              render={({ field }) => (
-                <Field id="pay-until" label={t('platform.newPaidUntil')} error={errors.paidUntil}>
-                  <DatePicker
-                    id="pay-until"
-                    value={field.value}
-                    onChange={field.onChange}
-                    invalid={!!errors.paidUntil}
-                    defaultMonth={company?.subscription.paidUntil ?? undefined}
-                  />
-                </Field>
-              )}
-            />
           </div>
+          <Controller
+            control={form.control}
+            name="paidThrough"
+            render={({ field }) => (
+              <MonthField
+                legend={t('platform.newPaidThrough')}
+                value={field.value as YearMonth}
+                onChange={field.onChange}
+                error={errors.paidThrough?.year ?? errors.paidThrough?.month}
+              />
+            )}
+          />
           <Field id="pay-note" label={t('platform.note')} error={errors.note}>
             <Input {...fieldControlProps('pay-note', errors.note)} {...form.register('note')} autoComplete="off" />
           </Field>

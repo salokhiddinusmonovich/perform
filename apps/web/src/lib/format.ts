@@ -6,6 +6,7 @@
  * builds) ship without Uzbek locale data, and Intl then prints "2026 M10 19" or
  * English-style numbers. Russian, Turkish and English use Intl.
  */
+import type { YearMonth } from '@puantaj/schemas';
 import type { Language } from '@/i18n';
 
 const LOCALES: Record<Language, string> = {
@@ -166,4 +167,10 @@ export function isoWeekday(day: string): number {
 export function today(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** The month `offset` months after the month of `day` ("YYYY-MM-DD"). */
+export function monthAfter(day: string, offset: number): YearMonth {
+  const index = Number(day.slice(0, 4)) * 12 + Number(day.slice(5, 7)) - 1 + offset;
+  return { year: Math.floor(index / 12), month: (index % 12) + 1 };
 }

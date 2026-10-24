@@ -26,6 +26,13 @@ function day(offset: number) {
   return isoDay(date);
 }
 
+/** The month `offset` months from this month in Tashkent. */
+function month(offset: number) {
+  const date = dayToDate(todayIn('Asia/Tashkent'));
+  date.setUTCMonth(date.getUTCMonth() + offset, 1);
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1 };
+}
+
 async function platformAdmin() {
   const admin = await createUser(ctx.prisma, { isPlatformAdmin: true });
   return { admin, agent: await loginAs(ctx.app, admin.email!) };
@@ -38,7 +45,7 @@ function newCompany(planId: string) {
     timezone: 'Asia/Tashkent',
     owner: { fullName: 'Test Owner', phone: '+998901234567', email: '' },
     planId,
-    paidUntil: day(30),
+    paidThrough: month(1),
   };
 }
 
@@ -81,7 +88,7 @@ describe('platform companies', () => {
       id: res.body.companyId,
       name: 'Perform Test MEP',
       role: 'OWNER',
-      subscription: { status: 'ACTIVE', planName: plan.name, paidUntil: day(30) },
+      subscription: { status: 'ACTIVE', planName: plan.name, paidThrough: firstOfMonth(month(1)) },
     });
 
     const list = await agent.get('/api/platform/companies').expect(200);
@@ -275,23 +282,30 @@ describe('plans', () => {
 });
 
 describe('subscriptions', () => {
-  async function companyPaidUntil(paidUntil: string) {
+  async function companyPaidThrough(paidThrough: { year: number; month: number }) {
     const owner = await memberOfNewCompany(ctx, 'OWNER');
     const plan = await createPlan(ctx.prisma);
     await givePlan(ctx.prisma, owner.company.id, plan.id);
-    await ctx.prisma.company.update({ where: { id: owner.company.id }, data: { paidUntil: dayToDate(paidUntil) } });
+    await ctx.prisma.company.update({ where: { id: owner.company.id }, data: { paidThrough: dayToDate(firstOfMonth(paidThrough)) } });
     return owner;
   }
 
-  it('warns during the 14-day grace period but keeps working', async () => {
-    const { agent } = await companyPaidUntil(day(-14));
+  it('is active through the whole paid month', async () => {
+    const { agent } = await companyPaidThrough(month(0));
     const me = (await agent.get('/api/auth/me').expect(200)).body;
-    expect(me.activeCompany.subscription).toMatchObject({ status: 'GRACE', paidUntil: day(-14), graceEndsOn: day(0) });
+    const end = dayToDate(firstOfMonth(month(1)));
+    end.setUTCDate(14);
+    expect(me.activeCompany.subscription).toMatchObject({
+      status: 'ACTIVE',
+      paidThrough: firstOfMonth(month(0)),
+      graceEndsOn: isoDay(end),
+    });
     await agent.patch('/api/company').send({ name: 'Still Working', currency: 'UZS', timezone: 'Asia/Tashkent' }).expect(204);
   });
 
   it('is read-only after the grace period until a payment is recorded', async () => {
-    const { company, agent } = await companyPaidUntil(day(-15));
+    // Grace ended on the 14th of last month.
+    const { company, agent } = await companyPaidThrough(month(-2));
     const settings = { name: 'Changed', currency: 'UZS', timezone: 'Asia/Tashkent' };
     expect((await agent.get('/api/auth/me').expect(200)).body.activeCompany.subscription.status).toBe('READ_ONLY');
     await agent.get('/api/company').expect(200);
@@ -300,28 +314,32 @@ describe('subscriptions', () => {
     expect((await agent.post('/api/sites').send({ name: 'Site A' }).expect(403)).body.code).toBe('subscription.expired');
 
     const { admin, agent: platform } = await platformAdmin();
-    const payment = { amount: '1 000 000', paidOn: day(0), paidUntil: day(30), note: 'Invoice 12' };
+    const payment = { amount: '1 000 000', paidOn: day(0), paidThrough: month(1), note: 'Invoice 12' };
     await platform.post(`/api/platform/companies/${company.id}/payments`).send(payment).expect(201);
     await agent.patch('/api/company').send(settings).expect(204);
 
     const payments = (await platform.get(`/api/platform/companies/${company.id}/payments`).expect(200)).body;
     expect(payments).toEqual([
-      expect.objectContaining({ amount: '1000000', paidOn: day(0), paidUntil: day(30), note: 'Invoice 12', recordedBy: admin.fullName }),
+      expect.objectContaining({ amount: '1000000', paidOn: day(0), paidThrough: firstOfMonth(month(1)), note: 'Invoice 12', recordedBy: admin.fullName }),
     ]);
     const log = await ctx.prisma.auditLog.findFirstOrThrow({ where: { action: 'company.payment', companyId: company.id } });
-    expect(log.data).toMatchObject({ amount: '1000000', paidUntil: day(30), previousPaidUntil: day(-15) });
+    expect(log.data).toMatchObject({
+      amount: '1000000',
+      paidThrough: firstOfMonth(month(1)),
+      previousPaidThrough: firstOfMonth(month(-2)),
+    });
   });
 
-  it('never expires a company without a paid-until date (from before plans)', async () => {
+  it('never expires a company not paid through any month (from before plans)', async () => {
     const { agent } = await memberOfNewCompany(ctx, 'OWNER');
     const me = (await agent.get('/api/auth/me').expect(200)).body;
-    expect(me.activeCompany.subscription).toEqual({ status: 'NONE', planName: null, paidUntil: null, graceEndsOn: null });
+    expect(me.activeCompany.subscription).toEqual({ status: 'NONE', planName: null, paidThrough: null, graceEndsOn: null });
     expect(me.activeCompany.modules).toEqual(['PAYROLL']);
   });
 
   it('refuses a payment for a company that does not exist', async () => {
     const { agent } = await platformAdmin();
-    const payment = { amount: '0', paidOn: day(0), paidUntil: day(30) };
+    const payment = { amount: '0', paidOn: day(0), paidThrough: month(1) };
     const res = await agent.post('/api/platform/companies/00000000-0000-4000-8000-000000000000/payments').send(payment);
     expect(res.status).toBe(404);
     expect(res.body.code).toBe('company.notFound');
@@ -333,7 +351,7 @@ describe('worker limit', () => {
     const owner = await memberOfNewCompany(ctx, 'OWNER');
     const plan = await createPlan(ctx.prisma, { maxActiveWorkers });
     await givePlan(ctx.prisma, owner.company.id, plan.id);
-    await ctx.prisma.company.update({ where: { id: owner.company.id }, data: { paidUntil: dayToDate(day(30)) } });
+    await ctx.prisma.company.update({ where: { id: owner.company.id }, data: { paidThrough: dayToDate(firstOfMonth(month(1))) } });
     const siteA = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
     const siteB = (await owner.agent.post('/api/sites').send({ name: 'Site B' }).expect(201)).body.id as string;
     return { ...owner, plan, siteA, siteB };

@@ -47,10 +47,29 @@ async function main() {
     const plan = await prisma.plan.create({
       data: { name: DEMO_PLAN, monthlyPrice: '1500000', maxActiveWorkers: 200, timesheetModule: true },
     });
-    const paidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    // Paid through next month.
+    const now = new Date();
+    const paidThrough = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
     const company = (name: string, slug: string) =>
       // On the plan for every month the demo data may cover.
-      prisma.company.create({ data: { name, slug, paidUntil, plans: { create: { planId: plan.id, fromMonth: new Date('2020-01-01') } } } });
+      prisma.company.create({
+        data: {
+          name,
+          slug,
+          paidThrough,
+          plans: { create: { planId: plan.id, fromMonth: new Date('2020-01-01') } },
+          // Demo codes for the grid; a real company sets its own in Settings.
+          timesheetCodes: {
+            create: [
+              { code: 'Y', status: 'ABSENT', inGrid: true },
+              { code: 'T', status: 'LEAVE', inGrid: true },
+              { code: 'B', status: 'SICK', inGrid: true },
+              { code: 'S', status: 'TRAVEL', inGrid: true },
+              { code: 'D', status: 'OFF' },
+            ],
+          },
+        },
+      });
     const demo = await company('Demo MEP', 'demo-mep');
     const other = await company('Other Construction', 'demo-other');
 

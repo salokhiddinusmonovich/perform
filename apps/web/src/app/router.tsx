@@ -76,6 +76,10 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/timesheet-settings-page')).TimesheetSettingsPage }),
       },
       {
+        path: 'settings/codes',
+        lazy: async () => ({ Component: (await import('@/pages/timesheet-codes-page')).TimesheetCodesPage }),
+      },
+      {
         path: 'platform/companies',
         lazy: async () => ({
           Component: (await import('@/pages/platform-companies-page')).PlatformCompaniesPage,

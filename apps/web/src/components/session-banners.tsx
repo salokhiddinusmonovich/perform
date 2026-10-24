@@ -64,13 +64,13 @@ export function SubscriptionBanner({ me }: { me: Me }) {
   const format = useFormat();
   const company = me.activeCompany;
   if (!company) return null;
-  const { status, paidUntil, graceEndsOn } = company.subscription;
+  const { status, paidThrough, graceEndsOn } = company.subscription;
 
-  if (status === 'GRACE' && company.role === 'OWNER' && paidUntil && graceEndsOn) {
+  if (status === 'GRACE' && company.role === 'OWNER' && paidThrough && graceEndsOn) {
     return (
       <Alert variant="warning" className="mb-4">
         <TriangleAlert aria-hidden />
-        <AlertTitle>{t('subscription.graceTitle', { date: format.date(paidUntil) })}</AlertTitle>
+        <AlertTitle>{t('subscription.graceTitle', { month: format.monthOf(paidThrough) })}</AlertTitle>
         <AlertDescription>{t('subscription.graceDescription', { date: format.date(graceEndsOn) })}</AlertDescription>
       </Alert>
     );

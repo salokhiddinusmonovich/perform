@@ -5,7 +5,7 @@ import type { TimesheetEntry, YearMonth } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict, forbidden, notFound } from '../common/api-error';
-import { currentOn, dayToDate, inMonth, isoDay, monthOfDay, monthSpan, todayIn } from '../common/dates';
+import { currentOn, dayToDate, inMonth, isoDay, monthOfDay, monthSpan } from '../common/dates';
 import { entersHoursAt, seesPlacement, visibleSites } from '../organisation/access';
 import { assertMonthsOpen, lockWorkerMonth } from '../pay-rules/months';
 import { PayRulesService } from '../pay-rules/pay-rules.service';
@@ -47,8 +47,6 @@ export interface TimesheetMonthView {
   locked: boolean;
   /** This month's plan has the Timesheet module; without it no hours are entered. */
   timesheetModule: boolean;
-  /** Today in the company's time zone: later days take no entries. */
-  today: string;
   /** Kind of each day under the site's rules; null while no rules are set for the month. */
   calendar: { date: string; kind: DayKind }[] | null;
   rows: TimesheetRowView[];
@@ -191,7 +189,6 @@ export class TimesheetService {
       site: { id: site.id, name: site.name, isActive: site.isActive },
       locked: locked > 0,
       timesheetModule,
-      today: todayIn(auth.company.timezone),
       calendar,
       rows: sorted,
     };
@@ -204,7 +201,6 @@ export class TimesheetService {
   async write(auth: CompanyAuthContext, id: string, input: TimesheetEntry): Promise<TimesheetEntryView> {
     const companyId = auth.company.id;
     const { year, month } = monthOfDay(input.date);
-    if (input.date > todayIn(auth.company.timezone)) throw conflict('timesheet.futureDay');
     return this.prisma.$transaction(async (tx) => {
       const entryRoles = await this.settings.entryRoles(companyId, tx);
       if (!entersHoursAt(auth, entryRoles, input.siteId, input.teamId)) throw forbidden();

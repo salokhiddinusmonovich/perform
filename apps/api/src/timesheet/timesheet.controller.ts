@@ -1,11 +1,13 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Put, Query } from '@nestjs/common';
 import {
   entryVersionQuerySchema,
+  timesheetCodesSchema,
   timesheetEntrySchema,
   timesheetQuerySchema,
   timesheetSettingsSchema,
   yearMonthSchema,
   type EntryVersionQuery,
+  type TimesheetCodes,
   type TimesheetEntry,
   type TimesheetQuery,
   type TimesheetSettings,
@@ -13,6 +15,7 @@ import {
 } from '@puantaj/schemas';
 import { CompanyAuth, ForModule, Roles, type CompanyAuthContext } from '../auth/auth.context';
 import { ZodPipe } from '../common/zod.pipe';
+import { TimesheetCodesService, type TimesheetCodeView } from './timesheet-codes.service';
 import { TimesheetSettingsService, type TimesheetSettingsView } from './timesheet-settings.service';
 import { TimesheetService, type TimesheetEntryView, type TimesheetMonthView } from './timesheet.service';
 
@@ -35,6 +38,33 @@ export class TimesheetSettingsController {
     @Body(new ZodPipe(timesheetSettingsSchema)) body: TimesheetSettings,
   ): Promise<void> {
     return this.settings.set(auth, body);
+  }
+}
+
+/**
+ * The company's own codes, typed in the grid and read by Excel imports (so part of
+ * Payroll, which every company has). Everyone who works with hours reads them; owners
+ * and admins change them.
+ */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER', 'TIMEKEEPER', 'FOREMAN')
+@Controller('timesheet-codes')
+export class TimesheetCodesController {
+  constructor(private readonly codes: TimesheetCodesService) {}
+
+  @Get()
+  list(@CompanyAuth() auth: CompanyAuthContext): Promise<TimesheetCodeView[]> {
+    return this.codes.list(auth.company.id);
+  }
+
+  @Put()
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  set(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Body(new ZodPipe(timesheetCodesSchema)) body: TimesheetCodes,
+  ): Promise<void> {
+    return this.codes.set(auth, body);
   }
 }
 

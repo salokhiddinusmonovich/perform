@@ -29,7 +29,8 @@
     "adjustments": "Qoʻshimcha va ushlanmalar",
     "payrollRun": "Ish haqi hisobi",
     "timesheet": "Tabel",
-    "timesheetSettings": "Tabel kiritish"
+    "timesheetSettings": "Tabel kiritish",
+    "codes": "Kodlar"
   },
   "settings": {
     "language": "Til",
@@ -242,12 +243,12 @@
     "planChangeHint": "Yangi tarif keyingi oyning 1-sanasidan boshlanadi. Hali boshlanmagan oʻzgarishni bekor qilish uchun joriy tarifni tanlang.",
     "activeWorkers": "Bu oy ishchilar: {{active}} / {{limit}}",
     "subscription": "Obuna",
-    "paidUntil": "{{date}} gacha toʻlangan",
+    "paidThrough": "Oxirgi toʻlangan oy: {{month}}",
     "graceUntil": "Toʻlanmagan, {{date}} dan keyin faqat koʻrish",
     "readOnlySince": "{{date}} dan beri faqat koʻrish",
-    "noPaidUntil": "Muddatsiz",
-    "firstPaidUntil": "Qaysi sanagacha toʻlangan",
-    "firstPaidUntilHint": "Birinchi toʻlangan davr yoki sinov muddatining oxiri.",
+    "noPaidThrough": "Muddatsiz",
+    "firstPaidThrough": "Oxirgi toʻlangan oy",
+    "firstPaidThroughHint": "Birinchi toʻlov yoki sinov muddatining oxirgi oyi. Oy oxirgi kunigacha toʻliq hisoblanadi.",
     "payments": "Toʻlovlar",
     "recordPayment": "Toʻlovni yozish",
     "paymentRecorded": "Toʻlov yozildi",
@@ -255,7 +256,7 @@
     "amountSom": "Summa, soʻm",
     "amountHint": "Bepul uzaytirish uchun 0",
     "paidOn": "Toʻlov sanasi",
-    "newPaidUntil": "Qaysi sanagacha toʻlangan",
+    "newPaidThrough": "Oxirgi toʻlangan oy",
     "note": "Izoh",
     "noPayments": "Hozircha toʻlovlar yoʻq"
   },
@@ -298,7 +299,12 @@
     "restDayHoursAboveRestDays": "Oydagi dam olish kunlari × 24 dan koʻp",
     "holidayHoursAboveHolidays": "Oydagi bayram kunlari × 24 dan koʻp",
     "dayHoursRange": "0 dan 24 gacha soat kiriting.",
-    "entryRolesRequired": "Kamida bitta rolni tanlang."
+    "entryRolesRequired": "Kamida bitta rolni tanlang.",
+    "codeIsNumber": "Raqam ishlangan soatni bildiradi; kod uchun harf ishlating",
+    "codeTaken": "Bu kod roʻyxatda bor",
+    "gridCodeOne": "Bu holatning tabelda koʻrinadigan bitta kodini belgilang",
+    "gridCodeNotForStatus": "Tabelda faqat kelmaslik holatlari koʻrinadi",
+    "tooMany": "Juda koʻp yozuv"
   },
   "errors": {
     "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
@@ -418,7 +424,6 @@
       "monthlyTotalsEntered": "Ishchining bu oy uchun oylik jami soatlari bor. Bir oyda soatlar faqat bitta manbadan olinadi."
     },
     "timesheet": {
-      "futureDay": "Hali kelmagan kunga soat kiritib boʻlmaydi.",
       "entryNotFound": "Bunday tabel kuni yoʻq.",
       "entryMismatch": "Bu yozuv boshqa ishchi, kun yoki joyga tegishli.",
       "staleVersion": "Bu kunni shu orada boshqa kishi oʻzgartirdi. Tabel endi saqlanganini koʻrsatadi.",
@@ -725,7 +730,7 @@
     "end": "Oʻz hisobimga qaytish"
   },
   "subscription": {
-    "graceTitle": "Obuna {{date}} da tugagan",
+    "graceTitle": "Obuna uzaytirilmagan. Oxirgi toʻlangan oy: {{month}}",
     "graceDescription": "{{date}} gacha hammasi ishlaydi. Shundan keyin toʻlov kelguncha kompaniya faqat koʻrish rejimida boʻladi. Toʻlash uchun tizim operatoriga murojaat qiling.",
     "readOnlyTitle": "Faqat koʻrish: obuna tugagan",
     "readOnlyOwner": "Hammasini koʻrish va eksport qilish mumkin, lekin hech narsani oʻzgartirib boʻlmaydi. Toʻlash uchun tizim operatoriga murojaat qiling.",
@@ -1010,17 +1015,11 @@
     "moduleOffHint": "Bu oyning tarifida Tabel moduli yoʻq. Soatlarni koʻrish mumkin, lekin kiritib boʻlmaydi.",
     "monthlyTotalsHint": "Ayrim ishchilarning bu oy uchun oylik jami soatlari bor, shuning uchun ularning kunlari bu yerda kiritilmaydi.",
     "legendTitle": "Tabelni qanday oʻqish kerak",
-    "howToEnter": "Kunni tanlang va soatni (masalan 9 yoki 7,5) yoki harf kodini yozib, Enter bosing. Delete kunni tozalaydi.",
+    "howToEnter": "Kunni tanlang va soatni (masalan 9 yoki 7,5) yoki quyidagi kodlardan birini yozib, Enter bosing. Delete kunni tozalaydi.",
     "notEmployed": "bu kunda ishga olinmagan",
     "invalidCell": "0 dan 24 gacha soat (masalan 9 yoki 7,5) yoki harf kodlaridan birini yozing.",
     "hoursWorked": "{{hours}} soat ishlagan",
     "changedBy": "Oxirgi marta {{name}} oʻzgartirgan, {{date}}",
-    "code": {
-      "ABSENT": "Y",
-      "LEAVE": "T",
-      "SICK": "B",
-      "TRAVEL": "S"
-    },
     "status": {
       "ABSENT": "Kelmagan",
       "LEAVE": "Taʼtil",
@@ -1031,7 +1030,11 @@
       "REST_DAY": "Dam olish kuni",
       "HOLIDAY": "Bayram kuni"
     },
-    "monthlyTotals": "oylik jami"
+    "monthlyTotals": "oylik jami",
+    "codesMissingTitle": "Baʼzi holatlar uchun hali kod yoʻq",
+    "codesMissingManager": "Soatlarni hozir ham kiritish mumkin. Kelmaslik holatlarini kiritish uchun ularga kompaniya kodlarini qoʻshing.",
+    "codesMissingMember": "Soatlarni hozir ham kiritish mumkin. Kodi yoʻq holatlarni ega yoki administrator kompaniya kodlarini qoʻshgandan keyin kiritish mumkin.",
+    "goToCodes": "Kodlarga oʻtish"
   },
   "timesheetSettings": {
     "title": "Tabel kiritish",
@@ -1043,5 +1046,25 @@
       "FOREMAN": "Oʻz brigadalari uchun"
     },
     "lastChanged": "Oxirgi marta {{name}} oʻzgartirgan, {{date}}"
+  },
+  "codes": {
+    "title": "Kodlar",
+    "description": "Kompaniyangiz tabelda ishga kelmaslik holatlari uchun ishlatadigan harflar.",
+    "hint": "Kompaniyadagi hamma, qaysi tilda ishlashidan qatʼi nazar, bir xil kodlarni yozadi. Soatlar raqam bilan yoziladi. Har bir holat tabelda u uchun belgilangan kod bilan koʻrinadi; uning boshqa kodlarini ham yozish mumkin. Kodni oʻzgartirish kiritilgan soatlarni oʻzgartirmaydi.",
+    "code": "Kod",
+    "status": "Maʼnosi",
+    "inGrid": "Tabelda koʻrinadi",
+    "inGridFor": "{{code}} tabelda koʻrinsin",
+    "importOnly": "Faqat Excel importi uchun",
+    "remove": "{{code}} kodini oʻchirish",
+    "add": "Kod qoʻshish",
+    "statuses": {
+      "ABSENT": "Kelmagan",
+      "LEAVE": "Taʼtil",
+      "SICK": "Kasal",
+      "TRAVEL": "Safar / koʻchish",
+      "OFF": "Dam olish (dam olish yoki bayram kuni)",
+      "NOT_EMPLOYED": "Ishga olinmagan"
+    }
   }
 }

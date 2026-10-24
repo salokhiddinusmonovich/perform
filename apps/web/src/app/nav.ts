@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   MapPin,
   Scale,
+  Tags,
   UserCog,
   Users,
   Wallet,
@@ -74,6 +75,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { path: '/settings/holidays', labelKey: 'nav.holidays', icon: CalendarDays, visible: canViewPayRules },
       { path: '/settings/working-days', labelKey: 'nav.workingDays', icon: CalendarCheck, visible: canViewPayRules },
       { path: '/settings/timesheet', labelKey: 'nav.timesheetSettings', icon: ClipboardPen, visible: canManageTimesheet },
+      { path: '/settings/codes', labelKey: 'nav.codes', icon: Tags, visible: canManageCompany },
     ],
   },
   {

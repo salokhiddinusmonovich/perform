@@ -29,9 +29,8 @@ import { toast } from 'sonner';
 import { DataTable } from '@/components/data-table';
 import { DatePicker } from '@/components/date-picker';
 import { ErrorState } from '@/components/error-state';
-import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
+import { Field, fieldControlProps, FormActions, FormError, MonthField } from '@/components/form';
 import { LoadingState } from '@/components/loading-state';
-import { MonthPicker } from '@/components/month-picker';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
 import { StatusBadge } from '@/components/status-badge';
@@ -578,7 +577,6 @@ function SalaryDialog({
     defaultValues: { fromYear: from.year, fromMonth: from.month, monthlySalary: '', reason: '' },
   });
   const { errors } = form.formState;
-  const monthError = errors.fromYear ?? errors.fromMonth;
   const corrects = history.data?.some((s) => !s.corrected && s.fromYear === from.year && s.fromMonth === from.month);
 
   const save = useMutation({
@@ -614,21 +612,19 @@ function SalaryDialog({
             })}
           >
             <FormError message={formError} />
-            <fieldset className="space-y-1.5">
-              <legend className="mb-1.5 text-sm font-medium">{t('workers.salaryFromMonth')}</legend>
-              <MonthPicker value={from} onChange={chooseMonth} />
-              {monthError?.message ? (
-                <p role="alert" className="text-sm text-destructive">
-                  {t(monthError.message)}
-                </p>
-              ) : (
+            <MonthField
+              legend={t('workers.salaryFromMonth')}
+              value={from}
+              onChange={chooseMonth}
+              error={errors.fromYear ?? errors.fromMonth}
+              hint={
                 corrects && (
                   <StatusBadge tone="warning">
                     {t('workers.salaryCorrects', { month: format.month(from.year, from.month) })}
                   </StatusBadge>
                 )
-              )}
-            </fieldset>
+              }
+            />
             <Field
               id="s-amount"
               label={t('workers.monthlySalary', { currency })}

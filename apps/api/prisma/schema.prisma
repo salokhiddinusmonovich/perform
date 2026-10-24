@@ -24,9 +24,10 @@ model Company {
   timezone  String    @default("Asia/Tashkent")
   /// Deactivated companies can't be used by their members
   isActive  Boolean   @default(true)
-  /// Last day paid for; then a 14-day grace period, then the company is read-only.
+  /// The last month paid for (its 1st day): then a 14-day grace period after that month,
+  /// then the company is read-only.
   /// Set at creation, then by each SubscriptionPayment.
-  paidUntil DateTime? @db.Date
+  paidThrough DateTime? @db.Date
   createdAt DateTime  @default(now())
 
   /// Its plan per month (no rows only for companies from before plans: no limits, Payroll only)
@@ -83,15 +84,15 @@ model CompanyPlan {
 }
 
 /// A payment the platform admin recorded (paid outside the app). Only ever added; each
-/// one sets the company's paidUntil. A free extension (e.g. a trial) has amount 0.
+/// one sets the company's paidThrough. A free extension (e.g. a trial) has amount 0.
 model SubscriptionPayment {
   id           String   @id @default(uuid()) @db.Uuid
   companyId    String   @db.Uuid
   /// In soʻm
   amount       Decimal  @db.Decimal(14, 2)
   paidOn       DateTime @db.Date
-  /// The company's new paid-until date
-  paidUntil    DateTime @db.Date
+  /// The company's new paid-through month (its 1st day)
+  paidThrough  DateTime @db.Date
   note         String?
   recordedById String   @db.Uuid
   createdAt    DateTime @default(now())
@@ -568,13 +569,17 @@ model TravelRoute {
   @@unique([id, companyId])
 }
 
-/// A company's own timesheet code (e.g. "IZ" = LEAVE), used by the importer.
+/// A company's own timesheet code (e.g. "IZ" = LEAVE), typed in the daily grid and read by
+/// the importer, the same letters in every language (AGENTS.md: The daily grid).
 /// code is normalized with normalizeCode() from @puantaj/payroll and never blank: a blank
 /// cell means "not employed" outside the worker's employment dates and is a problem inside.
 model TimesheetCode {
   companyId String    @db.Uuid
   code      String
   status    DayStatus
+  /// The code the grid shows for its status: one per status (partial unique index), and
+  /// only for statuses typed in the grid (ABSENT, LEAVE, SICK, TRAVEL; CHECK constraint).
+  inGrid    Boolean   @default(false)
 
   company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
 
