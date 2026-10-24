@@ -16,7 +16,8 @@ Multi-company web app for construction **timesheets and payroll** ("puantaj" in 
   - **Absence pay** is set per type (leave, sick, travel/transfer) in Settings: paid or unpaid, plus **hours paid per absence day** (pay = those hours × hourly rate). All three are **paid by default**. Default for **sick: 8 hours**. Default for leave and travel/transfer: the normal hours per day, following it if it changes (confirmed 2026-10-20). Absences recorded on rest days or holidays are **not paid** (nobody was due at work), so a full month never pays more than the salary.
   - **Travel pay** is configured in Settings: fixed amount per day worked per route, or a monthly amount entered by the accountant. "Per day worked" counts **working days only**: rest days and holidays worked don't earn travel pay.
   - **Working days per month (decided: option D):** calculated automatically from the rest weekdays and the holiday list, with a per-month override (by owner, admin or accountant). The app shows the calculated and overridden values side by side and records who changed them (audit trail). The app ships Uzbekistan's fixed-date public holidays per year. Moving holidays (Ramazon Hayit, Qurbon Hayit) and company days off are entered by an admin, and the app warns when a year's holidays are missing. Government day-off swaps are entered as both halves: the extra day off, and the rest weekday that becomes a working day (holiday kind `WORKING_DAY`).
-  - **Final pay is rounded to the nearest 1000 soʻm** (halves up), a Settings value. The difference shows as its own rounding line.
+  - **Final pay is rounded to the nearest 1000 soʻm** (halves up), a company Settings value. The difference shows as its own rounding line.
+    - **Rounded once, on the amount to pay out (decided 2026-10-24):** earned pay plus bonuses minus advances and deductions. The parts of a split month are not rounded on their own. The step is company-wide (in the company default rules); site rule sets have no rounding step of their own.
   - **Per-site settings:** a site may have its own rule set (rest weekdays and pay settings) that overrides the company default. Working-days overrides are per rule set.
     - **Split by placement (decided 2026-10-23):** pay rules follow the worker's placement (employment site), not the site where hours were entered. A worker whose placements in one month fall under different rule sets is paid in parts: the days of each placement under that placement's rules, at an hourly rate from that rule set's working days and normal hours. Each part is its own block on the payslip, so a full month split this way may not add up to exactly the salary.
   - Open: mid-month hire/exit (the hour model already prorates).
@@ -68,7 +69,31 @@ Multi-company web app for construction **timesheets and payroll** ("puantaj" in 
   - **A worker can work on two or more sites or teams on the same day**, with the hours split between them. Hours are stored per worker, day and site/team. Two people editing the same entry are protected by the version check (see Mobile app).
     - Normal hours per day apply to the worker's **total** for the day, across all sites. Overtime above that is charged to the **site entered later**: the entry created last for that worker and day, by creation time, not by edit time.
     - **Travel pay counts a split day once**, not once per site, at the route amount of the **site entered later** (same rule as overtime).
+  - **Starting a day's timesheet (decided 2026-10-23):** whoever creates the timesheet for a day picks how it starts:
+    - **Blank:** nothing filled in.
+    - **Normal hours:** every worker gets the normal hours per day.
+    - **Yesterday:** copies hours and statuses per worker and site/team from the last working day before the day being started (e.g. Saturday or Friday on a Monday), only for workers still placed there. Working days follow the site's rule set (rest weekdays and holidays, including `WORKING_DAY` swaps).
+    - Absence periods win in every mode: a worker on sick leave shows sick, never normal or copied hours.
+    - Starting a day is only a pre-fill. Nothing counts until the creator saves it, and approval (when on) still applies.
   - **Entry deadline: reminders only, never a block.** Late entries are always accepted. For now reminders go to foremen and timekeepers, each only for their own teams or sites, as mobile push notifications. Each company sets its own deadline in Settings. The default is 10:00 the next morning, in the company's local time.
+- **Absence periods (decided 2026-10-23):** an absence is entered once per worker as a period (type, first and last day, note or document number such as the sick note number) instead of on every day.
+  - Types: leave, sick, travel/transfer, and unexcused absence (`ABSENT`, unpaid).
+  - **Who:** every role, each only for the workers it already sees (foreman: own teams; timekeeper and project manager: own sites; owner, admin and accountant: all). When hour approval is on, periods need approval by the same approvers as hours.
+  - **Changing a period: owner or admin only**, audited with old and new values. The accountant stays add-only and asks an owner or admin to correct a period.
+  - **Periods fill days; payroll reads days.** Payroll never reads periods directly, so there is one pay path and "one source per worker-month" holds.
+    - Each day filled from a period records which period it came from, so the payslip can explain it (e.g. "sick 23.10–31.10").
+    - Rest days and holidays inside a period stay rest days and holidays (not paid as absence).
+    - A day that already has hours or another status is never overwritten: the app shows the conflict and someone decides. The same applies when hours are entered later on a day a period covers.
+    - Days in a locked month are not changed; a period reaching into one is refused for those days.
+    - Editing a period updates only the days it filled that nobody has changed since; anything else shows as a conflict.
+  - In a company without the Timesheet module, periods count the absence days for monthly totals, still one source per worker-month.
+  - **Worker history:** one timeline per worker in date order (hire, placements and moves, salary changes, absence periods, adjustments, exit). It is a view over existing records, not a new store.
+  - Later, not now: leave balance, attaching a photo of the sick note.
+- **Adjustments (decided 2026-10-24):** money added to or taken from a worker's pay for one month: **bonus** (+), **advance** (−, money already handed over) and **deduction** (−). The amount is always entered as positive; the type gives the sign.
+  - An adjustment belongs to the **worker-month**, not to a placement (like salaries). On a split payslip it shows once, in its own block after the parts. The monthly travel amount is separate and stays per placement, since it follows the route.
+  - **Who:** owner, admin and accountant add them; project managers only view them on their sites; timekeepers and foremen never see them. Only in an open month.
+  - **Mistakes are cancelled, never edited or deleted.** Whoever may add an adjustment may cancel one in an open month: the cancel is its own audited record with a required reason. The cancelled adjustment stays visible, marked cancelled, and no longer counts.
+  - **Pay out below zero** (advances and deductions above what was earned) is shown with a warning that the worker owes it. The month can still be locked. Nothing carries to the next month by itself; the accountant adds a deduction there if wanted.
 - UI languages: `uz` (default), `ru`, `tr`, `en`. Every user-facing string goes through i18n in all four files.
 
 ## Principles
