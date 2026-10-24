@@ -3,7 +3,8 @@ import { Reflector } from '@nestjs/core';
 import type { Role } from '@prisma/client';
 import type { Response } from 'express';
 import { forbidden, unauthorized } from '../common/api-error';
-import { todayIn } from '../common/dates';
+import { monthOfDay, todayIn } from '../common/dates';
+import { planOfMonth, PLAN_HISTORY, timesheetOpen } from '../platform/company-plan';
 import { subscriptionState } from '../platform/subscription';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -23,7 +24,7 @@ import { SITE_SCOPED, USABLE_MEMBERSHIP } from './memberships';
 import { bearerToken, SESSION_COOKIE, sessionCookieOptions, SessionService, type ValidSession } from './session.service';
 
 const SCOPE_INCLUDE = {
-  company: { include: { plan: true } },
+  company: { include: { plans: PLAN_HISTORY } },
   sites: { select: { siteId: true } },
   teams: { select: { teamId: true } },
 } as const;
@@ -167,16 +168,19 @@ export class AuthGuard implements CanActivate {
     if (!membership) return null;
 
     const { company } = membership;
+    const today = todayIn(company.timezone);
+    const plan = planOfMonth(company.plans, monthOfDay(today));
+    const timesheet = await timesheetOpen(this.prisma, company.id, company.plans, today);
     return {
       id: company.id,
       name: company.name,
       currency: company.currency,
       timezone: company.timezone,
       role: membership.role,
-      modules: company.plan?.timesheetModule ? ['PAYROLL', 'TIMESHEET'] : ['PAYROLL'],
+      modules: timesheet ? ['PAYROLL', 'TIMESHEET'] : ['PAYROLL'],
       siteIds: SITE_SCOPED.includes(membership.role) ? membership.sites.map((s) => s.siteId) : null,
       teamIds: membership.role === 'FOREMAN' ? membership.teams.map((t) => t.teamId) : null,
-      subscription: subscriptionState(company, todayIn(company.timezone)),
+      subscription: subscriptionState({ paidUntil: company.paidUntil, plan }, today),
     };
   }
 }

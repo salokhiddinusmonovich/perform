@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { dayToDate, isoDay, todayIn } from '../src/common/dates';
+import { firstOfMonth, nextMonth } from '../src/platform/company-plan';
 import {
   addMember,
   createPlan,
   createUser,
+  givePlan,
   loginAs,
   memberOfNewCompany,
   PASSWORD,
@@ -156,6 +158,62 @@ describe('platform companies', () => {
   });
 });
 
+describe('plan changes', () => {
+  /** The 1st of next month in Tashkent, "YYYY-MM-01". */
+  const nextMonthStart = () => firstOfMonth(nextMonth(day(0)));
+
+  it('start on the 1st of next month; choosing this month’s plan again cancels the change', async () => {
+    const { admin, agent } = await platformAdmin();
+    const small = await createPlan(ctx.prisma, { maxActiveWorkers: 10 });
+    const large = await createPlan(ctx.prisma, { maxActiveWorkers: 50, timesheetModule: true });
+    const other = await createPlan(ctx.prisma, { maxActiveWorkers: 20 });
+    const company = { id: (await agent.post('/api/platform/companies').send(newCompany(small.id)).expect(201)).body.companyId as string };
+    const row = async () => (await agent.get('/api/platform/companies').expect(200)).body.find((c: { id: string }) => c.id === company.id);
+
+    // A new company is on its plan from the 1st of this month.
+    expect(await row()).toMatchObject({ plan: { id: small.id }, nextPlan: null });
+
+    await agent.patch(`/api/platform/companies/${company.id}`).send({ planId: large.id }).expect(204);
+    expect(await row()).toMatchObject({
+      plan: { id: small.id, maxActiveWorkers: 10, timesheetModule: false },
+      nextPlan: { id: large.id, maxActiveWorkers: 50, timesheetModule: true, fromMonth: nextMonthStart() },
+      subscription: { planName: small.name },
+    });
+    // Another choice replaces the pending one; this month's plan again cancels it.
+    await agent.patch(`/api/platform/companies/${company.id}`).send({ planId: other.id }).expect(204);
+    expect((await row()).nextPlan).toMatchObject({ id: other.id });
+    await agent.patch(`/api/platform/companies/${company.id}`).send({ planId: small.id }).expect(204);
+    expect(await row()).toMatchObject({ plan: { id: small.id }, nextPlan: null });
+    await agent.patch(`/api/platform/companies/${company.id}`).send({ planId: small.id }).expect(204);
+    expect(await ctx.prisma.companyPlan.count({ where: { companyId: company.id } })).toBe(1);
+
+    const log = await ctx.prisma.auditLog.findMany({ where: { action: 'company.planChange', companyId: company.id }, orderBy: { createdAt: 'asc' } });
+    expect(log.map((l) => [l.actorUserId, l.data])).toEqual([
+      [admin.id, { from: small.id, to: large.id, fromMonth: nextMonthStart() }],
+      [admin.id, { from: large.id, to: other.id, fromMonth: nextMonthStart() }],
+      [admin.id, { from: other.id, to: small.id, fromMonth: nextMonthStart() }],
+    ]);
+  });
+
+  it('gives a company from before plans its first plan from next month too', async () => {
+    const { agent } = await platformAdmin();
+    const owner = await memberOfNewCompany(ctx, 'OWNER');
+    const plan = await createPlan(ctx.prisma, { maxActiveWorkers: 1, timesheetModule: true });
+    await agent.patch(`/api/platform/companies/${owner.company.id}`).send({ planId: plan.id }).expect(204);
+
+    const me = (await owner.agent.get('/api/auth/me').expect(200)).body;
+    expect(me.activeCompany).toMatchObject({ modules: ['PAYROLL'], subscription: { planName: null } });
+    // No limit this month.
+    const siteId = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
+    const hire = (from: string) => ({ worker: WORKER, placement: { siteId, teamId: null, from, shift: 'DAY' } });
+    await owner.agent.post('/api/workers').send(hire(day(0))).expect(201);
+    await owner.agent.post('/api/workers').send(hire(day(0))).expect(201);
+    // Next month's limit applies to placements starting then.
+    const res = await owner.agent.post('/api/workers').send(hire(nextMonthStart())).expect(409);
+    expect(res.body).toMatchObject({ code: 'plan.workerLimitReached', limit: 1 });
+  });
+});
+
 describe('plans', () => {
   it('creates, lists, edits and archives plans, with audit records', async () => {
     const { agent } = await platformAdmin();
@@ -174,10 +232,36 @@ describe('plans', () => {
         timesheetModule: true,
         isActive: false,
         companyCount: 0,
+        inUse: false,
       },
     ]);
     const log = await ctx.prisma.auditLog.findFirstOrThrow({ where: { action: 'plan.update', entityId: id } });
     expect(log.data).toEqual({ monthlyPrice: { from: '1500000', to: '1750000' }, isActive: { from: true, to: false } });
+  });
+
+  it('fixes a plan’s price, worker limit and modules once a company has had it', async () => {
+    const { agent } = await platformAdmin();
+    const plan = await createPlan(ctx.prisma);
+    const next = await createPlan(ctx.prisma);
+    const a = await memberOfNewCompany(ctx, 'OWNER');
+    const b = await memberOfNewCompany(ctx, 'OWNER');
+    await givePlan(ctx.prisma, a.company.id, plan.id);
+    await givePlan(ctx.prisma, b.company.id, plan.id);
+    // B moves to another plan from next month: it still counts on both until then.
+    await agent.patch(`/api/platform/companies/${b.company.id}`).send({ planId: next.id }).expect(204);
+    const list = (await agent.get('/api/platform/plans').expect(200)).body;
+    const view = (id: string) => list.find((p: { id: string }) => p.id === id);
+    expect(view(plan.id)).toMatchObject({ companyCount: 2, inUse: true });
+    expect(view(next.id)).toMatchObject({ companyCount: 1, inUse: true });
+
+    for (const change of [{ monthlyPrice: '2000000' }, { maxActiveWorkers: 5 }, { timesheetModule: true }]) {
+      expect((await agent.patch(`/api/platform/plans/${plan.id}`).send(change).expect(409)).body.code).toBe('plan.inUse');
+    }
+    // The same terms sent again (as the edit form does), a new name and archiving are fine.
+    const same = { name: 'Renamed', monthlyPrice: '1 000 000', maxActiveWorkers: 100, timesheetModule: false };
+    await agent.patch(`/api/platform/plans/${plan.id}`).send(same).expect(204);
+    await agent.patch(`/api/platform/plans/${plan.id}`).send({ isActive: false }).expect(204);
+    expect(await ctx.prisma.plan.findUniqueOrThrow({ where: { id: plan.id } })).toMatchObject({ name: 'Renamed', maxActiveWorkers: 100, isActive: false });
   });
 
   it('refuses a plan without a worker limit', async () => {
@@ -194,7 +278,8 @@ describe('subscriptions', () => {
   async function companyPaidUntil(paidUntil: string) {
     const owner = await memberOfNewCompany(ctx, 'OWNER');
     const plan = await createPlan(ctx.prisma);
-    await ctx.prisma.company.update({ where: { id: owner.company.id }, data: { planId: plan.id, paidUntil: dayToDate(paidUntil) } });
+    await givePlan(ctx.prisma, owner.company.id, plan.id);
+    await ctx.prisma.company.update({ where: { id: owner.company.id }, data: { paidUntil: dayToDate(paidUntil) } });
     return owner;
   }
 
@@ -247,7 +332,8 @@ describe('worker limit', () => {
   async function companyWithLimit(maxActiveWorkers: number) {
     const owner = await memberOfNewCompany(ctx, 'OWNER');
     const plan = await createPlan(ctx.prisma, { maxActiveWorkers });
-    await ctx.prisma.company.update({ where: { id: owner.company.id }, data: { planId: plan.id, paidUntil: dayToDate(day(30)) } });
+    await givePlan(ctx.prisma, owner.company.id, plan.id);
+    await ctx.prisma.company.update({ where: { id: owner.company.id }, data: { paidUntil: dayToDate(day(30)) } });
     const siteA = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
     const siteB = (await owner.agent.post('/api/sites').send({ name: 'Site B' }).expect(201)).body.id as string;
     return { ...owner, plan, siteA, siteB };

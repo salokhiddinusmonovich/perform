@@ -92,7 +92,13 @@ function MonthView({ data, myName }: { data: TimesheetMonth; myName: string }) {
         <Alert>
           <Info aria-hidden />
           <AlertDescription>
-            {data.locked ? t('timesheet.lockedHint') : !canEnter ? t('timesheet.readOnlyHint') : t('timesheet.monthlyTotalsHint')}
+            {data.locked
+              ? t('timesheet.lockedHint')
+              : !data.timesheetModule
+                ? t('timesheet.moduleOffHint')
+                : !canEnter
+                  ? t('timesheet.readOnlyHint')
+                  : t('timesheet.monthlyTotalsHint')}
           </AlertDescription>
         </Alert>
       )}

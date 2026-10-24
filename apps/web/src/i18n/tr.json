@@ -238,6 +238,8 @@
     "choosePlan": "Paket seçin",
     "planOption": "{{name}} — {{price}}, en fazla {{limit}} işçi",
     "noPlan": "Paket yok",
+    "nextPlan": "Gelecek aydan itibaren ({{month}}): {{name}}",
+    "planChangeHint": "Yeni paket gelecek ayın 1’inde başlar. Henüz başlamamış bir değişikliği iptal etmek için mevcut paketi seçin.",
     "activeWorkers": "Bu ay işçi: {{active}} / {{limit}}",
     "subscription": "Abonelik",
     "paidUntil": "{{date}} tarihine kadar ödendi",
@@ -385,6 +387,7 @@
     },
     "plan": {
       "archived": "Bu paket arşivde, bir şirkete verilemez.",
+      "inUse": "Bu paketi bir şirket kullandı, bu yüzden fiyatı, işçi sınırı ve modülleri değiştirilemez. Bunun yerine yeni bir paket oluşturun.",
       "nameTaken": "Bu adda bir paket zaten var.",
       "notFound": "Böyle bir paket yok.",
       "workerLimitReached": "Paketiniz ayda {{limit}} aktif işçiye izin veriyor ve bu bir işçi daha ekler. Sistem operatöründen daha büyük bir paket isteyin."
@@ -421,6 +424,7 @@
       "staleVersion": "Bu günü bu arada başka biri değiştirdi. Puantaj artık kaydedileni gösteriyor.",
       "notEmployed": "İşçi bu gün çalışmıyor.",
       "entryExists": "Bu günün burada zaten saati var. Puantaj artık kaydedileni gösteriyor.",
+      "moduleOff": "Bu ayın paketinde Puantaj modülü yok, bu yüzden bu aya saat girilemez.",
       "wholeDay": "Devamsızlık işçinin bütün günüdür: o gün başka kayıt olamaz.",
       "dayTooManyHours": "İşçinin bu günkü saatleri toplamda 24’ü geçiyor."
     }
@@ -784,7 +788,8 @@
     "create": "Yeni paket",
     "createDescription": "Kullanıcılar ve şantiyeler sınırlanmaz, yalnızca aktif işçiler.",
     "edit": "Paketi düzenle",
-    "editDescription": "Bu paketteki şirketler: {{companies}}. Değişiklikler hepsine uygulanır.",
+    "editDescription": "Bu ay veya gelecek aydan itibaren bu paketteki şirketler: {{companies}}.",
+    "termsFixed": "Bir şirket bu paketi kullandıktan sonra fiyat, işçi sınırı ve modüller değiştirilemez. Yeni koşullar için yeni bir paket oluşturup şirketleri ona taşıyın.",
     "name": "Ad",
     "monthlyPrice": "Aylık fiyat",
     "monthlyPriceSom": "Aylık fiyat, som",
@@ -1002,6 +1007,7 @@
     "noRulesDescription": "Bu ay için ücret kuralları henüz girilmedi, bu yüzden takvim tatil günlerini bilmiyor.",
     "lockedHint": "Bu ay kilitli. Saatleri değiştirilemez.",
     "readOnlyHint": "Bu saatleri görebilirsiniz. Saatleri Ayarlar’da izin verilen kişiler girer.",
+    "moduleOffHint": "Bu ayın paketinde Puantaj modülü yok. Saatleri görebilirsiniz ama giremezsiniz.",
     "monthlyTotalsHint": "Bazı işçilerin bu ay için aylık toplamları var, bu yüzden günleri burada girilemez.",
     "legendTitle": "Puantaj nasıl okunur",
     "howToEnter": "Bir gün seçip saati (örneğin 9 veya 7,5) ya da harf kodunu yazın ve Enter’a basın. Delete günü temizler.",

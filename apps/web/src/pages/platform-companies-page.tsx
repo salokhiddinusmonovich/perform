@@ -112,8 +112,25 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
         header: t('platform.plan'),
         enableSorting: false,
         cell: ({ row }) => {
-          const { plan, activeWorkers } = row.original;
-          if (!plan) return <StatusBadge tone="warning">{t('platform.noPlan')}</StatusBadge>;
+          const { plan, nextPlan, activeWorkers } = row.original;
+          const next = nextPlan && (
+            <div className="mt-1">
+              <StatusBadge tone="warning">
+                {t('platform.nextPlan', {
+                  month: format.month(Number(nextPlan.fromMonth.slice(0, 4)), Number(nextPlan.fromMonth.slice(5, 7))),
+                  name: nextPlan.name,
+                })}
+              </StatusBadge>
+            </div>
+          );
+          if (!plan) {
+            return (
+              <div className="min-w-36">
+                <StatusBadge tone="warning">{t('platform.noPlan')}</StatusBadge>
+                {next}
+              </div>
+            );
+          }
           return (
             <div className="min-w-36">
               <div>{plan.name}</div>
@@ -127,6 +144,7 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
                 <StatusBadge tone="info">{t('modules.PAYROLL')}</StatusBadge>
                 {plan.timesheetModule && <StatusBadge tone="info">{t('modules.TIMESHEET')}</StatusBadge>}
               </div>
+              {next}
             </div>
           );
         },
@@ -197,7 +215,7 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
         onRetry={() => companies.refetch()}
         searchable
         searchText={(c) =>
-          [c.name, c.plan?.name, ...c.owners.flatMap((o) => [o.fullName, o.phone, o.email])].filter(Boolean).join(' ')
+          [c.name, c.plan?.name, c.nextPlan?.name, ...c.owners.flatMap((o) => [o.fullName, o.phone, o.email])].filter(Boolean).join(' ')
         }
         emptyTitle={t('platform.empty')}
       />
@@ -267,26 +285,26 @@ function SubscriptionStatus({ subscription }: { subscription: Subscription }) {
 }
 
 /**
- * The plans a company can be put on: the offered ones, plus its current plan if that
- * was archived since (it may keep it).
+ * The plans a company can be put on: the offered ones, plus its own plans (this month's
+ * and a pending one) if they were archived since (it may keep them).
  */
 function PlanSelect({
   id,
   value,
   onChange,
   invalid,
-  currentPlanId,
+  ownPlanIds = [],
 }: {
   id: string;
   value: string | undefined;
   onChange: (planId: string) => void;
   invalid?: boolean;
-  currentPlanId?: string;
+  ownPlanIds?: string[];
 }) {
   const { t } = useTranslation();
   const format = useFormat();
   const plans = usePlans();
-  const choices = plans.data?.filter((p) => p.isActive || p.id === currentPlanId) ?? [];
+  const choices = plans.data?.filter((p) => p.isActive || ownPlanIds.includes(p.id)) ?? [];
   return (
     <Select value={value ?? ''} onValueChange={onChange}>
       <SelectTrigger id={id} className="w-full" aria-invalid={invalid ? true : undefined}>
@@ -439,7 +457,8 @@ function EditCompanyDialog({
       name: company?.name ?? '',
       currency: company?.currency ?? '',
       timezone: company?.timezone ?? '',
-      planId: company?.plan?.id,
+      // What next month will have: the pending change, or this month's plan.
+      planId: company?.nextPlan?.id ?? company?.plan?.id,
     },
   });
   const { errors } = form.formState;
@@ -486,13 +505,13 @@ function EditCompanyDialog({
             control={form.control}
             name="planId"
             render={({ field }) => (
-              <Field id="e-plan" label={t('platform.plan')} error={errors.planId}>
+              <Field id="e-plan" label={t('platform.plan')} error={errors.planId} hint={t('platform.planChangeHint')}>
                 <PlanSelect
                   id="e-plan"
                   value={field.value}
                   onChange={field.onChange}
                   invalid={!!errors.planId}
-                  currentPlanId={company?.plan?.id}
+                  ownPlanIds={[company?.plan?.id, company?.nextPlan?.id].filter((p) => p !== undefined)}
                 />
               </Field>
             )}

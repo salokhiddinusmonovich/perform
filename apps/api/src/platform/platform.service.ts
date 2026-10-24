@@ -9,6 +9,7 @@ import { dayToDate, isoDay, monthOfDay, todayIn } from '../common/dates';
 import { countActiveWorkers } from '../organisation/worker-limit';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserAccountsService } from '../users/user-accounts.service';
+import { firstOfMonth, nextMonth, pendingPlan, planHistory, planOfMonth, PLAN_HISTORY } from './company-plan';
 import { subscriptionState, type SubscriptionState } from './subscription';
 
 export interface CompanyListItem {
@@ -20,12 +21,23 @@ export interface CompanyListItem {
   createdAt: Date;
   memberCount: number;
   owners: { fullName: string; email: string | null; phone: string | null }[];
-  /** null for a company from before plans */
-  plan: { id: string; name: string; maxActiveWorkers: number; timesheetModule: boolean } | null;
+  /** This month's plan; null for a company from before plans */
+  plan: PlanSummary | null;
+  /** A change that starts on the 1st of next month, or null */
+  nextPlan: (PlanSummary & { fromMonth: string }) | null;
   subscription: SubscriptionState;
   /** Workers with a placement this month (what the plan's limit counts) */
   activeWorkers: number;
 }
+
+type PlanSummary = { id: string; name: string; maxActiveWorkers: number; timesheetModule: boolean };
+
+const planSummary = (p: Plan): PlanSummary => ({
+  id: p.id,
+  name: p.name,
+  maxActiveWorkers: p.maxActiveWorkers,
+  timesheetModule: p.timesheetModule,
+});
 
 export interface PaymentView {
   id: string;
@@ -51,7 +63,7 @@ export class PlatformService {
     const companies = await this.prisma.company.findMany({
       orderBy: { name: 'asc' },
       include: {
-        plan: true,
+        plans: PLAN_HISTORY,
         _count: { select: { memberships: { where: { isActive: true, acceptedAt: { not: null } } } } },
         memberships: { where: { role: 'OWNER', isActive: true, acceptedAt: { not: null } }, include: { user: true } },
       },
@@ -60,6 +72,8 @@ export class PlatformService {
       companies.map(async (c) => {
         const today = todayIn(c.timezone);
         const { year, month } = monthOfDay(today);
+        const plan = planOfMonth(c.plans, { year, month });
+        const next = pendingPlan(c.plans, today);
         return {
           id: c.id,
           name: c.name,
@@ -69,20 +83,20 @@ export class PlatformService {
           createdAt: c.createdAt,
           memberCount: c._count.memberships,
           owners: c.memberships.map((m) => ({ fullName: m.user.fullName, email: m.user.email, phone: m.user.phone })),
-          plan: c.plan && {
-            id: c.plan.id,
-            name: c.plan.name,
-            maxActiveWorkers: c.plan.maxActiveWorkers,
-            timesheetModule: c.plan.timesheetModule,
-          },
-          subscription: subscriptionState(c, today),
+          plan: plan && planSummary(plan),
+          nextPlan: next && { ...planSummary(next.plan), fromMonth: next.fromMonth },
+          subscription: subscriptionState({ paidUntil: c.paidUntil, plan }, today),
           activeWorkers: await countActiveWorkers(this.prisma, c.id, year, month),
         };
       }),
     );
   }
 
-  /** Creates a company on a plan and makes the given person its owner (new account if needed). */
+  /**
+   * Creates a company on a plan and makes the given person its owner (new account if
+   * needed). The plan starts on the 1st of this month: the company has no data yet, so the
+   * month stays on one plan.
+   */
   async create(auth: AuthContext, input: CreateCompany) {
     return this.prisma.$transaction(async (tx) => {
       const plan = await offeredPlan(tx, input.planId);
@@ -92,8 +106,14 @@ export class PlatformService {
           currency: input.currency,
           timezone: input.timezone,
           slug: await uniqueSlug(tx, input.name),
-          planId: plan.id,
           paidUntil: dayToDate(input.paidUntil),
+          plans: {
+            create: {
+              planId: plan.id,
+              fromMonth: dayToDate(firstOfMonth(monthOfDay(todayIn(input.timezone)))),
+              setById: auth.user.id,
+            },
+          },
         },
       });
       const { user, temporaryPassword } = await this.accounts.findOrCreate(tx, input.owner);
@@ -122,15 +142,16 @@ export class PlatformService {
     });
   }
 
-  /** Changes a company's settings, its plan, or whether it is active. */
+  /**
+   * Changes a company's settings, its plan, or whether it is active. A plan change starts
+   * on the 1st of next month (AGENTS.md: Plans); choosing this month's plan again cancels
+   * a pending change.
+   */
   async update(auth: AuthContext, companyId: string, changes: UpdatePlatformCompany) {
     await this.prisma.$transaction(async (tx) => {
       const company = await findCompany(tx, companyId);
       const { isActive, planId, ...settings } = changes;
-      const planChanged = planId !== undefined && planId !== company.planId;
-      // A company may keep a plan that was archived, but isn't moved onto one.
-      if (planChanged) await offeredPlan(tx, planId);
-      await tx.company.update({ where: { id: companyId }, data: changes });
+      const updated = await tx.company.update({ where: { id: companyId }, data: { isActive, ...settings } });
 
       const record = (action: string, data?: Prisma.InputJsonObject) =>
         this.audit.record({ action, companyId, auth, entityType: 'Company', entityId: companyId, data }, tx);
@@ -139,7 +160,27 @@ export class PlatformService {
       if (isActive !== undefined && isActive !== company.isActive) {
         await record(isActive ? 'company.activate' : 'company.deactivate');
       }
-      if (planChanged) await record('company.planChange', { from: company.planId, to: planId });
+      if (planId === undefined) return;
+
+      const today = todayIn(updated.timezone);
+      const history = await planHistory(tx, companyId);
+      const current = planOfMonth(history, monthOfDay(today));
+      const scheduled = pendingPlan(history, today)?.plan ?? current;
+      if (planId === scheduled?.id) return;
+      const fromMonth = firstOfMonth(nextMonth(today));
+      const where = { companyId_fromMonth: { companyId, fromMonth: dayToDate(fromMonth) } };
+      if (planId === current?.id) {
+        await tx.companyPlan.delete({ where });
+      } else {
+        // A company may keep a plan that was archived, but isn't moved onto one.
+        await offeredPlan(tx, planId);
+        await tx.companyPlan.upsert({
+          where,
+          create: { companyId, planId, fromMonth: dayToDate(fromMonth), setById: auth.user.id },
+          update: { planId, setById: auth.user.id, setAt: new Date() },
+        });
+      }
+      await record('company.planChange', { from: scheduled?.id ?? null, to: planId, fromMonth });
     });
   }
 
@@ -201,6 +242,8 @@ async function findCompany(db: Prisma.TransactionClient, companyId: string) {
 
 /** A plan that can be given to a company: it exists and isn't archived. */
 async function offeredPlan(tx: Prisma.TransactionClient, planId: string): Promise<Plan> {
+  // Its terms are fixed once a company has it (PlansService.update), so hold them while moving.
+  await tx.$queryRaw`SELECT 1 FROM "Plan" WHERE "id" = ${planId}::uuid FOR SHARE`;
   const plan = await tx.plan.findUnique({ where: { id: planId } });
   if (!plan) throw notFound('plan.notFound');
   if (!plan.isActive) throw conflict('plan.archived');

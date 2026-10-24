@@ -2,7 +2,7 @@ import { Controller, Get, Post } from '@nestjs/common';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ForModule, Roles } from '../src/auth/auth.context';
-import { addMember, createPlan, createUser, loginAs, memberOfNewCompany, PASSWORD, resetDb, startApp, type TestContext } from './helpers';
+import { addMember, createPlan, createUser, givePlan, loginAs, memberOfNewCompany, PASSWORD, resetDb, startApp, type TestContext } from './helpers';
 
 /** Test-only routes: one per module, and one that forgot to declare its module. */
 @Controller('test-probe')
@@ -116,7 +116,7 @@ describe('modules', () => {
     expect(off.body.code).toBe('module.disabled');
 
     const plan = await createPlan(ctx.prisma, { timesheetModule: true });
-    await ctx.prisma.company.update({ where: { id: company.id }, data: { planId: plan.id } });
+    await givePlan(ctx.prisma, company.id, plan.id);
     await agent.get('/api/test-probe/timesheet').expect(200);
     expect((await agent.get('/api/auth/me').expect(200)).body.activeCompany.modules).toEqual(['PAYROLL', 'TIMESHEET']);
   });
@@ -134,11 +134,16 @@ describe('modules', () => {
     const admin = await createUser(ctx.prisma, { isPlatformAdmin: true });
     const platform = await loginAs(ctx.app, admin.email!);
     await platform.patch(`/api/platform/companies/${owner.company.id}`).send({ planId: plan.id }).expect(204);
-    await owner.agent.get('/api/test-probe/timesheet').expect(200);
+    // It starts on the 1st of next month.
+    await owner.agent.get('/api/test-probe/timesheet').expect(403);
     const list = (await platform.get('/api/platform/companies').expect(200)).body;
-    expect(list[0]).toMatchObject({ plan: { id: plan.id, timesheetModule: true }, isActive: true });
+    expect(list[0]).toMatchObject({ plan: null, nextPlan: { id: plan.id, timesheetModule: true }, isActive: true });
     const log = await ctx.prisma.auditLog.findFirstOrThrow({ where: { action: 'company.planChange', companyId: owner.company.id } });
     expect(log).toMatchObject({ actorUserId: admin.id, data: { from: null, to: plan.id } });
+
+    // Once that month has come.
+    await ctx.prisma.companyPlan.updateMany({ where: { companyId: owner.company.id }, data: { fromMonth: new Date('2000-01-01') } });
+    await owner.agent.get('/api/test-probe/timesheet').expect(200);
   });
 });
 

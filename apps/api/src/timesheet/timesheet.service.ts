@@ -9,6 +9,7 @@ import { currentOn, dayToDate, inMonth, isoDay, monthOfDay, monthSpan, todayIn }
 import { entersHoursAt, seesPlacement, visibleSites } from '../organisation/access';
 import { assertMonthsOpen, lockWorkerMonth } from '../pay-rules/months';
 import { PayRulesService } from '../pay-rules/pay-rules.service';
+import { timesheetIn } from '../platform/company-plan';
 import { PrismaService } from '../prisma/prisma.service';
 import { TimesheetSettingsService } from './timesheet-settings.service';
 
@@ -44,6 +45,8 @@ export interface TimesheetMonthView {
   month: number;
   site: { id: string; name: string; isActive: boolean };
   locked: boolean;
+  /** This month's plan has the Timesheet module; without it no hours are entered. */
+  timesheetModule: boolean;
   /** Today in the company's time zone: later days take no entries. */
   today: string;
   /** Kind of each day under the site's rules; null while no rules are set for the month. */
@@ -108,7 +111,7 @@ export class TimesheetService {
     if (!site) throw notFound('site.notFound');
     const { first, last } = monthSpan(year, month);
 
-    const [placements, entries, locked, entryRoles, calendar] = await Promise.all([
+    const [placements, entries, locked, entryRoles, calendar, timesheetModule] = await Promise.all([
       this.prisma.assignment.findMany({
         where: { AND: [{ companyId, siteId }, inMonth(year, month)] },
         include: { worker: { select: WORKER_SELECT }, team: { select: { name: true } } },
@@ -125,6 +128,7 @@ export class TimesheetService {
       this.prisma.payrollPeriod.count({ where: { companyId, year, month, status: 'LOCKED' } }),
       this.settings.entryRoles(companyId),
       this.calendar(companyId, siteId, year, month),
+      timesheetIn(this.prisma, companyId, { year, month }),
     ]);
 
     const rows = new Map<string, TimesheetRowView>();
@@ -138,7 +142,7 @@ export class TimesheetService {
           teamName,
           employed: [],
           hasMonthlyTotals: false,
-          canEnter: locked === 0 && entersHoursAt(auth, entryRoles, siteId, teamId),
+          canEnter: timesheetModule && locked === 0 && entersHoursAt(auth, entryRoles, siteId, teamId),
           entries: [],
         };
         rows.set(key, row);
@@ -186,6 +190,7 @@ export class TimesheetService {
       month,
       site: { id: site.id, name: site.name, isActive: site.isActive },
       locked: locked > 0,
+      timesheetModule,
       today: todayIn(auth.company.timezone),
       calendar,
       rows: sorted,
@@ -203,6 +208,7 @@ export class TimesheetService {
     return this.prisma.$transaction(async (tx) => {
       const entryRoles = await this.settings.entryRoles(companyId, tx);
       if (!entersHoursAt(auth, entryRoles, input.siteId, input.teamId)) throw forbidden();
+      await assertTimesheetIn(tx, companyId, { year, month });
       await assertMonthsOpen(tx, companyId, { year, month });
       await lockWorkerMonth(tx, input.workerId, year, month);
 
@@ -287,6 +293,7 @@ export class TimesheetService {
       const entryRoles = await this.settings.entryRoles(companyId, tx);
       if (!entersHoursAt(auth, entryRoles, found.siteId, found.teamId)) throw forbidden();
       const { year, month } = monthOfDay(isoDay(found.date));
+      await assertTimesheetIn(tx, companyId, { year, month });
       await assertMonthsOpen(tx, companyId, { year, month });
       await lockWorkerMonth(tx, found.assignment.workerId, year, month);
       // Read again under the lock: a write may have changed it meanwhile.
@@ -369,4 +376,9 @@ export class TimesheetService {
       tx,
     );
   }
+}
+
+/** Hours of a month are entered only if that month's plan has the Timesheet module (AGENTS.md: Modules). */
+async function assertTimesheetIn(tx: Tx, companyId: string, month: YearMonth) {
+  if (!(await timesheetIn(tx, companyId, month))) throw conflict('timesheet.moduleOff', { ...month });
 }

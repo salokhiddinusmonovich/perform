@@ -238,6 +238,8 @@
     "choosePlan": "Tarifni tanlang",
     "planOption": "{{name}} — {{price}}, {{limit}} tagacha ishchi",
     "noPlan": "Tarif yoʻq",
+    "nextPlan": "Keyingi oydan ({{month}}): {{name}}",
+    "planChangeHint": "Yangi tarif keyingi oyning 1-sanasidan boshlanadi. Hali boshlanmagan oʻzgarishni bekor qilish uchun joriy tarifni tanlang.",
     "activeWorkers": "Bu oy ishchilar: {{active}} / {{limit}}",
     "subscription": "Obuna",
     "paidUntil": "{{date}} gacha toʻlangan",
@@ -385,6 +387,7 @@
     },
     "plan": {
       "archived": "Bu tarif arxivda, uni kompaniyaga berib boʻlmaydi.",
+      "inUse": "Bu tarifda kompaniya boʻlgan, shuning uchun narx, ishchilar chegarasi va modullarni oʻzgartirib boʻlmaydi. Oʻrniga yangi tarif yarating.",
       "nameTaken": "Bunday nomli tarif allaqachon bor.",
       "notFound": "Bunday tarif yoʻq.",
       "workerLimitReached": "Tarifingiz oyiga {{limit}} ta faol ishchiga ruxsat beradi, bu esa yana bittasini qoʻshadi. Tizim operatoridan kattaroq tarif soʻrang."
@@ -421,6 +424,7 @@
       "staleVersion": "Bu kunni shu orada boshqa kishi oʻzgartirdi. Tabel endi saqlanganini koʻrsatadi.",
       "notEmployed": "Ishchi bu kunda ishga olinmagan.",
       "entryExists": "Bu kunda bu yerda soat allaqachon bor. Tabel endi saqlanganini koʻrsatadi.",
+      "moduleOff": "Bu oyning tarifida Tabel moduli yoʻq, shuning uchun unga soat kiritib boʻlmaydi.",
       "wholeDay": "Ishga kelmaslik ishchining butun kuni: u boshqa yozuvlar bilan bir kunda boʻlolmaydi.",
       "dayTooManyHours": "Ishchining bu kundagi soatlari jami 24 dan oshadi."
     }
@@ -784,7 +788,8 @@
     "create": "Yangi tarif",
     "createDescription": "Foydalanuvchilar va obyektlar cheklanmaydi, faqat faol ishchilar.",
     "edit": "Tarifni tahrirlash",
-    "editDescription": "Shu tarifdagi kompaniyalar: {{companies}}. Oʻzgarishlar hammasiga tegishli.",
+    "editDescription": "Bu oy yoki keyingi oydan shu tarifdagi kompaniyalar: {{companies}}.",
+    "termsFixed": "Biror kompaniya shu tarifda boʻlgach, narx, ishchilar chegarasi va modullarni oʻzgartirib boʻlmaydi. Yangi shartlar uchun yangi tarif yarating va kompaniyalarni unga oʻtkazing.",
     "name": "Nomi",
     "monthlyPrice": "Oylik narx",
     "monthlyPriceSom": "Oylik narx, soʻm",
@@ -1002,6 +1007,7 @@
     "noRulesDescription": "Bu oy uchun ish haqi qoidalari hali kiritilmagan, shuning uchun kalendar dam olish kunlarini bilmaydi.",
     "lockedHint": "Bu oy yopilgan. Uning soatlarini oʻzgartirib boʻlmaydi.",
     "readOnlyHint": "Siz bu soatlarni koʻrishingiz mumkin. Ularni Sozlamalarda ruxsat berilganlar kiritadi.",
+    "moduleOffHint": "Bu oyning tarifida Tabel moduli yoʻq. Soatlarni koʻrish mumkin, lekin kiritib boʻlmaydi.",
     "monthlyTotalsHint": "Ayrim ishchilarning bu oy uchun oylik jami soatlari bor, shuning uchun ularning kunlari bu yerda kiritilmaydi.",
     "legendTitle": "Tabelni qanday oʻqish kerak",
     "howToEnter": "Kunni tanlang va soatni (masalan 9 yoki 7,5) yoki harf kodini yozib, Enter bosing. Delete kunni tozalaydi.",

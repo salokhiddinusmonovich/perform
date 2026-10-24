@@ -238,6 +238,8 @@
     "choosePlan": "Choose a plan",
     "planOption": "{{name}} — {{price}}, up to {{limit}} workers",
     "noPlan": "No plan",
+    "nextPlan": "From next month ({{month}}): {{name}}",
+    "planChangeHint": "A new plan starts on the 1st of next month. Choose the current plan to cancel a change that hasn’t started.",
     "activeWorkers": "Workers this month: {{active}} of {{limit}}",
     "subscription": "Subscription",
     "paidUntil": "Paid until {{date}}",
@@ -385,6 +387,7 @@
     },
     "plan": {
       "archived": "This plan is archived and can’t be given to a company.",
+      "inUse": "A company has had this plan, so its price, worker limit and modules can’t change. Make a new plan instead.",
       "nameTaken": "A plan with this name already exists.",
       "notFound": "This plan doesn’t exist.",
       "workerLimitReached": "Your plan allows {{limit}} active workers a month, and this would add one more. Ask the system operator for a bigger plan."
@@ -421,6 +424,7 @@
       "staleVersion": "Someone changed this day meanwhile. The timesheet now shows what is saved.",
       "notEmployed": "The worker isn’t employed on this day.",
       "entryExists": "This day already has hours here. The timesheet now shows what is saved.",
+      "moduleOff": "This month’s plan doesn’t include the Timesheet module, so hours can’t be entered for it.",
       "wholeDay": "An absence is the worker’s whole day: it can’t share the day with other entries.",
       "dayTooManyHours": "The worker’s hours on this day add up to more than 24."
     }
@@ -784,7 +788,8 @@
     "create": "New plan",
     "createDescription": "Users and sites are never limited, only active workers.",
     "edit": "Edit plan",
-    "editDescription": "Companies on this plan: {{companies}}. Changes apply to all of them.",
+    "editDescription": "Companies on this plan this month or from next month: {{companies}}.",
+    "termsFixed": "Price, worker limit and modules can’t change once a company has had this plan. For new terms, make a new plan and move companies to it.",
     "name": "Name",
     "monthlyPrice": "Price per month",
     "monthlyPriceSom": "Price per month, soʻm",
@@ -1002,6 +1007,7 @@
     "noRulesDescription": "Pay rules for this month aren’t set yet, so the calendar doesn’t know the rest days.",
     "lockedHint": "This month is locked. Its hours can’t be changed.",
     "readOnlyHint": "You can view these hours. Entering them is done by the people Settings allow.",
+    "moduleOffHint": "This month’s plan doesn’t include the Timesheet module. You can view the hours, but not enter them.",
     "monthlyTotalsHint": "Some workers have monthly totals for this month, so their days can’t be entered here.",
     "legendTitle": "How to read the timesheet",
     "howToEnter": "Select a day and type the hours (for example 9 or 7,5) or a letter code, then press Enter. Delete clears the day.",

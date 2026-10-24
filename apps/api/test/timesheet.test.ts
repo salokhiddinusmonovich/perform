@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Role } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { addMember, createPlan, createUser, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
+import { addMember, createPlan, createUser, givePlan, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
 
 let ctx: TestContext;
 beforeAll(async () => (ctx = await startApp()));
@@ -27,13 +27,14 @@ const RULES = {
 };
 
 /**
- * A company with the Timesheet module and pay rules from September 2026: Site A with
- * Teams A and B, Site B, and a worker placed on Site A / Team A with a salary.
+ * A company with the Timesheet module (on a plan from `planFrom`) and pay rules from
+ * September 2026: Site A with Teams A and B, Site B, and a worker placed on Site A /
+ * Team A with a salary.
  */
-async function company({ timesheetModule = true } = {}) {
+async function company({ timesheetModule = true, planFrom = '2000-01-01' } = {}) {
   const owner = await memberOfNewCompany(ctx, 'OWNER');
   const plan = await createPlan(ctx.prisma, { timesheetModule });
-  await ctx.prisma.company.update({ where: { id: owner.company.id }, data: { planId: plan.id } });
+  await givePlan(ctx.prisma, owner.company.id, plan.id, planFrom);
   await owner.agent.put('/api/pay-rules/2026/9').send(RULES).expect(204);
   const siteA = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
   const siteB = (await owner.agent.post('/api/sites').send({ name: 'Site B' }).expect(201)).body.id as string;
@@ -258,6 +259,43 @@ describe('who enters hours', () => {
     expect((await agent.get('/api/timesheet/settings').expect(403)).body.code).toBe('module.disabled');
     const body = { workerId, siteId: siteA, teamId: teamA, date: '2026-09-02', status: 'WORKED', hours: '9' };
     expect((await agent.put(entryUrl(randomUUID())).send(body).expect(403)).body.code).toBe('module.disabled');
+  });
+});
+
+describe('the Timesheet module by month', () => {
+  it('takes hours only in months whose plan has it, and keeps an earlier month open until it is locked', async () => {
+    // Timesheet in September 2026, then a plan without it from October.
+    const { agent, user, company: c, siteA, teamA, workerId } = await company({ planFrom: '2026-09-01' });
+    const payrollOnly = await createPlan(ctx.prisma);
+    await givePlan(ctx.prisma, c.id, payrollOnly.id, '2026-10-01');
+    const day = { workerId, siteId: siteA, teamId: teamA, status: 'WORKED', hours: '9' };
+
+    // September isn't locked yet, so its hours can still be finished.
+    expect((await agent.get('/api/auth/me').expect(200)).body.activeCompany.modules).toEqual(['PAYROLL', 'TIMESHEET']);
+    await agent.put(entryUrl(randomUUID())).send({ ...day, date: '2026-09-02' }).expect(200);
+    const off = await agent.put(entryUrl(randomUUID())).send({ ...day, date: '2026-10-01' }).expect(409);
+    expect(off.body).toMatchObject({ code: 'timesheet.moduleOff', year: 2026, month: 10 });
+    const october = (await agent.get(`/api/timesheet/2026/10?siteId=${siteA}`).expect(200)).body;
+    expect(october).toMatchObject({ timesheetModule: false, rows: [{ canEnter: false }] });
+    expect((await agent.get(`/api/timesheet/2026/9?siteId=${siteA}`).expect(200)).body.timesheetModule).toBe(true);
+
+    await ctx.prisma.payrollPeriod.update({
+      where: { companyId_year_month: { companyId: c.id, year: 2026, month: 9 } },
+      data: { status: 'LOCKED', lockedAt: new Date(), lockedById: user.id },
+    });
+    expect((await agent.get('/api/auth/me').expect(200)).body.activeCompany.modules).toEqual(['PAYROLL']);
+    expect((await agent.get(`/api/timesheet/2026/9?siteId=${siteA}`).expect(403)).body.code).toBe('module.disabled');
+  });
+
+  it('starts with the month its plan starts in', async () => {
+    // A plan without Timesheet in September 2026, one with it from October.
+    const { agent, company: c, siteA, teamA, workerId } = await company({ timesheetModule: false, planFrom: '2026-09-01' });
+    const withTimesheet = await createPlan(ctx.prisma, { timesheetModule: true });
+    await givePlan(ctx.prisma, c.id, withTimesheet.id, '2026-10-01');
+    const day = { workerId, siteId: siteA, teamId: teamA, status: 'WORKED', hours: '9' };
+
+    expect((await agent.put(entryUrl(randomUUID())).send({ ...day, date: '2026-09-30' }).expect(409)).body.code).toBe('timesheet.moduleOff');
+    await agent.put(entryUrl(randomUUID())).send({ ...day, date: '2026-10-01' }).expect(200);
   });
 });
 

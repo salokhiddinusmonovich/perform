@@ -179,7 +179,7 @@ function PlansView({ creating, onCreatingChange }: { creating: boolean; onCreati
 
 const EMPTY_PLAN: PlanInput = { name: '', monthlyPrice: '', maxActiveWorkers: Number.NaN, timesheetModule: false };
 
-/** Creates a plan, or edits one (which changes it for every company on it). */
+/** Creates a plan, or edits one (only its name once a company has had it). */
 function PlanDialog({
   open,
   plan,
@@ -192,6 +192,7 @@ function PlanDialog({
   onSaved: () => void;
 }) {
   const { t } = useTranslation();
+  const format = useFormat();
   const [formError, setFormError] = useState<string>();
   const form = useForm<PlanInput>({
     resolver: zodResolver(planSchema),
@@ -243,34 +244,58 @@ function PlanDialog({
           <Field id="p-name" label={t('plans.name')} error={errors.name}>
             <Input {...fieldControlProps('p-name', errors.name)} {...form.register('name')} autoComplete="off" />
           </Field>
-          <Field id="p-price" label={t('plans.monthlyPriceSom')} error={errors.monthlyPrice}>
-            <Input
-              {...fieldControlProps('p-price', errors.monthlyPrice)}
-              {...form.register('monthlyPrice')}
-              inputMode="decimal"
-              autoComplete="off"
-            />
-          </Field>
-          <Field id="p-workers" label={t('plans.maxActiveWorkers')} error={errors.maxActiveWorkers} hint={t('plans.maxActiveWorkersHint')}>
-            <Input
-              {...fieldControlProps('p-workers', errors.maxActiveWorkers)}
-              {...form.register('maxActiveWorkers', { valueAsNumber: true })}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              autoComplete="off"
-            />
-          </Field>
-          <Controller
-            control={form.control}
-            name="timesheetModule"
-            render={({ field }) => (
-              <div className="flex min-h-10 items-center gap-3">
-                <Checkbox id="p-timesheet" checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
-                <Label htmlFor="p-timesheet">{t('plans.includesTimesheet')}</Label>
-              </div>
-            )}
-          />
+          {plan?.inUse ? (
+            // Fixed once a company has had the plan; the form sends them back unchanged.
+            <div className="space-y-2">
+              <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                {[
+                  [t('plans.monthlyPriceSom'), format.money(plan.monthlyPrice, PLATFORM_CURRENCY)],
+                  [t('plans.maxActiveWorkers'), format.number(plan.maxActiveWorkers)],
+                  [
+                    t('platform.modules'),
+                    plan.timesheetModule ? `${t('modules.PAYROLL')}, ${t('modules.TIMESHEET')}` : t('modules.PAYROLL'),
+                  ],
+                ].map(([label, value]) => (
+                  <div key={label} className="min-w-0">
+                    <dt className="text-sm text-muted-foreground">{label}</dt>
+                    <dd className="font-medium">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="text-sm text-muted-foreground">{t('plans.termsFixed')}</p>
+            </div>
+          ) : (
+            <>
+              <Field id="p-price" label={t('plans.monthlyPriceSom')} error={errors.monthlyPrice}>
+                <Input
+                  {...fieldControlProps('p-price', errors.monthlyPrice)}
+                  {...form.register('monthlyPrice')}
+                  inputMode="decimal"
+                  autoComplete="off"
+                />
+              </Field>
+              <Field id="p-workers" label={t('plans.maxActiveWorkers')} error={errors.maxActiveWorkers} hint={t('plans.maxActiveWorkersHint')}>
+                <Input
+                  {...fieldControlProps('p-workers', errors.maxActiveWorkers)}
+                  {...form.register('maxActiveWorkers', { valueAsNumber: true })}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  autoComplete="off"
+                />
+              </Field>
+              <Controller
+                control={form.control}
+                name="timesheetModule"
+                render={({ field }) => (
+                  <div className="flex min-h-10 items-center gap-3">
+                    <Checkbox id="p-timesheet" checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+                    <Label htmlFor="p-timesheet">{t('plans.includesTimesheet')}</Label>
+                  </div>
+                )}
+              />
+            </>
+          )}
           <FormActions submitLabel={plan ? t('common.save') : t('plans.create')} pending={save.isPending} onCancel={close} />
         </form>
       </DialogContent>

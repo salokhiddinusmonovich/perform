@@ -37,6 +37,8 @@ export interface TimesheetMonth {
   month: number;
   site: { id: string; name: string; isActive: boolean };
   locked: boolean;
+  /** This month's plan has the Timesheet module; without it no hours are entered */
+  timesheetModule: boolean;
   /** Today in the company's time zone */
   today: string;
   /** null while no pay rules are set for the month */

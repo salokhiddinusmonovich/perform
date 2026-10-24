@@ -22,11 +22,20 @@ export interface CompanyRow {
   createdAt: string;
   memberCount: number;
   owners: { fullName: string; email: string | null; phone: string | null }[];
-  /** null for a company from before plans */
-  plan: { id: string; name: string; maxActiveWorkers: number; timesheetModule: boolean } | null;
+  /** This month's plan; null for a company from before plans */
+  plan: PlanSummary | null;
+  /** A change that starts on the 1st of next month ("YYYY-MM-01"), or null */
+  nextPlan: (PlanSummary & { fromMonth: string }) | null;
   subscription: Subscription;
   /** Workers with a placement this month */
   activeWorkers: number;
+}
+
+export interface PlanSummary {
+  id: string;
+  name: string;
+  maxActiveWorkers: number;
+  timesheetModule: boolean;
 }
 
 export interface PlanRow {
@@ -39,6 +48,8 @@ export interface PlanRow {
   /** false = archived */
   isActive: boolean;
   companyCount: number;
+  /** Some company has had it: its price, worker limit and modules are fixed */
+  inUse: boolean;
 }
 
 export interface UserRow {

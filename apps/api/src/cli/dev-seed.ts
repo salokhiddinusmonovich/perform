@@ -49,7 +49,8 @@ async function main() {
     });
     const paidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const company = (name: string, slug: string) =>
-      prisma.company.create({ data: { name, slug, planId: plan.id, paidUntil } });
+      // On the plan for every month the demo data may cover.
+      prisma.company.create({ data: { name, slug, paidUntil, plans: { create: { planId: plan.id, fromMonth: new Date('2020-01-01') } } } });
     const demo = await company('Demo MEP', 'demo-mep');
     const other = await company('Other Construction', 'demo-other');
 
@@ -162,6 +163,7 @@ async function removeDemoData(prisma: PrismaClient) {
       where: { OR: [inCompany, { actorUserId: { in: userIds } }, { impersonatorUserId: { in: userIds } }] },
     }),
     prisma.subscriptionPayment.deleteMany({ where: { OR: [inCompany, { recordedById: { in: userIds } }] } }),
+    prisma.companyPlan.deleteMany({ where: { OR: [inCompany, { setById: { in: userIds } }] } }),
     prisma.adjustmentCancel.deleteMany({ where: inCompany }),
     prisma.adjustment.deleteMany({ where: inCompany }),
     prisma.travelAmount.deleteMany({ where: inCompany }),

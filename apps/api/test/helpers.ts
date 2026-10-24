@@ -28,7 +28,7 @@ export async function startApp(controllers: Type[] = []): Promise<TestContext> {
 /** Empties every table except the migration history. */
 export async function resetDb(prisma: PrismaService) {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "Session", "SubscriptionPayment", "MemberSite", "MemberTeam", "Membership", "PayrollSnapshotWorker", "PayrollSnapshot", "Salary", "MonthlyHours", "TimesheetEntry", "TimesheetSettings", "AdjustmentCancel", "Adjustment", "TravelAmount", "PayrollPeriod", "WorkingDaysOverride", "PayrollRules", "PayrollRuleSet", "Holiday", "TimesheetCode", "Assignment", "TravelRoute", "Worker", "Team", "Site", "User", "Company", "Plan" CASCADE',
+    'TRUNCATE "AuditLog", "Session", "SubscriptionPayment", "CompanyPlan", "MemberSite", "MemberTeam", "Membership", "PayrollSnapshotWorker", "PayrollSnapshot", "Salary", "MonthlyHours", "TimesheetEntry", "TimesheetSettings", "AdjustmentCancel", "Adjustment", "TravelAmount", "PayrollPeriod", "WorkingDaysOverride", "PayrollRules", "PayrollRuleSet", "Holiday", "TimesheetCode", "Assignment", "TravelRoute", "Worker", "Team", "Site", "User", "Company", "Plan" CASCADE',
   );
 }
 
@@ -69,6 +69,11 @@ export async function createPlan(
       isActive: data.isActive ?? true,
     },
   });
+}
+
+/** Puts a company on a plan from a month ("YYYY-MM-01"; by default long before any test data). */
+export async function givePlan(prisma: PrismaService, companyId: string, planId: string, fromMonth = '2000-01-01') {
+  return prisma.companyPlan.create({ data: { companyId, planId, fromMonth: new Date(fromMonth) } });
 }
 
 export async function addMember(prisma: PrismaService, userId: string, companyId: string, role: Role) {

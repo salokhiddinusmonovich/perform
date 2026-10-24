@@ -20,7 +20,10 @@ export interface ActiveCompany {
   currency: string;
   timezone: string;
   role: Role;
-  /** Modules this company has (Payroll always). */
+  /**
+   * Modules open to this company now (Payroll always): Timesheet while this month's plan
+   * has it, or an earlier month that had it isn't locked yet (platform/company-plan.ts).
+   */
   modules: CompanyModule[];
   /** Sites a project manager or timekeeper works on (MemberSite); null for other roles. */
   siteIds: string[] | null;
