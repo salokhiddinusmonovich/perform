@@ -368,13 +368,13 @@
     "site": {
       "notFound": "This site doesn't exist or you don't work on it.",
       "nameTaken": "A site with this name already exists.",
-      "hasWorkers": "Workers still work on this site. Move them or record their leaving first.",
+      "hasWorkers": "Workers are placed on this site, now or from a later day. Move them or record their leaving first.",
       "inactive": "This site is closed."
     },
     "team": {
       "notFound": "This team doesn't exist or you don't work with it.",
       "nameTaken": "This site already has a team with this name.",
-      "hasWorkers": "Workers are still in this team. Move them first.",
+      "hasWorkers": "Workers are placed in this team, now or from a later day. Move them first.",
       "inactive": "This team is closed."
     },
     "staff": {

@@ -5,7 +5,7 @@ import { AuditService, diff } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { USABLE_MEMBERSHIP } from '../auth/memberships';
 import { badRequest, conflict, forbidden, notFound } from '../common/api-error';
-import { currentOn, todayIn } from '../common/dates';
+import { currentOn, notEndedBefore, todayIn } from '../common/dates';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertManagesSite, isCompanyManager, visibleSites, visibleTeams } from './access';
 
@@ -113,9 +113,10 @@ export class SitesService {
       if (input.name && input.name !== before.name && (await tx.site.findFirst({ where: { companyId, name: input.name } }))) {
         throw conflict('site.nameTaken');
       }
+      // Placements starting later count too: they would start on a closed site.
       if (input.isActive === false && before.isActive) {
         const today = todayIn(auth.company.timezone);
-        if (await tx.assignment.count({ where: { siteId: id, ...currentOn(today) } })) throw conflict('site.hasWorkers');
+        if (await tx.assignment.count({ where: { siteId: id, ...notEndedBefore(today) } })) throw conflict('site.hasWorkers');
       }
       await tx.site.update({ where: { id }, data: input });
       await this.record(tx, auth, 'site.update', 'Site', id, diff(before, input));
@@ -148,9 +149,10 @@ export class SitesService {
       ) {
         throw conflict('team.nameTaken');
       }
+      // Placements starting later count too: they would start in a closed team.
       if (input.isActive === false && before.isActive) {
         const today = todayIn(auth.company.timezone);
-        if (await tx.assignment.count({ where: { teamId: id, ...currentOn(today) } })) throw conflict('team.hasWorkers');
+        if (await tx.assignment.count({ where: { teamId: id, ...notEndedBefore(today) } })) throw conflict('team.hasWorkers');
       }
       await tx.team.update({ where: { id }, data: input });
       await this.record(tx, auth, 'team.update', 'Team', id, diff(before, input));

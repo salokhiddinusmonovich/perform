@@ -4,7 +4,7 @@ import type { CreateWorker, Placement, Salary, Worker } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
-import { dayToDate, isoDay, monthOfDay, previousDay } from '../common/dates';
+import { dayToDate, isoDay, monthOfDay, previousDay, todayIn } from '../common/dates';
 import { assertMonthsOpen, monthIndex } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertManagesSite, seesPay, seesPersonalData, seesPlacement } from './access';
@@ -78,8 +78,9 @@ export const SALARY_ORDER = [
   { seq: 'desc' },
 ] as const satisfies Prisma.SalaryOrderByWithRelationInput[];
 
+/** Placements newest first: the first is the latest, which moves and leaving act on. */
 const WORKER_INCLUDE = {
-  assignments: { orderBy: { hiredOn: 'desc' }, take: 1, include: PLACEMENT_INCLUDE },
+  assignments: { orderBy: { hiredOn: 'desc' }, include: PLACEMENT_INCLUDE },
   salaries: { orderBy: SALARY_ORDER, take: 1 },
 } as const satisfies Prisma.WorkerInclude;
 
@@ -102,7 +103,7 @@ export class WorkersService {
 
   async list(auth: CompanyAuthContext): Promise<WorkerView[]> {
     const { id: companyId, siteIds, teamIds } = auth.company;
-    // Narrow in the database, then keep workers whose latest placement the caller sees.
+    // Narrow in the database, then keep the workers the caller sees (sees()).
     const scope: Prisma.WorkerWhereInput = siteIds
       ? { assignments: { some: { siteId: { in: siteIds } } } }
       : teamIds
@@ -305,9 +306,17 @@ export class WorkersService {
     return worker;
   }
 
+  /**
+   * The caller sees a worker through the latest placement or any placement not ended
+   * before today. So a move planned for a later day doesn't hide the worker from the
+   * site or team they still work in; after leaving, the last placement decides.
+   */
   private sees(auth: CompanyAuthContext, worker: WorkerRow): boolean {
-    const latest = worker.assignments[0];
-    return latest !== undefined && seesPlacement(auth, latest.siteId, latest.teamId);
+    const today = todayIn(auth.company.timezone);
+    return worker.assignments.some(
+      (p, i) =>
+        (i === 0 || p.leftOn === null || isoDay(p.leftOn) >= today) && seesPlacement(auth, p.siteId, p.teamId),
+    );
   }
 
   private view(auth: CompanyAuthContext, w: WorkerRow): WorkerView {

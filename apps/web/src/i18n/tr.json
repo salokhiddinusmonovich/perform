@@ -368,13 +368,13 @@
     "site": {
       "notFound": "Bu şantiye yok ya da siz burada çalışmıyorsunuz.",
       "nameTaken": "Bu adla bir şantiye zaten var.",
-      "hasWorkers": "Bu şantiyede hâlâ çalışan işçiler var. Önce onları aktarın veya ayrılışlarını kaydedin.",
+      "hasWorkers": "Bu şantiyeye şimdi veya ileri bir tarihten itibaren yerleştirilmiş işçiler var. Önce onları aktarın veya ayrılışlarını kaydedin.",
       "inactive": "Bu şantiye kapalı."
     },
     "team": {
       "notFound": "Bu ekip yok ya da siz bu ekiple çalışmıyorsunuz.",
       "nameTaken": "Bu şantiyede bu adla bir ekip zaten var.",
-      "hasWorkers": "Bu ekipte hâlâ işçiler var. Önce onları aktarın.",
+      "hasWorkers": "Bu ekibe şimdi veya ileri bir tarihten itibaren yerleştirilmiş işçiler var. Önce onları aktarın.",
       "inactive": "Bu ekip kapalı."
     },
     "staff": {

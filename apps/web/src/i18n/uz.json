@@ -368,13 +368,13 @@
     "site": {
       "notFound": "Bu obyekt mavjud emas yoki siz unda ishlamaysiz.",
       "nameTaken": "Bu nomli obyekt allaqachon bor.",
-      "hasWorkers": "Bu obyektda hali ishchilar ishlayapti. Avval ularni oʻtkazing yoki ketganini qayd eting.",
+      "hasWorkers": "Bu obyektga hozir yoki keyingi sanadan ishchilar biriktirilgan. Avval ularni oʻtkazing yoki ketganini qayd eting.",
       "inactive": "Bu obyekt yopilgan."
     },
     "team": {
       "notFound": "Bu brigada mavjud emas yoki siz u bilan ishlamaysiz.",
       "nameTaken": "Bu obyektda shu nomli brigada allaqachon bor.",
-      "hasWorkers": "Bu brigadada hali ishchilar bor. Avval ularni oʻtkazing.",
+      "hasWorkers": "Bu brigadaga hozir yoki keyingi sanadan ishchilar biriktirilgan. Avval ularni oʻtkazing.",
       "inactive": "Bu brigada yopilgan."
     },
     "staff": {

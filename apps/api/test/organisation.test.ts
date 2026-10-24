@@ -1,5 +1,6 @@
 import type { Role } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { dayToDate, isoDay, todayIn } from '../src/common/dates';
 import { addMember, createUser, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
 
 let ctx: TestContext;
@@ -46,6 +47,13 @@ async function hire(agent: Awaited<ReturnType<typeof company>>['agent'], siteId:
   return res.body.id as string;
 }
 
+/** The calendar day `n` days from today in the companies' time zone. */
+function daysFromToday(n: number) {
+  const date = dayToDate(todayIn('Asia/Tashkent'));
+  date.setUTCDate(date.getUTCDate() + n);
+  return isoDay(date);
+}
+
 async function lock(companyId: string, year: number, month: number) {
   const user = await createUser(ctx.prisma);
   await ctx.prisma.payrollPeriod.create({
@@ -84,6 +92,14 @@ describe('sites and teams', () => {
     await agent.patch(`/api/teams/${teamA}`).send({ isActive: false }).expect(204);
     await agent.patch(`/api/sites/${siteA}`).send({ isActive: false }).expect(204);
     expect((await agent.post('/api/teams').send({ siteId: siteA, name: 'Team B' }).expect(409)).body.code).toBe('site.inactive');
+  });
+
+  it('refuses closing a site or team that a worker is placed in from a later day', async () => {
+    const { agent, siteA, siteB, teamA } = await company();
+    const worker = await hire(agent, siteB, null);
+    await agent.post(`/api/workers/${worker}/placements`).send({ siteId: siteA, teamId: teamA, from: daysFromToday(7), shift: 'DAY' }).expect(204);
+    expect((await agent.patch(`/api/teams/${teamA}`).send({ isActive: false }).expect(409)).body.code).toBe('team.hasWorkers');
+    expect((await agent.patch(`/api/sites/${siteA}`).send({ isActive: false }).expect(409)).body.code).toBe('site.hasWorkers');
   });
 
   it('lets a project manager manage teams only on their own sites, never create sites', async () => {
@@ -302,6 +318,26 @@ describe('workers', () => {
     await hire(agent, siteA, teamB);
     await hire(agent, siteA, null);
     expect((await fm.agent.get('/api/workers').expect(200)).body.map((w: { id: string }) => w.id)).toEqual([inA]);
+  });
+
+  it('keeps showing a worker to their team until a planned move, and not after a past one', async () => {
+    const { company: c, agent, siteA, teamA } = await company();
+    const teamB = (await agent.post('/api/teams').send({ siteId: siteA, name: 'Team B' }).expect(201)).body.id;
+    const [fmA, fmB] = [await member(c.id, 'FOREMAN'), await member(c.id, 'FOREMAN')];
+    await agent.post(`/api/teams/${teamA}/foremen`).send({ userId: fmA.user.id }).expect(204);
+    await agent.post(`/api/teams/${teamB}/foremen`).send({ userId: fmB.user.id }).expect(204);
+    const ids = async (fm: typeof fmA) => (await fm.agent.get('/api/workers').expect(200)).body.map((w: { id: string }) => w.id);
+
+    const moving = await hire(agent, siteA, teamA);
+    await agent.post(`/api/workers/${moving}/placements`).send({ siteId: siteA, teamId: teamB, from: daysFromToday(7), shift: 'DAY' }).expect(204);
+    expect(await ids(fmA)).toEqual([moving]);
+    await fmA.agent.get(`/api/workers/${moving}`).expect(200);
+    expect(await ids(fmB)).toEqual([moving]);
+
+    const moved = await hire(agent, siteA, teamA, { firstName: 'Moved' });
+    await agent.post(`/api/workers/${moved}/placements`).send({ siteId: siteA, teamId: teamB, from: '2026-10-01', shift: 'DAY' }).expect(204);
+    expect(await ids(fmA)).toEqual([moving]);
+    await fmA.agent.get(`/api/workers/${moved}`).expect(404);
   });
 
   it('edits worker details, recording which personal fields changed but not their values', async () => {

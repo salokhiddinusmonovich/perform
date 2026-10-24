@@ -21,10 +21,15 @@ export function todayIn(timeZone: string): string {
   );
 }
 
+/** Placements not ended before `day`: current on it, or starting later. */
+export const notEndedBefore = (day: string) => ({
+  OR: [{ leftOn: null }, { leftOn: { gte: dayToDate(day) } }],
+});
+
 /** Placements that are current on `day`: started on or before it and not ended before it. */
 export const currentOn = (day: string) => ({
   hiredOn: { lte: dayToDate(day) },
-  OR: [{ leftOn: null }, { leftOn: { gte: dayToDate(day) } }],
+  ...notEndedBefore(day),
 });
 
 /** First and last calendar day of a month (1-based), as @db.Date values. */
