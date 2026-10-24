@@ -3,6 +3,8 @@ import {
   Building2,
   CalendarCheck,
   CalendarDays,
+  ClipboardList,
+  ClipboardPen,
   Clock,
   Coins,
   CreditCard,
@@ -15,7 +17,17 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
-import { canEnterMonthlyHours, canManageCompany, canViewPayRules, inCompany, isPlatformAdmin, seesPay, type Me } from '@/lib/auth';
+import {
+  canEnterMonthlyHours,
+  canManageCompany,
+  canManageTimesheet,
+  canViewPayRules,
+  hasTimesheet,
+  inCompany,
+  isPlatformAdmin,
+  seesPay,
+  type Me,
+} from '@/lib/auth';
 
 export interface NavItem {
   path: string;
@@ -42,6 +54,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { path: '/sites', labelKey: 'nav.sites', icon: MapPin, visible: inCompany },
       { path: '/workers', labelKey: 'nav.workers', icon: HardHat, visible: inCompany },
+      { path: '/timesheet', labelKey: 'nav.timesheet', icon: ClipboardList, visible: hasTimesheet },
     ],
   },
   {
@@ -60,6 +73,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { path: '/settings/pay-rules', labelKey: 'nav.payRules', icon: Scale, visible: canViewPayRules },
       { path: '/settings/holidays', labelKey: 'nav.holidays', icon: CalendarDays, visible: canViewPayRules },
       { path: '/settings/working-days', labelKey: 'nav.workingDays', icon: CalendarCheck, visible: canViewPayRules },
+      { path: '/settings/timesheet', labelKey: 'nav.timesheetSettings', icon: ClipboardPen, visible: canManageTimesheet },
     ],
   },
   {

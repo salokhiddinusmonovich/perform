@@ -1,6 +1,6 @@
-import type { CalendarDay, WorkingDays } from './calendar';
-import { divRound, fromUnits, SCALE, toUnits, type Units } from './decimal';
-import { MAX_HOURS_PER_DAY, type DayEntry } from './entry';
+import type { CalendarDay, WorkingDays } from './calendar.js';
+import { divRound, fromUnits, SCALE, toUnits, type Units } from './decimal.js';
+import { MAX_HOURS_PER_DAY, type DayEntry } from './entry.js';
 import {
   ABSENCE_TYPES,
   HOUR_KINDS,
@@ -11,7 +11,7 @@ import {
   type HoursSummary,
   type PlaceTotals,
   type PlaceUnits,
-} from './summary';
+} from './summary.js';
 
 /** Pay for one absence type (Settings). */
 export interface AbsenceRule {

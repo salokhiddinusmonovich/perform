@@ -18,6 +18,8 @@
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.104.4",
     "@tanstack/react-table": "^8.21.3",
+    "ag-grid-community": "^36.2.0",
+    "ag-grid-react": "^36.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",

@@ -42,13 +42,24 @@ export type PayrollProblem =
   /** Daily entries that contradict each other (the engine says how) */
   | { code: 'invalidHours'; detail: string };
 
-/** What a pay line's place key stands for: a site (daily entries) or a placement (totals). */
+/**
+ * What a pay line's place key stands for: a site and team the hours were entered at
+ * (daily entries, placeKey) or a placement (totals).
+ */
 export interface PlaceLabel {
   siteName: string;
+  /** The team of a place with one; absent in months locked before teams were told apart */
+  teamName?: string | null;
   /** A placement's first and last day; null for a site */
   from: string | null;
   until: string | null;
 }
+
+/**
+ * Key of the place daily hours were entered at. A worker's day may be split between
+ * teams of one site too, so the team is part of it.
+ */
+const placeKey = (siteId: string, teamId: string | null) => (teamId ? `${siteId}/${teamId}` : siteId);
 
 /** The days of the worker's placements under one rule set, paid under its rules. */
 export interface PayrollPartView {
@@ -327,6 +338,7 @@ export class PayrollService {
       }),
       db.timesheetEntry.findMany({
         where: { companyId, assignmentId: { in: assignmentIds }, date: { gte: first, lte: last } },
+        include: { site: { select: { name: true } }, team: { select: { name: true } } },
       }),
       // The newest amount of each placement counts.
       db.travelAmount.findMany({
@@ -439,25 +451,22 @@ export class PayrollService {
             const routes = Object.fromEntries(inPart.map((p) => [p.id, route(p)]));
             result = calculatePay({ ...base, totals, travel: travel(settings, routes, inPart, travelAmounts) });
           } else {
-            const partEntries: DayEntry[] = ownEntries
-              .filter((e) => ids.has(e.assignmentId))
-              .map((e) => ({
-                date: isoDay(e.date),
-                place: e.siteId,
-                seq: Number(e.seq),
-                status: e.status,
-                hours: e.hours.toString(),
-              }));
-            const siteIds = [...new Set(partEntries.map((e) => e.place))];
-            const siteNames = await this.siteNames(db, companyId, siteIds);
-            for (const siteId of siteIds) places[siteId] = { siteName: siteNames.get(siteId)!, from: null, until: null };
-            // A site's route is the worker's route on their placement there; elsewhere none.
-            const routes = Object.fromEntries(
-              siteIds.map((siteId) => {
-                const p = inPart.find((x) => x.siteId === siteId);
-                return [siteId, p ? route(p) : null];
-              }),
-            );
+            const inThisPart = ownEntries.filter((e) => ids.has(e.assignmentId));
+            const partEntries: DayEntry[] = inThisPart.map((e) => ({
+              date: isoDay(e.date),
+              place: placeKey(e.siteId, e.teamId),
+              seq: Number(e.seq),
+              status: e.status,
+              hours: e.hours.toString(),
+            }));
+            // A place's route is the worker's route on their placement at its site; elsewhere none.
+            const routes: Record<string, ReturnType<typeof route>> = {};
+            for (const e of inThisPart) {
+              const key = placeKey(e.siteId, e.teamId);
+              places[key] = { siteName: e.site.name, teamName: e.team?.name ?? null, from: null, until: null };
+              const p = inPart.find((x) => x.siteId === e.siteId);
+              routes[key] = p ? route(p) : null;
+            }
             result = calculatePay({ ...base, entries: partEntries, travel: travel(settings, routes, inPart, travelAmounts) });
           }
         } catch (error) {
@@ -499,10 +508,6 @@ export class PayrollService {
     return workers;
   }
 
-  private async siteNames(db: Db, companyId: string, ids: string[]) {
-    const sites = await db.site.findMany({ where: { companyId, id: { in: ids } }, select: { id: true, name: true } });
-    return new Map(sites.map((s) => [s.id, s.name]));
-  }
 }
 
 /** Pay rules (Settings) as the engine takes them. Normal hours are always paid at × 1. */

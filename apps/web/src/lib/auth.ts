@@ -129,3 +129,13 @@ export function canUnlockMonths(me: Me | null | undefined): boolean {
 export function inCompany(me: Me | null | undefined): boolean {
   return Boolean(me?.activeCompany);
 }
+
+/** The company has the Timesheet module (daily hours). */
+export function hasTimesheet(me: Me | null | undefined): boolean {
+  return me?.activeCompany?.modules.includes('TIMESHEET') === true;
+}
+
+/** Can change who enters daily hours (Timesheet module, owners and admins). */
+export function canManageTimesheet(me: Me | null | undefined): boolean {
+  return hasTimesheet(me) && canManageCompany(me);
+}

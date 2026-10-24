@@ -36,6 +36,10 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/workers-page')).WorkersPage }),
       },
       {
+        path: 'timesheet',
+        lazy: async () => ({ Component: (await import('@/pages/timesheet-page')).TimesheetPage }),
+      },
+      {
         path: 'monthly-hours',
         lazy: async () => ({ Component: (await import('@/pages/monthly-hours-page')).MonthlyHoursPage }),
       },
@@ -66,6 +70,10 @@ export const router = createBrowserRouter([
       {
         path: 'settings/working-days',
         lazy: async () => ({ Component: (await import('@/pages/working-days-page')).WorkingDaysPage }),
+      },
+      {
+        path: 'settings/timesheet',
+        lazy: async () => ({ Component: (await import('@/pages/timesheet-settings-page')).TimesheetSettingsPage }),
       },
       {
         path: 'platform/companies',

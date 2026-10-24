@@ -10,6 +10,7 @@ import {
   formatSignedMoney,
   formatTime,
   formatWeekday,
+  formatWeekdayShort,
   type DecimalInput,
 } from '@/lib/format';
 
@@ -29,6 +30,7 @@ export function useFormat() {
       month: (year: number, month: number) => formatMonth(year, month, lang),
       monthName: (month: number) => formatMonthName(month, lang),
       weekday: (isoWeekday: number) => formatWeekday(isoWeekday, lang),
+      weekdayShort: (isoWeekday: number) => formatWeekdayShort(isoWeekday, lang),
     }),
     [lang],
   );

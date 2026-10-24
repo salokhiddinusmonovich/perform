@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildMonthCalendar, countWorkdays, workingDays } from './calendar';
-import { divRound, fromUnits, toUnits } from './decimal';
-import { normalizeCode, parseCell, type CodeMap, type DayEntry } from './entry';
-import { missingMovingHolidays, uzbekistanFixedHolidays } from './holidays';
-import { calculatePay, type PaySettings, type TravelInput } from './pay';
-import { payOut } from './pay-out';
-import { checkTotals, summarizeMonth, type MonthlyTotals } from './summary';
+import { buildMonthCalendar, countWorkdays, workingDays } from './calendar.js';
+import { divRound, fromUnits, toUnits } from './decimal.js';
+import { normalizeCode, parseCell, type CodeMap, type DayEntry } from './entry.js';
+import { missingMovingHolidays, uzbekistanFixedHolidays } from './holidays.js';
+import { calculatePay, type PaySettings, type TravelInput } from './pay.js';
+import { payOut } from './pay-out.js';
+import { checkTotals, summarizeMonth, type MonthlyTotals } from './summary.js';
 
 // September 2026: Sept 1 (Tue) is Independence Day, Sundays are 6/13/20/27.
 const september = buildMonthCalendar(2026, 9, { restWeekdays: [7], holidays: ['2026-09-01'] });

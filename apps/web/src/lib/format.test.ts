@@ -8,6 +8,7 @@ import {
   formatSignedMoney,
   formatTime,
   formatWeekday,
+  formatWeekdayShort,
 } from './format';
 
 // Intl uses non-breaking spaces as group separators; compare with plain spaces.
@@ -95,6 +96,9 @@ describe('weekday and month names', () => {
     expect(formatMonthName(11, 'uz')).toBe('noyabr');
     expect(formatMonthName(11, 'ru')).toBe('ноябрь');
     expect(formatMonthName(11, 'tr')).toBe('Kasım');
+    expect(formatWeekdayShort(1, 'uz')).toBe('Du');
+    expect(formatWeekdayShort(7, 'uz')).toBe('Ya');
+    expect(formatWeekdayShort(1, 'en')).toBe('Mon');
   });
 });
 

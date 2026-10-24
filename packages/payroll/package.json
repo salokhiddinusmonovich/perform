@@ -2,10 +2,20 @@
   "name": "@puantaj/payroll",
   "version": "0.1.0",
   "private": true,
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "description": "Payroll engine shared by the API, the web app and the mobile app",
+  "sideEffects": false,
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node ../../scripts/mark-module-type.mjs dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   }

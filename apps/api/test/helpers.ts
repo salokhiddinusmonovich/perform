@@ -28,7 +28,7 @@ export async function startApp(controllers: Type[] = []): Promise<TestContext> {
 /** Empties every table except the migration history. */
 export async function resetDb(prisma: PrismaService) {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "Session", "SubscriptionPayment", "MemberSite", "MemberTeam", "Membership", "PayrollSnapshotWorker", "PayrollSnapshot", "Salary", "MonthlyHours", "TimesheetEntry", "AdjustmentCancel", "Adjustment", "TravelAmount", "PayrollPeriod", "WorkingDaysOverride", "PayrollRules", "PayrollRuleSet", "Holiday", "TimesheetCode", "Assignment", "TravelRoute", "Worker", "Team", "Site", "User", "Company", "Plan" CASCADE',
+    'TRUNCATE "AuditLog", "Session", "SubscriptionPayment", "MemberSite", "MemberTeam", "Membership", "PayrollSnapshotWorker", "PayrollSnapshot", "Salary", "MonthlyHours", "TimesheetEntry", "TimesheetSettings", "AdjustmentCancel", "Adjustment", "TravelAmount", "PayrollPeriod", "WorkingDaysOverride", "PayrollRules", "PayrollRuleSet", "Holiday", "TimesheetCode", "Assignment", "TravelRoute", "Worker", "Team", "Site", "User", "Company", "Plan" CASCADE',
   );
 }
 

@@ -32,18 +32,19 @@ model Company {
   paidUntil DateTime? @db.Date
   createdAt DateTime  @default(now())
 
-  plan           Plan?                 @relation(fields: [planId], references: [id], onDelete: NoAction)
-  payments       SubscriptionPayment[]
-  memberships    Membership[]
-  sites          Site[]
-  teams          Team[]
-  workers        Worker[]
-  holidays       Holiday[]
-  ruleSets       PayrollRuleSet[]
-  periods        PayrollPeriod[]
-  auditLogs      AuditLog[]
-  travelRoutes   TravelRoute[]
-  timesheetCodes TimesheetCode[]
+  plan              Plan?                 @relation(fields: [planId], references: [id], onDelete: NoAction)
+  payments          SubscriptionPayment[]
+  memberships       Membership[]
+  sites             Site[]
+  teams             Team[]
+  workers           Worker[]
+  holidays          Holiday[]
+  ruleSets          PayrollRuleSet[]
+  periods           PayrollPeriod[]
+  auditLogs         AuditLog[]
+  travelRoutes      TravelRoute[]
+  timesheetCodes    TimesheetCode[]
+  timesheetSettings TimesheetSettings?
 }
 
 /// What a company pays for: a limit of active workers (workers with a placement
@@ -119,6 +120,9 @@ model User {
   adjustments          Adjustment[]
   adjustmentCancels    AdjustmentCancel[]
   travelAmounts        TravelAmount[]
+  createdEntries       TimesheetEntry[]      @relation("EntryCreatedBy")
+  updatedEntries       TimesheetEntry[]      @relation("EntryUpdatedBy")
+  timesheetSettings    TimesheetSettings[]
 }
 
 /// How a session's token is sent: the browser's httpOnly cookie, or the mobile app's
@@ -660,16 +664,38 @@ model TimesheetEntry {
   /// higher seq was entered later, and gets the day's overtime and travel pay
   /// (DayEntry.seq in @puantaj/payroll). Unlike createdAt it never ties.
   seq          BigInt    @unique @default(autoincrement())
+  /// 1 when created, +1 on every change. A write names the version it saw, so stale
+  /// data (e.g. from a phone that was offline) is refused instead of overwriting newer.
+  version      Int       @default(1)
+  createdById  String    @db.Uuid
   createdAt    DateTime  @default(now())
+  updatedById  String    @db.Uuid
   updatedAt    DateTime  @updatedAt
 
   period     PayrollPeriod @relation(fields: [periodId, companyId], references: [id, companyId], onDelete: NoAction)
   assignment Assignment    @relation(fields: [assignmentId, companyId], references: [id, companyId], onDelete: NoAction)
   site       Site          @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
   team       Team?         @relation(fields: [teamId, siteId, companyId], references: [id, siteId, companyId], onDelete: NoAction)
+  createdBy  User          @relation("EntryCreatedBy", fields: [createdById], references: [id], onDelete: NoAction)
+  updatedBy  User          @relation("EntryUpdatedBy", fields: [updatedById], references: [id], onDelete: NoAction)
 
   @@index([assignmentId, date])
   @@index([periodId])
+}
+
+/// Who enters daily hours (AGENTS.md: Hour entry). A company without a row has the
+/// decided default (DEFAULT_ENTRY_ROLES in @puantaj/schemas: timekeepers). Owners and
+/// admins always may, so they aren't listed.
+model TimesheetSettings {
+  companyId  String   @id @db.Uuid
+  /// TIMEKEEPER and/or FOREMAN, never empty (CHECK constraint in the migration)
+  entryRoles Role[]
+  /// Who saved them last; every change is also in AuditLog
+  setById    String   @db.Uuid
+  setAt      DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  setBy   User    @relation(fields: [setById], references: [id], onDelete: NoAction)
 }
 
 /// One placement's hours for a month entered as totals instead of daily entries

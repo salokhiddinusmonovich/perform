@@ -5,3 +5,4 @@ export * from './pay-rules.js';
 export * from './organisation.js';
 export * from './payroll.js';
 export * from './platform.js';
+export * from './timesheet.js';

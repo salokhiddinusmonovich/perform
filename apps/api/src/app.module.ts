@@ -10,6 +10,7 @@ import { PayRulesModule } from './pay-rules/pay-rules.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { PlatformModule } from './platform/platform.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { TimesheetModule } from './timesheet/timesheet.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PayRulesModule,
     OrganisationModule,
     PayrollModule,
+    TimesheetModule,
   ],
 })
 export class AppModule {}

@@ -1,4 +1,4 @@
-import { fromUnits, tryUnits } from './decimal';
+import { fromUnits, tryUnits } from './decimal.js';
 
 /**
  * Status of one worker on one day. Every company's Excel uses its own codes

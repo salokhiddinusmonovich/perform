@@ -41,6 +41,8 @@ async function workerWithHistory() {
       date: new Date('2026-09-01'),
       status: 'WORKED',
       hours: 9,
+      createdById: user.id,
+      updatedById: user.id,
     },
   });
   await prisma.travelAmount.create({
@@ -279,6 +281,8 @@ describe('rows never mix two companies', () => {
       date: new Date('2026-09-02'),
       status: 'WORKED' as const,
       hours: 9,
+      createdById: a.user.id,
+      updatedById: a.user.id,
     };
 
     for (const companyId of [a.company.id, other.id]) {
@@ -355,8 +359,9 @@ describe('payroll periods and timesheet days', () => {
 
   it('allows hours only on worked days, up to 24', async () => {
     const { prisma } = ctx;
-    const { company, site, period, assignment } = await workerWithHistory();
-    const day = { companyId: company.id, periodId: period.id, assignmentId: assignment.id, siteId: site.id };
+    const { company, site, period, assignment, user } = await workerWithHistory();
+    const by = { createdById: user.id, updatedById: user.id };
+    const day = { companyId: company.id, periodId: period.id, assignmentId: assignment.id, siteId: site.id, ...by };
     const bad = [
       { date: new Date('2026-09-02'), status: 'WORKED' as const, hours: 0 },
       { date: new Date('2026-09-03'), status: 'WORKED' as const, hours: 24.5 },
@@ -374,7 +379,7 @@ describe('payroll periods and timesheet days', () => {
 describe('a day worked at several sites or teams', () => {
   it('stores one entry per worker, day, site and team', async () => {
     const { prisma } = ctx;
-    const { company, site, team, period, assignment } = await workerWithHistory();
+    const { company, site, team, period, assignment, user } = await workerWithHistory();
     const siteB = await prisma.site.create({ data: { companyId: company.id, name: 'Site B' } });
     const teamA2 = await prisma.team.create({ data: { companyId: company.id, siteId: site.id, name: 'Team A2' } });
     // workerWithHistory has 9 h at Site A / Team A on 2026-09-01.
@@ -385,6 +390,8 @@ describe('a day worked at several sites or teams', () => {
       date: new Date('2026-09-01'),
       status: 'WORKED' as const,
       hours: 2,
+      createdById: user.id,
+      updatedById: user.id,
     };
 
     await prisma.timesheetEntry.create({ data: { ...day, siteId: site.id, teamId: teamA2.id } });
@@ -405,7 +412,7 @@ describe('a day worked at several sites or teams', () => {
 
   it('records the order entries were created in, which edits do not change', async () => {
     const { prisma } = ctx;
-    const { company, site, period, assignment } = await workerWithHistory();
+    const { company, site, period, assignment , user } = await workerWithHistory();
     const siteB = await prisma.site.create({ data: { companyId: company.id, name: 'Site B' } });
     const day = {
       companyId: company.id,
@@ -413,6 +420,8 @@ describe('a day worked at several sites or teams', () => {
       assignmentId: assignment.id,
       date: new Date('2026-09-02'),
       status: 'WORKED' as const,
+      createdById: user.id,
+      updatedById: user.id,
     };
     const first = await prisma.timesheetEntry.create({ data: { ...day, siteId: site.id, hours: 6 } });
     const later = await prisma.timesheetEntry.create({ data: { ...day, siteId: siteB.id, hours: 5 } });
@@ -437,6 +446,8 @@ describe('a day worked at several sites or teams', () => {
       date: new Date('2026-09-03'),
       status: 'WORKED' as const,
       hours: 4,
+      createdById: a.user.id,
+      updatedById: a.user.id,
     };
 
     for (const place of [

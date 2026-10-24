@@ -1,5 +1,5 @@
-import { divRound, fromUnits, toUnits, type Units } from './decimal';
-import type { PayResult } from './pay';
+import { divRound, fromUnits, toUnits, type Units } from './decimal.js';
+import type { PayResult } from './pay.js';
 
 /** Mirrors AdjustmentType in apps/api/prisma/schema.prisma (ADJUSTMENT_TYPES in @puantaj/schemas). */
 export type AdjustmentType = 'BONUS' | 'ADVANCE' | 'DEDUCTION';

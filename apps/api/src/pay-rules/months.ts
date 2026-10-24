@@ -18,6 +18,17 @@ async function monthsLock(db: Db, companyId: string, exclusive: boolean) {
   else await db.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${key}))`;
 }
 
+/**
+ * Serializes changes to one worker's hours for a month (daily entries and monthly
+ * totals), so checks that span rows (one source per worker-month, one worker's day
+ * across sites) can't both pass for two writes running at once. Held until the
+ * transaction ends.
+ */
+export async function lockWorkerMonth(db: Db, workerId: string, year: number, month: number): Promise<void> {
+  const key = `hours:${workerId}:${monthIndex(year, month)}`;
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+}
+
 /** For locking and unlocking a month: no change to any of the company's months runs meanwhile. */
 export const lockCompanyMonths = (db: Db, companyId: string) => monthsLock(db, companyId, true);
 

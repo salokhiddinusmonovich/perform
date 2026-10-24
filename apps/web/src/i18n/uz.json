@@ -27,7 +27,9 @@
     "payroll": "Ish haqi",
     "monthlyHours": "Oylik soatlar",
     "adjustments": "Qoʻshimcha va ushlanmalar",
-    "payrollRun": "Ish haqi hisobi"
+    "payrollRun": "Ish haqi hisobi",
+    "timesheet": "Tabel",
+    "timesheetSettings": "Tabel kiritish"
   },
   "settings": {
     "language": "Til",
@@ -292,7 +294,9 @@
     "workdayHoursAboveDaysWorked": "Ish kunlaridagi soatlar ishlangan ish kunlari × 24 dan koʻp",
     "daysAboveWorkingDays": "Ishlangan va yoʻq kunlar birgalikda oydagi ish kunlaridan koʻp",
     "restDayHoursAboveRestDays": "Oydagi dam olish kunlari × 24 dan koʻp",
-    "holidayHoursAboveHolidays": "Oydagi bayram kunlari × 24 dan koʻp"
+    "holidayHoursAboveHolidays": "Oydagi bayram kunlari × 24 dan koʻp",
+    "dayHoursRange": "0 dan 24 gacha soat kiriting.",
+    "entryRolesRequired": "Kamida bitta rolni tanlang."
   },
   "errors": {
     "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
@@ -407,7 +411,18 @@
       "alreadyCancelled": "Bu yozuv allaqachon bekor qilingan."
     },
     "hours": {
-      "otherSource": "Bu oy uchun ishchining kunlik tabeli bor. Bir oyda soatlar faqat bitta manbadan olinadi."
+      "otherSource": "Bu oy uchun ishchining kunlik tabeli bor. Bir oyda soatlar faqat bitta manbadan olinadi.",
+      "monthlyTotalsEntered": "Ishchining bu oy uchun oylik jami soatlari bor. Bir oyda soatlar faqat bitta manbadan olinadi."
+    },
+    "timesheet": {
+      "futureDay": "Hali kelmagan kunga soat kiritib boʻlmaydi.",
+      "entryNotFound": "Bunday tabel kuni yoʻq.",
+      "entryMismatch": "Bu yozuv boshqa ishchi, kun yoki joyga tegishli.",
+      "staleVersion": "Bu kunni shu orada boshqa kishi oʻzgartirdi. Tabel endi saqlanganini koʻrsatadi.",
+      "notEmployed": "Ishchi bu kunda ishga olinmagan.",
+      "entryExists": "Bu kunda bu yerda soat allaqachon bor. Tabel endi saqlanganini koʻrsatadi.",
+      "wholeDay": "Ishga kelmaslik ishchining butun kuni: u boshqa yozuvlar bilan bir kunda boʻlolmaydi.",
+      "dayTooManyHours": "Ishchining bu kundagi soatlari jami 24 dan oshadi."
     }
   },
   "payRules": {
@@ -969,5 +984,58 @@
     "earned": "Hisoblangan",
     "payOutTotal": "Toʻlanadi",
     "goToAdjustments": "Qoʻshimcha va ushlanmalarga oʻtish"
+  },
+  "timesheet": {
+    "title": "Tabel",
+    "description": "Har bir ishchining kunlik soatlari. Obyekt va oyni tanlang, soatlarni har bir kunga yozing.",
+    "site": "Obyekt",
+    "chooseSite": "Obyektni tanlang",
+    "locked": "Oy yopilgan",
+    "worker": "Ishchi",
+    "noTeam": "Brigadasiz",
+    "total": "Soat",
+    "noSitesTitle": "Hali obyektlar yoʻq",
+    "noSitesDescription": "Soatlar obyekt boʻyicha kiritiladi. Obyektga biriktirilganingizdan keyin u shu yerda chiqadi.",
+    "emptyTitle": "Bu oyda obyektda hech kim ishlamaydi",
+    "emptyDescription": "Obyektga joylashtirilgan ishchilar va bu yerda soati borlar tabelda chiqadi.",
+    "noRulesTitle": "Dam olish va bayram kunlari belgilanmagan",
+    "noRulesDescription": "Bu oy uchun ish haqi qoidalari hali kiritilmagan, shuning uchun kalendar dam olish kunlarini bilmaydi.",
+    "lockedHint": "Bu oy yopilgan. Uning soatlarini oʻzgartirib boʻlmaydi.",
+    "readOnlyHint": "Siz bu soatlarni koʻrishingiz mumkin. Ularni Sozlamalarda ruxsat berilganlar kiritadi.",
+    "monthlyTotalsHint": "Ayrim ishchilarning bu oy uchun oylik jami soatlari bor, shuning uchun ularning kunlari bu yerda kiritilmaydi.",
+    "legendTitle": "Tabelni qanday oʻqish kerak",
+    "howToEnter": "Kunni tanlang va soatni (masalan 9 yoki 7,5) yoki harf kodini yozib, Enter bosing. Delete kunni tozalaydi.",
+    "notEmployed": "bu kunda ishga olinmagan",
+    "invalidCell": "0 dan 24 gacha soat (masalan 9 yoki 7,5) yoki harf kodlaridan birini yozing.",
+    "hoursWorked": "{{hours}} soat ishlagan",
+    "changedBy": "Oxirgi marta {{name}} oʻzgartirgan, {{date}}",
+    "code": {
+      "ABSENT": "Y",
+      "LEAVE": "T",
+      "SICK": "B",
+      "TRAVEL": "S"
+    },
+    "status": {
+      "ABSENT": "Kelmagan",
+      "LEAVE": "Taʼtil",
+      "SICK": "Kasal",
+      "TRAVEL": "Safar / koʻchish"
+    },
+    "dayKind": {
+      "REST_DAY": "Dam olish kuni",
+      "HOLIDAY": "Bayram kuni"
+    },
+    "monthlyTotals": "oylik jami"
+  },
+  "timesheetSettings": {
+    "title": "Tabel kiritish",
+    "description": "Obyektda kunlik soatlarni kim kiritadi.",
+    "entryRoles": "Soatlarni kim kiritadi",
+    "entryRolesHint": "Egalar va administratorlar har doim soatlarni kiritishi va tuzatishi mumkin.",
+    "scope": {
+      "TIMEKEEPER": "Oʻziga biriktirilgan obyektlarda",
+      "FOREMAN": "Oʻz brigadalari uchun"
+    },
+    "lastChanged": "Oxirgi marta {{name}} oʻzgartirgan, {{date}}"
   }
 }

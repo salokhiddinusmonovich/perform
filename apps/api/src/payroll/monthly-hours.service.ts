@@ -6,7 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
 import { inMonth, isoDay, monthSpan } from '../common/dates';
-import { assertMonthsOpen } from '../pay-rules/months';
+import { assertMonthsOpen, lockWorkerMonth } from '../pay-rules/months';
 import { PayRulesService } from '../pay-rules/pay-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -152,6 +152,7 @@ export class MonthlyHoursService {
       if (!placement) throw notFound('placement.notFound');
       const inThisMonth = await tx.assignment.count({ where: { AND: [{ id: assignmentId }, inMonth(year, month)] } });
       if (inThisMonth === 0) throw conflict('monthlyHours.notInMonth');
+      await lockWorkerMonth(tx, placement.workerId, year, month);
       await this.assertNoDailyEntries(tx, companyId, placement.workerId, year, month);
 
       const totals: MonthlyTotals = Object.fromEntries(TOTAL_FIELDS.map((f) => [f, input[f]])) as unknown as MonthlyTotals;

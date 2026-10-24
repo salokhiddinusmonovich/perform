@@ -13,6 +13,8 @@ import {
   parseIdentifier,
   payRulesSchema,
   siteSchema,
+  timesheetEntrySchema,
+  timesheetSettingsSchema,
   workerSchema,
   workingDaysOverrideSchema,
 } from './index.js';
@@ -193,6 +195,34 @@ describe('workingDaysOverrideSchema', () => {
     expect(workingDaysOverrideSchema.parse({ workingDays: 22, reason: '' })).toEqual({ workingDays: 22, reason: null });
     expect(workingDaysOverrideSchema.parse({ workingDays: null })).toEqual({ workingDays: null, reason: null });
     expect(messages(workingDaysOverrideSchema.safeParse({ workingDays: 0 }))).toEqual(['validation.workingDaysRange']);
+  });
+});
+
+describe('timesheetEntrySchema', () => {
+  const cell = {
+    workerId: '7b0c6f1e-3a4d-4c2b-9e8f-1a2b3c4d5e6f',
+    siteId: '0f1e2d3c-4b5a-4968-8776-655443322110',
+    teamId: null,
+    date: '2026-09-02',
+  };
+
+  it('takes hours for a day worked, as typed', () => {
+    expect(timesheetEntrySchema.parse({ ...cell, status: 'WORKED', hours: '7,50' })).toEqual({ ...cell, status: 'WORKED', hours: '7.5', note: null });
+    expect(messages(timesheetEntrySchema.safeParse({ ...cell, status: 'WORKED', hours: '0' }))).toEqual(['validation.dayHoursRange']);
+    expect(messages(timesheetEntrySchema.safeParse({ ...cell, status: 'WORKED' }))).toEqual(['validation.required']);
+  });
+
+  it('makes any other status the whole day, without hours', () => {
+    expect(timesheetEntrySchema.parse({ ...cell, status: 'SICK', hours: '8', version: 3 })).toMatchObject({ hours: '0', version: 3 });
+    expect(timesheetEntrySchema.safeParse({ ...cell, status: 'OFF' }).success).toBe(false);
+  });
+});
+
+describe('timesheetSettingsSchema', () => {
+  it('keeps each role once, in a fixed order, and needs one', () => {
+    expect(timesheetSettingsSchema.parse({ entryRoles: ['FOREMAN', 'TIMEKEEPER', 'FOREMAN'] })).toEqual({ entryRoles: ['TIMEKEEPER', 'FOREMAN'] });
+    expect(messages(timesheetSettingsSchema.safeParse({ entryRoles: [] }))).toEqual(['validation.entryRolesRequired']);
+    expect(timesheetSettingsSchema.safeParse({ entryRoles: ['OWNER'] }).success).toBe(false);
   });
 });
 

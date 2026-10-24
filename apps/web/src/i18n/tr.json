@@ -27,7 +27,9 @@
     "payroll": "Maaş",
     "monthlyHours": "Aylık saatler",
     "adjustments": "Ek ödeme ve kesintiler",
-    "payrollRun": "Maaş hesabı"
+    "payrollRun": "Maaş hesabı",
+    "timesheet": "Puantaj",
+    "timesheetSettings": "Puantaj girişi"
   },
   "settings": {
     "language": "Dil",
@@ -292,7 +294,9 @@
     "workdayHoursAboveDaysWorked": "İş günlerindeki saatler çalışılan iş günü × 24'ten fazla",
     "daysAboveWorkingDays": "Çalışılan ve devamsız günler birlikte ayın iş günlerinden fazla",
     "restDayHoursAboveRestDays": "Ayın dinlenme günleri × 24'ten fazla",
-    "holidayHoursAboveHolidays": "Ayın tatil günleri × 24'ten fazla"
+    "holidayHoursAboveHolidays": "Ayın tatil günleri × 24'ten fazla",
+    "dayHoursRange": "0 ile 24 arasında saat girin.",
+    "entryRolesRequired": "En az bir rol seçin."
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -407,7 +411,18 @@
       "alreadyCancelled": "Bu kayıt zaten iptal edildi."
     },
     "hours": {
-      "otherSource": "İşçinin bu ay için günlük puantajı var. Bir ayın saatleri yalnızca tek bir kaynaktan gelir."
+      "otherSource": "İşçinin bu ay için günlük puantajı var. Bir ayın saatleri yalnızca tek bir kaynaktan gelir.",
+      "monthlyTotalsEntered": "İşçinin bu ay için aylık toplamları var. Bir ayın saatleri yalnızca tek bir kaynaktan gelir."
+    },
+    "timesheet": {
+      "futureDay": "Henüz gelmemiş bir güne saat girilemez.",
+      "entryNotFound": "Böyle bir puantaj günü yok.",
+      "entryMismatch": "Bu kayıt başka bir işçiye, güne veya yere ait.",
+      "staleVersion": "Bu günü bu arada başka biri değiştirdi. Puantaj artık kaydedileni gösteriyor.",
+      "notEmployed": "İşçi bu gün çalışmıyor.",
+      "entryExists": "Bu günün burada zaten saati var. Puantaj artık kaydedileni gösteriyor.",
+      "wholeDay": "Devamsızlık işçinin bütün günüdür: o gün başka kayıt olamaz.",
+      "dayTooManyHours": "İşçinin bu günkü saatleri toplamda 24’ü geçiyor."
     }
   },
   "payRules": {
@@ -969,5 +984,58 @@
     "earned": "Hak edilen",
     "payOutTotal": "Ödenecek",
     "goToAdjustments": "Ek ödeme ve kesintilere git"
+  },
+  "timesheet": {
+    "title": "Puantaj",
+    "description": "İşçilerin günlük saatleri. Bir şantiye ve ay seçin, saatleri her güne yazın.",
+    "site": "Şantiye",
+    "chooseSite": "Şantiye seçin",
+    "locked": "Ay kilitli",
+    "worker": "İşçi",
+    "noTeam": "Ekipsiz",
+    "total": "Saat",
+    "noSitesTitle": "Henüz şantiye yok",
+    "noSitesDescription": "Saatler şantiye bazında girilir. Bir şantiyeye atandığınızda burada görünür.",
+    "emptyTitle": "Bu ay bu şantiyede kimse çalışmıyor",
+    "emptyDescription": "Şantiyeye yerleştirilen işçiler ve burada saati olan herkes puantajda görünür.",
+    "noRulesTitle": "Tatil ve bayram günleri işaretli değil",
+    "noRulesDescription": "Bu ay için ücret kuralları henüz girilmedi, bu yüzden takvim tatil günlerini bilmiyor.",
+    "lockedHint": "Bu ay kilitli. Saatleri değiştirilemez.",
+    "readOnlyHint": "Bu saatleri görebilirsiniz. Saatleri Ayarlar’da izin verilen kişiler girer.",
+    "monthlyTotalsHint": "Bazı işçilerin bu ay için aylık toplamları var, bu yüzden günleri burada girilemez.",
+    "legendTitle": "Puantaj nasıl okunur",
+    "howToEnter": "Bir gün seçip saati (örneğin 9 veya 7,5) ya da harf kodunu yazın ve Enter’a basın. Delete günü temizler.",
+    "notEmployed": "o gün çalışmıyordu",
+    "invalidCell": "0 ile 24 arasında saat (örneğin 9 veya 7,5) ya da harf kodlarından birini yazın.",
+    "hoursWorked": "{{hours}} saat çalıştı",
+    "changedBy": "Son değiştiren {{name}}, {{date}}",
+    "code": {
+      "ABSENT": "D",
+      "LEAVE": "İ",
+      "SICK": "R",
+      "TRAVEL": "G"
+    },
+    "status": {
+      "ABSENT": "Devamsız",
+      "LEAVE": "İzin",
+      "SICK": "Raporlu",
+      "TRAVEL": "Görev / transfer"
+    },
+    "dayKind": {
+      "REST_DAY": "Tatil günü",
+      "HOLIDAY": "Resmî tatil"
+    },
+    "monthlyTotals": "aylık toplam"
+  },
+  "timesheetSettings": {
+    "title": "Puantaj girişi",
+    "description": "Şantiyede günlük saatleri kim girer.",
+    "entryRoles": "Saatleri kim girer",
+    "entryRolesHint": "Sahipler ve yöneticiler saatleri her zaman girebilir ve düzeltebilir.",
+    "scope": {
+      "TIMEKEEPER": "Atandıkları şantiyelerde",
+      "FOREMAN": "Kendi ekipleri için"
+    },
+    "lastChanged": "Son değiştiren {{name}}, {{date}}"
   }
 }

@@ -27,7 +27,9 @@
     "payroll": "Payroll",
     "monthlyHours": "Monthly hours",
     "adjustments": "Adjustments",
-    "payrollRun": "Pay calculation"
+    "payrollRun": "Pay calculation",
+    "timesheet": "Timesheet",
+    "timesheetSettings": "Timesheet entry"
   },
   "settings": {
     "language": "Language",
@@ -292,7 +294,9 @@
     "workdayHoursAboveDaysWorked": "Hours on working days are more than the working days worked × 24",
     "daysAboveWorkingDays": "Days worked and absence days together are more than the month’s working days",
     "restDayHoursAboveRestDays": "More than the month’s rest days × 24",
-    "holidayHoursAboveHolidays": "More than the month’s holidays × 24"
+    "holidayHoursAboveHolidays": "More than the month’s holidays × 24",
+    "dayHoursRange": "Enter hours from 0 to 24.",
+    "entryRolesRequired": "Choose at least one role."
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -407,7 +411,18 @@
       "alreadyCancelled": "This adjustment is already cancelled."
     },
     "hours": {
-      "otherSource": "The worker has daily timesheet entries this month. A month’s hours come from one source only."
+      "otherSource": "The worker has daily timesheet entries this month. A month’s hours come from one source only.",
+      "monthlyTotalsEntered": "The worker has monthly totals for this month. A month’s hours come from one source only."
+    },
+    "timesheet": {
+      "futureDay": "Hours can’t be entered for a day that hasn’t come yet.",
+      "entryNotFound": "This timesheet day doesn’t exist.",
+      "entryMismatch": "This entry belongs to another worker, day or place.",
+      "staleVersion": "Someone changed this day meanwhile. The timesheet now shows what is saved.",
+      "notEmployed": "The worker isn’t employed on this day.",
+      "entryExists": "This day already has hours here. The timesheet now shows what is saved.",
+      "wholeDay": "An absence is the worker’s whole day: it can’t share the day with other entries.",
+      "dayTooManyHours": "The worker’s hours on this day add up to more than 24."
     }
   },
   "payRules": {
@@ -969,5 +984,58 @@
     "earned": "Earned",
     "payOutTotal": "To pay out",
     "goToAdjustments": "Go to adjustments"
+  },
+  "timesheet": {
+    "title": "Timesheet",
+    "description": "Daily hours per worker. Pick a site and a month, then type the hours into each day.",
+    "site": "Site",
+    "chooseSite": "Choose a site",
+    "locked": "Month locked",
+    "worker": "Worker",
+    "noTeam": "No team",
+    "total": "Hours",
+    "noSitesTitle": "No sites yet",
+    "noSitesDescription": "Hours are entered per site. Once you work on a site, it appears here.",
+    "emptyTitle": "Nobody works on this site this month",
+    "emptyDescription": "Workers placed on the site, and anyone with hours here, appear in the timesheet.",
+    "noRulesTitle": "Rest days and holidays aren’t marked",
+    "noRulesDescription": "Pay rules for this month aren’t set yet, so the calendar doesn’t know the rest days.",
+    "lockedHint": "This month is locked. Its hours can’t be changed.",
+    "readOnlyHint": "You can view these hours. Entering them is done by the people Settings allow.",
+    "monthlyTotalsHint": "Some workers have monthly totals for this month, so their days can’t be entered here.",
+    "legendTitle": "How to read the timesheet",
+    "howToEnter": "Select a day and type the hours (for example 9 or 7,5) or a letter code, then press Enter. Delete clears the day.",
+    "notEmployed": "not employed on that day",
+    "invalidCell": "Type hours from 0 to 24 (for example 9 or 7,5) or one of the letter codes.",
+    "hoursWorked": "{{hours}} h worked",
+    "changedBy": "Last changed by {{name}}, {{date}}",
+    "code": {
+      "ABSENT": "A",
+      "LEAVE": "L",
+      "SICK": "S",
+      "TRAVEL": "T"
+    },
+    "status": {
+      "ABSENT": "Absent",
+      "LEAVE": "Leave",
+      "SICK": "Sick",
+      "TRAVEL": "Travel / transfer"
+    },
+    "dayKind": {
+      "REST_DAY": "Rest day",
+      "HOLIDAY": "Public holiday"
+    },
+    "monthlyTotals": "monthly totals"
+  },
+  "timesheetSettings": {
+    "title": "Timesheet entry",
+    "description": "Who enters the daily hours on site.",
+    "entryRoles": "Who enters hours",
+    "entryRolesHint": "Owners and administrators can always enter and correct hours.",
+    "scope": {
+      "TIMEKEEPER": "On the sites they are assigned to",
+      "FOREMAN": "For their own teams"
+    },
+    "lastChanged": "Last changed by {{name}}, {{date}}"
   }
 }

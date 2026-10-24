@@ -92,13 +92,14 @@ async function siteRules(companyId: string, siteId: string) {
   });
 }
 
-/** A daily timesheet entry, written directly: there is no hour entry API yet. */
+/** A daily timesheet entry, written directly: these tests are about pay, not hour entry. */
 async function dailyEntry(companyId: string, assignmentId: string, siteId: string, date: string) {
+  const user = await createUser(ctx.prisma);
   const period =
     (await ctx.prisma.payrollPeriod.findUnique({ where: { companyId_year_month: { companyId, year: 2026, month: 9 } } })) ??
     (await ctx.prisma.payrollPeriod.create({ data: { companyId, year: 2026, month: 9 } }));
   await ctx.prisma.timesheetEntry.create({
-    data: { companyId, periodId: period.id, assignmentId, siteId, date: new Date(`${date}T00:00:00Z`), status: 'WORKED', hours: 9 },
+    data: { companyId, periodId: period.id, assignmentId, siteId, date: new Date(`${date}T00:00:00Z`), status: 'WORKED', hours: 9, createdById: user.id, updatedById: user.id },
   });
 }
 
@@ -204,7 +205,7 @@ describe('payroll', () => {
     await dailyEntry(c.id, placementA, siteA, '2026-09-02');
     const [w] = (await agent.get('/api/payroll/2026/9').expect(200)).body.workers;
     expect(w).toMatchObject({ source: 'DAILY', total: '300000.00', problems: [] });
-    expect(w.parts[0].places).toEqual({ [siteA]: { siteName: 'Site A', from: null, until: null } });
+    expect(w.parts[0].places).toEqual({ [siteA]: { siteName: 'Site A', teamName: null, from: null, until: null } });
     expect(w.parts[0].result.summary).toMatchObject({ normalHours: '9.00', workdaysWorked: 1 });
   });
 

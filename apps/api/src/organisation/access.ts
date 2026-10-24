@@ -53,6 +53,20 @@ export function seesPlacement(auth: CompanyAuthContext, siteId: string, teamId: 
 }
 
 /**
+ * Daily hours at this site and team (AGENTS.md: Hour entry): owners and admins anywhere;
+ * the roles the company lets enter hours (Settings) where they see placements.
+ */
+export function entersHoursAt(
+  auth: CompanyAuthContext,
+  entryRoles: readonly Role[],
+  siteId: string,
+  teamId: string | null,
+): boolean {
+  if (isCompanyManager(auth)) return true;
+  return entryRoles.includes(auth.company.role) && seesPlacement(auth, siteId, teamId);
+}
+
+/**
  * Teams and workers on this site: owners and admins anywhere, project managers on
  * their own sites. Throws for everyone else.
  */

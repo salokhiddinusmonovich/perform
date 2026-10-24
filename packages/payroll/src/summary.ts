@@ -1,6 +1,6 @@
-import type { CalendarDay } from './calendar';
-import { fromUnits, toUnits, type Units } from './decimal';
-import { MAX_HOURS_PER_DAY, type DayEntry } from './entry';
+import type { CalendarDay } from './calendar.js';
+import { fromUnits, toUnits, type Units } from './decimal.js';
+import { MAX_HOURS_PER_DAY, type DayEntry } from './entry.js';
 
 /** Kinds of worked hours; each has its own pay multiplier in Settings. */
 export type HourKind = 'NORMAL' | 'OVERTIME' | 'REST_DAY' | 'HOLIDAY';

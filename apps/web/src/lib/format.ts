@@ -129,11 +129,21 @@ function parseDate(value: string | Date): { date: Date; calendarDay: boolean } {
 
 const UZ_WEEKDAYS = ['dushanba', 'seshanba', 'chorshanba', 'payshanba', 'juma', 'shanba', 'yakshanba'];
 
+const UZ_WEEKDAYS_SHORT = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
+
 /** Name of an ISO weekday (1 = Monday … 7 = Sunday), e.g. "dushanba" / "Monday". */
 export function formatWeekday(weekday: number, lang: Language): string {
   if (lang === 'uz') return UZ_WEEKDAYS[weekday - 1];
   // 2024-01-01 was a Monday.
   return new Intl.DateTimeFormat(localeOf(lang), { weekday: 'long', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(2024, 0, weekday)),
+  );
+}
+
+/** Short name of an ISO weekday for narrow columns, e.g. "Du" / "пн" / "Mon". */
+export function formatWeekdayShort(weekday: number, lang: Language): string {
+  if (lang === 'uz') return UZ_WEEKDAYS_SHORT[weekday - 1];
+  return new Intl.DateTimeFormat(localeOf(lang), { weekday: 'short', timeZone: 'UTC' }).format(
     new Date(Date.UTC(2024, 0, weekday)),
   );
 }
