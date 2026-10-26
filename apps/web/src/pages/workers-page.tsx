@@ -5,8 +5,9 @@ import {
   leaveSchema,
   placementSchema,
   salarySchema,
-  SHIFTS,
   workerSchema,
+  workerShiftSchema,
+  workerShiftsSchema,
   type CreateWorker,
   type CreateWorkerInput,
   type Leave,
@@ -17,15 +18,20 @@ import {
   type SalaryInput,
   type Worker,
   type WorkerInput,
+  type WorkerShift,
+  type WorkerShiftInput,
+  type WorkerShifts,
+  type WorkerShiftsInput,
   type YearMonth,
 } from '@puantaj/schemas';
 import { useMutation } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowRightLeft, LogOut, MoreHorizontal, Pencil, UserPlus, Wallet } from 'lucide-react';
+import { ArrowRightLeft, LogOut, MoreHorizontal, Pencil, SunMoon, Trash2, UserPlus, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Controller, useForm, type Control, type FieldErrors, type FieldPath, type FieldValues } from 'react-hook-form';
+import { Controller, useForm, type Control, type FieldError, type FieldErrors, type FieldPath, type FieldValues } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
 import { DatePicker } from '@/components/date-picker';
 import { ErrorState } from '@/components/error-state';
@@ -35,6 +41,7 @@ import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -43,20 +50,35 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
-import { canAddSalaries, canManageWorkers, inCompany, seesPay, seesPersonalData, useMe, type Me } from '@/lib/auth';
+import {
+  canAddSalaries,
+  canAssignShifts,
+  canManageCompany,
+  canManageWorkers,
+  inCompany,
+  seesPay,
+  seesPersonalData,
+  useMe,
+  type Me,
+} from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
 import { today } from '@/lib/format';
 import {
   useRefreshOrganisation,
   useSalaries,
+  useShifts,
   useSites,
   useWorkers,
+  useWorkerShifts,
   workerName,
+  type ShiftItem,
   type SiteItem,
   type WorkerItem,
+  type WorkerShiftItem,
 } from '@/lib/organisation';
 
 type Status = 'working' | 'left' | 'all';
@@ -89,7 +111,7 @@ export function WorkersPage() {
   );
 }
 
-type Action = { kind: 'edit' | 'move' | 'leave' | 'salary'; worker: WorkerItem };
+type Action = { kind: 'edit' | 'move' | 'leave' | 'salary' | 'shift'; worker: WorkerItem };
 
 function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; onAddingChange: (open: boolean) => void }) {
   const { t } = useTranslation();
@@ -100,10 +122,12 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
   const manage = canManageWorkers(me);
   const personal = seesPersonalData(me);
   const pay = seesPay(me);
+  const assignShifts = canAssignShifts(me);
   const currency = me.activeCompany!.currency;
   const [siteFilter, setSiteFilter] = useState<string>(ALL);
   const [status, setStatus] = useState<Status>('working');
   const [action, setAction] = useState<Action | null>(null);
+  const [settingShifts, setSettingShifts] = useState(false);
 
   const rows = useMemo(
     () =>
@@ -143,6 +167,12 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
             '—'
           );
         },
+      },
+      {
+        id: 'shift',
+        accessorFn: (w) => w.shift?.name ?? '',
+        header: t('workers.shift'),
+        cell: ({ row }) => <ShiftLabel shift={row.original.shift} />,
       },
       {
         id: 'from',
@@ -200,8 +230,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         id: 'actions',
         header: () => <span className="sr-only">{t('common.actions')}</span>,
         enableSorting: false,
-        cell: ({ row }) =>
-          (manage || pay) && (
+        cell: ({ row }) => (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label={t('common.actionsFor', { name: workerName(row.original) })}>
@@ -231,6 +260,10 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
                     {t('workers.salaryAction')}
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem onSelect={() => setAction({ kind: 'shift', worker: row.original })}>
+                  <SunMoon aria-hidden />
+                  {t('workers.shiftAction')}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ),
@@ -257,7 +290,9 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         onRetry={() => workers.refetch()}
         searchable
         searchText={(w) =>
-          [workerName(w), w.position, w.personal?.pinfl, w.placement?.siteName, w.placement?.teamName].filter(Boolean).join(' ')
+          [workerName(w), w.position, w.personal?.pinfl, w.placement?.siteName, w.placement?.teamName, w.shift?.name]
+            .filter(Boolean)
+            .join(' ')
         }
         toolbar={
           <>
@@ -284,6 +319,12 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
                 <SelectItem value="all">{t('workers.filterAll')}</SelectItem>
               </SelectContent>
             </Select>
+            {assignShifts && (
+              <Button variant="outline" onClick={() => setSettingShifts(true)} disabled={!rows?.length}>
+                <SunMoon aria-hidden />
+                {t('workers.setShift')}
+              </Button>
+            )}
           </>
         }
         emptyTitle={t('workers.emptyTitle')}
@@ -298,6 +339,21 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         <MoveDialog worker={action.worker} sites={activeSites} onClose={() => setAction(null)} onSaved={done} />
       )}
       {action?.kind === 'leave' && <LeaveDialog worker={action.worker} onClose={() => setAction(null)} onSaved={done} />}
+      {action?.kind === 'shift' && (
+        <WorkerShiftDialog
+          worker={action.worker}
+          canAdd={assignShifts}
+          canCorrect={canManageCompany(me)}
+          onClose={() => setAction(null)}
+          onSaved={refresh}
+        />
+      )}
+      {settingShifts && rows && (
+        <SetShiftDialog workers={rows.filter((w) => !hasLeft(w))} onClose={() => setSettingShifts(false)} onSaved={async () => {
+          setSettingShifts(false);
+          await refresh();
+        }} />
+      )}
       {action?.kind === 'salary' && (
         <SalaryDialog
           worker={action.worker}
@@ -349,7 +405,7 @@ function AddWorkerDialog({ sites, onClose, onSaved }: { sites: SiteItem[]; onClo
     resolver: zodResolver(createWorkerSchema),
     defaultValues: {
       worker: EMPTY_WORKER,
-      placement: { siteId: sites.length === 1 ? sites[0].id : '', teamId: '', from: today(), shift: 'DAY' },
+      placement: { siteId: sites.length === 1 ? sites[0].id : '', teamId: '', from: today() },
     },
   });
 
@@ -458,7 +514,6 @@ function MoveDialog({
       siteId: worker.placement?.siteId ?? '',
       teamId: worker.placement?.teamId ?? '',
       from: today(),
-      shift: worker.placement?.shift ?? 'DAY',
     },
   });
   const rehire = hasLeft(worker);
@@ -857,19 +912,59 @@ function PlacementFields<T extends FieldValues>({
           </Field>
         )}
       />
+    </div>
+  );
+}
+
+/** Radix Select can't hold an empty value, so "no team" has its own. */
+const NO_TEAM = 'none';
+
+/** A worker's shift, or the pay rules' normal hours when they have none. */
+function ShiftLabel({ shift }: { shift: WorkerItem['shift'] }) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  return shift ? (
+    <span className="whitespace-nowrap">{t('workers.shiftWithHours', { name: shift.name, hours: format.number(shift.normalHoursPerDay) })}</span>
+  ) : (
+    <span className="text-muted-foreground">{t('workers.noShift')}</span>
+  );
+}
+
+/** Radix Select can't hold an empty value, so "no shift" has its own. */
+const NO_SHIFT = 'none';
+
+/** The shift and its first day, for one worker or many. */
+function ShiftFields<T extends FieldValues>({
+  control,
+  errors,
+  shifts,
+  keep,
+}: {
+  control: Control<T>;
+  errors: FieldErrors<WorkerShiftInput>;
+  shifts: ShiftItem[];
+  /** A shift to offer although it is no longer active: the one a corrected row has */
+  keep?: string | null;
+}) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const offered = shifts.filter((s) => s.isActive || s.id === keep);
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
       <Controller
         control={control}
-        name={name('shift')}
+        name={'shiftId' as FieldPath<T>}
         render={({ field }) => (
-          <Field id="p-shift" label={t('workers.shift')} error={errors?.shift}>
-            <Select value={(field.value as string) ?? ''} onValueChange={field.onChange}>
-              <SelectTrigger id="p-shift" className="w-full">
+          <Field id="ws-shift" label={t('workers.shift')} error={errors.shiftId}>
+            <Select value={(field.value as string | null) || NO_SHIFT} onValueChange={(v) => field.onChange(v === NO_SHIFT ? '' : v)}>
+              <SelectTrigger id="ws-shift" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {SHIFTS.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {t(`workers.shiftName.${s}`)}
+                <SelectItem value={NO_SHIFT}>{t('workers.noShift')}</SelectItem>
+                {offered.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {t('workers.shiftWithHours', { name: s.name, hours: format.number(s.normalHoursPerDay) })}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -877,9 +972,253 @@ function PlacementFields<T extends FieldValues>({
           </Field>
         )}
       />
+      <Controller
+        control={control}
+        name={'from' as FieldPath<T>}
+        render={({ field }) => (
+          <Field id="ws-from" label={t('workers.shiftFrom')} error={errors.from}>
+            <DatePicker id="ws-from" value={(field.value as string) ?? ''} onChange={field.onChange} invalid={!!errors.from} />
+          </Field>
+        )}
+      />
     </div>
   );
 }
 
-/** Radix Select can't hold an empty value, so "no team" has its own. */
-const NO_TEAM = 'none';
+type Translate = ReturnType<typeof useTranslation>['t'];
+
+/** What a shift row says: from which day, which shift (or none). */
+function shiftRowText(t: Translate, format: ReturnType<typeof useFormat>, row: WorkerShiftItem) {
+  const shift = row.shift
+    ? t('workers.shiftWithHours', { name: row.shift.name, hours: format.number(row.shift.normalHoursPerDay) })
+    : t('workers.noShift');
+  return t('workers.shiftFromDay', { date: format.date(row.from), shift });
+}
+
+/**
+ * A worker's shifts, each from a day until the next: adding a newer one, and (owners and
+ * admins) correcting or removing a row.
+ */
+function WorkerShiftDialog({
+  worker,
+  canAdd,
+  canCorrect,
+  onClose,
+  onSaved,
+}: {
+  worker: WorkerItem;
+  canAdd: boolean;
+  canCorrect: boolean;
+  onClose: () => void;
+  onSaved: () => Promise<unknown>;
+}) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const history = useWorkerShifts(worker.id);
+  const shifts = useShifts();
+  const [formError, setFormError] = useState<string>();
+  const [correcting, setCorrecting] = useState<WorkerShiftItem | null>(null);
+  const [removing, setRemoving] = useState<WorkerShiftItem | null>(null);
+  const empty: WorkerShiftInput = { shiftId: '', from: today() };
+  const form = useForm<WorkerShiftInput, unknown, WorkerShift>({ resolver: zodResolver(workerShiftSchema), defaultValues: empty });
+
+  const correct = (row: WorkerShiftItem | null) => {
+    setCorrecting(row);
+    setFormError(undefined);
+    form.reset(row ? { shiftId: row.shift?.id ?? '', from: row.from } : empty);
+  };
+
+  const save = useMutation({
+    mutationFn: async (values: WorkerShift) => {
+      if (correcting) {
+        await api.put(`/workers/${worker.id}/shifts/${correcting.id}`, values);
+        return null;
+      }
+      return api.post<{ added: number; unchanged: number }>('/worker-shifts', { ...values, workerIds: [worker.id] });
+    },
+    onSuccess: async (result) => {
+      if (result?.added === 0) toast.info(t('workers.shiftUnchanged'));
+      else toast.success(t('common.saved'));
+      correct(null);
+      await onSaved();
+    },
+    onError: (error) => {
+      if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('workers.shiftTitle')}</DialogTitle>
+          <DialogDescription>
+            {workerName(worker)} · {t('workers.shiftHint')}
+          </DialogDescription>
+        </DialogHeader>
+        {(canAdd || correcting) && (
+          <form
+            className="space-y-4"
+            noValidate
+            onSubmit={form.handleSubmit((values) => {
+              setFormError(undefined);
+              save.mutate(values);
+            })}
+          >
+            {correcting && (
+              <StatusBadge tone="warning">{t('workers.shiftCorrecting', { row: shiftRowText(t, format, correcting) })}</StatusBadge>
+            )}
+            <FormError message={formError} />
+            <ShiftFields control={form.control} errors={form.formState.errors} shifts={shifts.data ?? []} keep={correcting?.shift?.id} />
+            <FormActions
+              submitLabel={correcting ? t('common.save') : t('workers.addShift')}
+              pending={save.isPending}
+              onCancel={correcting ? () => correct(null) : onClose}
+            />
+          </form>
+        )}
+        <section className={canAdd || correcting ? 'space-y-2 border-t pt-4' : 'space-y-2'}>
+          <h3 className="text-sm font-medium">{t('workers.shiftHistory')}</h3>
+          {history.isPending ? (
+            <LoadingState />
+          ) : history.isError ? (
+            <ErrorState onRetry={() => history.refetch()} />
+          ) : history.data.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('workers.noShiftYet')}</p>
+          ) : (
+            <ul className="divide-y rounded-lg border text-sm">
+              {history.data.map((row) => (
+                <li key={row.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                  <div className="min-w-0">
+                    <div className="font-medium">{shiftRowText(t, format, row)}</div>
+                    <div className="text-muted-foreground">
+                      {row.setBy.fullName} · {format.date(row.setAt)}
+                    </div>
+                  </div>
+                  {canCorrect && (
+                    <div className="flex shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => correct(row)}
+                        aria-label={t('workers.correctShift', { row: shiftRowText(t, format, row) })}
+                      >
+                        <Pencil aria-hidden />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setRemoving(row)}
+                        aria-label={t('workers.removeShift', { row: shiftRowText(t, format, row) })}
+                      >
+                        <Trash2 aria-hidden />
+                      </Button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <ConfirmDialog
+          open={removing !== null}
+          onOpenChange={(open) => !open && setRemoving(null)}
+          title={t('workers.confirmRemoveShift.title')}
+          description={
+            removing ? t('workers.confirmRemoveShift.description', { name: workerName(worker), row: shiftRowText(t, format, removing) }) : ''
+          }
+          confirmLabel={t('workers.confirmRemoveShift.button')}
+          destructive
+          onConfirm={async () => {
+            if (!removing) return;
+            await api.delete(`/workers/${worker.id}/shifts/${removing.id}`);
+            if (correcting?.id === removing.id) correct(null);
+            toast.success(t('common.saved'));
+            await onSaved();
+          }}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** The same shift from a day for many workers at once ("night shift from day X"). */
+function SetShiftDialog({ workers, onClose, onSaved }: { workers: WorkerItem[]; onClose: () => void; onSaved: () => Promise<unknown> }) {
+  const { t } = useTranslation();
+  const shifts = useShifts();
+  const [formError, setFormError] = useState<string>();
+  const form = useForm<WorkerShiftsInput, unknown, WorkerShifts>({
+    resolver: zodResolver(workerShiftsSchema),
+    defaultValues: { workerIds: [], shiftId: '', from: today() },
+  });
+  const { errors } = form.formState;
+
+  const save = useMutation({
+    mutationFn: (values: WorkerShifts) => api.post<{ added: number; unchanged: number }>('/worker-shifts', values),
+    onSuccess: async ({ added, unchanged }) => {
+      toast.success(unchanged > 0 ? t('workers.shiftsSetSome', { added, unchanged }) : t('workers.shiftsSet', { count: added }));
+      await onSaved();
+    },
+    onError: (error) => {
+      if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('workers.setShift')}</DialogTitle>
+          <DialogDescription>{t('workers.setShiftHint')}</DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          noValidate
+          onSubmit={form.handleSubmit((values) => {
+            setFormError(undefined);
+            save.mutate(values);
+          })}
+        >
+          <FormError message={formError} />
+          <ShiftFields control={form.control} errors={errors} shifts={shifts.data ?? []} />
+          <Controller
+            control={form.control}
+            name="workerIds"
+            render={({ field }) => {
+              const chosen = new Set(field.value);
+              const all = workers.length > 0 && workers.every((w) => chosen.has(w.id));
+              return (
+                <Field id="ws-workers" label={t('workers.chooseWorkers', { count: chosen.size })} error={errors.workerIds?.root ?? (errors.workerIds as FieldError | undefined)}>
+                  <div id="ws-workers" className="rounded-lg border">
+                    <div className="flex min-h-10 items-center gap-3 border-b px-3">
+                      <Checkbox id="ws-all" checked={all} onCheckedChange={(v) => field.onChange(v === true ? workers.map((w) => w.id) : [])} />
+                      <Label htmlFor="ws-all">{t('workers.allShown')}</Label>
+                    </div>
+                    <ul className="max-h-64 overflow-y-auto">
+                      {workers.map((w) => (
+                        <li key={w.id} className="flex min-h-10 items-center gap-3 px-3">
+                          <Checkbox
+                            id={`ws-${w.id}`}
+                            checked={chosen.has(w.id)}
+                            onCheckedChange={(v) =>
+                              field.onChange(v === true ? [...field.value, w.id] : field.value.filter((id) => id !== w.id))
+                            }
+                          />
+                          <Label htmlFor={`ws-${w.id}`} className="flex min-w-0 flex-1 flex-wrap justify-between gap-x-2 font-normal">
+                            <span className="truncate">{workerName(w)}</span>
+                            <ShiftLabel shift={w.shift} />
+                          </Label>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </Field>
+              );
+            }}
+          />
+          <FormActions submitLabel={t('workers.setShift')} pending={save.isPending} onCancel={onClose} />
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

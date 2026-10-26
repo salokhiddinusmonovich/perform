@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { EmploymentType, Prisma, Shift } from '@prisma/client';
+import type { EmploymentType, Prisma } from '@prisma/client';
 import type { CreateWorker, Placement, Salary, Worker } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
@@ -9,6 +9,7 @@ import { assertMonthsOpen, monthIndex } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertManagesSite, seesPay, seesPersonalData, seesPlacement } from './access';
 import { withinWorkerLimit } from './worker-limit';
+import { shiftInfo, type ShiftInfo } from './worker-shifts';
 
 export interface PlacementView {
   id: string;
@@ -20,7 +21,6 @@ export interface PlacementView {
   from: string;
   /** Last day, or null while the worker is still there */
   until: string | null;
-  shift: Shift;
 }
 
 /** Never sent to timekeepers or foremen (AGENTS.md: Personal data). */
@@ -55,6 +55,8 @@ export interface WorkerView {
   employmentType: EmploymentType;
   /** The latest placement (the current one, or the last before leaving). */
   placement: PlacementView | null;
+  /** The worker's shift today (AGENTS.md: Shifts); null: none, the rule set's normal hours */
+  shift: ShiftInfo | null;
   /** null when the caller doesn't see personal data */
   personal: PersonalDataView | null;
   /**
@@ -82,6 +84,7 @@ export const SALARY_ORDER = [
 const WORKER_INCLUDE = {
   assignments: { orderBy: { hiredOn: 'desc' }, include: PLACEMENT_INCLUDE },
   salaries: { orderBy: SALARY_ORDER, take: 1 },
+  shifts: { orderBy: { fromDay: 'desc' }, include: { shift: true } },
 } as const satisfies Prisma.WorkerInclude;
 
 type WorkerRow = Prisma.WorkerGetPayload<{ include: typeof WORKER_INCLUDE }>;
@@ -300,7 +303,7 @@ export class WorkersService {
   }
 
   /** A worker the caller sees, or 404 (another company's or out of scope look the same). */
-  private async find(db: Tx | PrismaService, auth: CompanyAuthContext, id: string): Promise<WorkerRow> {
+  async find(db: Tx | PrismaService, auth: CompanyAuthContext, id: string): Promise<WorkerRow> {
     const worker = await db.worker.findFirst({ where: { id, companyId: auth.company.id }, include: WORKER_INCLUDE });
     if (!worker || !this.sees(auth, worker)) throw notFound('worker.notFound');
     return worker;
@@ -337,9 +340,9 @@ export class WorkersService {
             teamName: p.team?.name ?? null,
             from: isoDay(p.hiredOn),
             until: p.leftOn ? isoDay(p.leftOn) : null,
-            shift: p.shift,
           }
         : null,
+      shift: shiftToday(auth, w),
       personal: seesPersonalData(auth)
         ? {
             pinfl: w.pinfl,
@@ -393,5 +396,11 @@ function toInput(w: WorkerRow): Worker {
 }
 
 function placementColumns(companyId: string, workerId: string, p: Placement) {
-  return { companyId, workerId, siteId: p.siteId, teamId: p.teamId, hiredOn: dayToDate(p.from), shift: p.shift };
+  return { companyId, workerId, siteId: p.siteId, teamId: p.teamId, hiredOn: dayToDate(p.from) };
+}
+
+function shiftToday(auth: CompanyAuthContext, w: WorkerRow): ShiftInfo | null {
+  const today = todayIn(auth.company.timezone);
+  const row = w.shifts.find((s) => isoDay(s.fromDay) <= today);
+  return row?.shift ? shiftInfo(row.shift) : null;
 }

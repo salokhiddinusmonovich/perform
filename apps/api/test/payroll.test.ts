@@ -25,6 +25,8 @@ const RULES = {
 };
 
 const FULL_MONTH = {
+  from: '2026-09-01',
+  until: '2026-09-30',
   normalHours: '225',
   overtimeHours: '0',
   restDayHours: '0',
@@ -52,7 +54,7 @@ async function hire(agent: Awaited<ReturnType<typeof memberOfNewCompany>>['agent
     .post('/api/workers')
     .send({
       worker: { lastName, firstName: 'Test', employmentType: 'DIRECT' },
-      placement: { siteId, from, shift: 'DAY' },
+      placement: { siteId, from },
     })
     .expect(201);
   return res.body.id as string;
@@ -163,7 +165,7 @@ describe('monthly hours', () => {
     expect(res.body.code).toBe('hours.otherSource');
     expect((await agent.get('/api/monthly-hours/2026/9').expect(200)).body.rows[0].hasDailyEntries).toBe(true);
     // October has no daily entries, so totals are fine there.
-    await agent.post(`/api/monthly-hours/2026/10/${placementA}`).send({ ...FULL_MONTH, normalHours: '216', workdaysWorked: 24 }).expect(201);
+    await agent.post(`/api/monthly-hours/2026/10/${placementA}`).send({ ...FULL_MONTH, from: '2026-10-01', until: '2026-10-31', normalHours: '216', workdaysWorked: 24 }).expect(201);
   });
 });
 
@@ -211,7 +213,7 @@ describe('payroll', () => {
 
   it('pays a worker who moved to a site with its own rules in two parts, rounded once', async () => {
     const { company: c, agent, siteB, workerId, placementA } = await company();
-    await agent.post(`/api/workers/${workerId}/placements`).send({ siteId: siteB, from: '2026-09-16', shift: 'DAY' }).expect(204);
+    await agent.post(`/api/workers/${workerId}/placements`).send({ siteId: siteB, from: '2026-09-16' }).expect(204);
     const placementB = (await agent.get(`/api/workers/${workerId}`).expect(200)).body.placement.id as string;
     // Site B's own rules: 8-hour days.
     await siteRules(c.id, siteB);

@@ -120,6 +120,8 @@ async function main() {
         setById: ids.owner,
       },
     });
+    // Shifts are optional; one to give workers from the workers page.
+    await prisma.shift.create({ data: { companyId: demo.id, name: 'Night', normalHoursPerDay: '10' } });
     // The first worker has a salary and September's hours; the second shows how missing ones look.
     for (const [lastName, firstName, position, monthlySalary] of [
       ['Demoev', 'Ali', 'Electrician', '6000000'],
@@ -140,6 +142,8 @@ async function main() {
             assignmentId: placement.id,
             year: 2026,
             month: 9,
+            fromDay: new Date('2026-09-01'),
+            untilDay: new Date('2026-09-30'),
             normalHours: '216',
             overtimeHours: '6',
             restDayHours: '8',
@@ -198,6 +202,8 @@ async function removeDemoData(prisma: PrismaClient) {
     prisma.holiday.deleteMany({ where: inCompany }),
     prisma.timesheetCode.deleteMany({ where: inCompany }),
     prisma.assignment.deleteMany({ where: inCompany }),
+    prisma.workerShift.deleteMany({ where: inCompany }),
+    prisma.shift.deleteMany({ where: inCompany }),
     prisma.travelRoute.deleteMany({ where: inCompany }),
     prisma.memberSite.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),
     prisma.memberTeam.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),

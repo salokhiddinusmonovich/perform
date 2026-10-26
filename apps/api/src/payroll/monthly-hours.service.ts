@@ -1,25 +1,37 @@
 import { Injectable } from '@nestjs/common';
 import type { MonthlyHours as MonthlyHoursRow, Prisma } from '@prisma/client';
-import { checkTotals, type MonthlyTotals, type TotalsProblem } from '@puantaj/payroll';
+import { checkTotals, spanCalendar, type MonthlyTotals, type TotalsProblem } from '@puantaj/payroll';
 import type { MonthlyHours, YearMonth } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
-import { inMonth, isoDay, monthSpan } from '../common/dates';
+import { dayToDate, inMonth, isoDay, monthSpan } from '../common/dates';
+import { placementDaysIn, shiftPartsOf, type ShiftInfo, type ShiftPart } from '../organisation/worker-shifts';
 import { assertMonthsOpen, lockWorkerMonth } from '../pay-rules/months';
 import { PayRulesService } from '../pay-rules/pay-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+/** First and last day of a part of the month. */
+interface Days {
+  from: string;
+  until: string;
+}
+
 export interface MonthlyHoursEntryView extends MonthlyTotals {
   id: string;
+  /** The part of the month the totals were entered for */
+  part: Days;
   note: string | null;
-  /** A newer entry for the same placement and month corrected this one, so it never counts. */
+  /** A newer entry for the same placement and days corrected this one, so it never counts. */
   corrected: boolean;
   setBy: { fullName: string };
   setAt: Date;
 }
 
-/** One placement in the month, with the hours entered for it. */
+/**
+ * One placement in one part of the month, with the hours entered for it. Without a shift
+ * change in the month a placement has one part, the whole month.
+ */
 export interface MonthlyHoursRowView {
   assignmentId: string;
   worker: { id: string; lastName: string; firstName: string; patronymic: string | null; position: string | null };
@@ -28,8 +40,19 @@ export interface MonthlyHoursRowView {
   /** First and last day of the placement (last null while it continues) */
   from: string;
   until: string | null;
-  /** Every entry, newest first; the first one counts. */
+  /** The days of one shift in the month, which totals are entered for (AGENTS.md: Shifts) */
+  part: Days;
+  /** The placement's days in the part: what the totals cover */
+  days: Days;
+  /** The part's shift, or null: the rule set's normal hours */
+  shift: ShiftInfo | null;
+  /** Every entry for the part, newest first; the first one counts. */
   history: MonthlyHoursEntryView[];
+  /**
+   * Entries for days that aren't a part any more (the worker's shift changed since), which
+   * count for nothing. Listed on the placement's first part only.
+   */
+  outdated: MonthlyHoursEntryView[];
   /** The worker has daily timesheet entries this month, so totals can't be added (one source per worker-month). */
   hasDailyEntries: boolean;
 }
@@ -77,11 +100,14 @@ export function toTotals(row: MonthlyHoursRow): MonthlyTotals {
   };
 }
 
+const sameDays = (row: MonthlyHoursRow, part: Days) => isoDay(row.fromDay) === part.from && isoDay(row.untilDay) === part.until;
+
 /**
- * Hours entered as monthly totals, one set per placement and month, by an owner, admin
- * or accountant (AGENTS.md: Modules, Roles). Entries are only ever added; the newest
- * counts. A worker-month has one source of hours: totals are refused while the worker
- * has daily timesheet entries that month.
+ * Hours entered as monthly totals, one set per placement and part of the month (the days
+ * of one shift, AGENTS.md: Shifts), by an owner, admin or accountant (AGENTS.md: Modules,
+ * Roles). Entries are only ever added; the newest counts. The app never divides one total
+ * between parts. A worker-month has one source of hours: totals are refused while the
+ * worker has daily timesheet entries that month.
  */
 @Injectable()
 export class MonthlyHoursService {
@@ -116,30 +142,44 @@ export class MonthlyHoursService {
       }),
     ]);
     const workersWithDaily = new Set(daily.map((d) => d.assignment.workerId));
+    const shiftParts = await shiftPartsOf(this.prisma, companyId, [...new Set(placements.map((p) => p.workerId))], year, month);
 
-    const rows = placements.map((p) => ({
-      assignmentId: p.id,
-      worker: p.worker,
-      siteName: p.site.name,
-      teamName: p.team?.name ?? null,
-      from: isoDay(p.hiredOn),
-      until: p.leftOn ? isoDay(p.leftOn) : null,
-      history: p.monthlyHours.map((h, i) => ({
+    const rows = placements.flatMap((p) => {
+      const parts = shiftParts.get(p.workerId)!.flatMap((part) => {
+        const days = placementDaysIn(part, p);
+        return days ? [{ part, days }] : [];
+      });
+      const entry = (h: (typeof p.monthlyHours)[number], corrected: boolean): MonthlyHoursEntryView => ({
         id: h.id,
+        part: { from: isoDay(h.fromDay), until: isoDay(h.untilDay) },
         ...toTotals(h),
         note: h.note,
-        corrected: i > 0,
+        corrected,
         setBy: h.setBy,
         setAt: h.setAt,
-      })),
-      hasDailyEntries: workersWithDaily.has(p.workerId),
-    }));
+      });
+      const outdated = p.monthlyHours.filter((h) => !parts.some(({ part }) => sameDays(h, part)));
+      return parts.map(({ part, days }, i) => ({
+        assignmentId: p.id,
+        worker: p.worker,
+        siteName: p.site.name,
+        teamName: p.team?.name ?? null,
+        from: isoDay(p.hiredOn),
+        until: p.leftOn ? isoDay(p.leftOn) : null,
+        part: { from: part.from, until: part.until },
+        days,
+        shift: part.shiftInfo,
+        history: p.monthlyHours.filter((h) => sameDays(h, part)).map((h, j) => entry(h, j > 0)),
+        outdated: i === 0 ? outdated.map((h) => entry(h, false)) : [],
+        hasDailyEntries: workersWithDaily.has(p.workerId),
+      }));
+    });
     const collator = new Intl.Collator('en');
     rows.sort(
       (a, b) =>
         collator.compare(a.worker.lastName, b.worker.lastName) ||
         collator.compare(a.worker.firstName, b.worker.firstName) ||
-        a.from.localeCompare(b.from),
+        a.days.from.localeCompare(b.days.from),
     );
     return { year, month, locked: locked > 0, rows };
   }
@@ -155,15 +195,33 @@ export class MonthlyHoursService {
       await lockWorkerMonth(tx, placement.workerId, year, month);
       await this.assertNoDailyEntries(tx, companyId, placement.workerId, year, month);
 
-      const totals: MonthlyTotals = Object.fromEntries(TOTAL_FIELDS.map((f) => [f, input[f]])) as unknown as MonthlyTotals;
-      await this.assertFitsMonth(tx, companyId, placement.siteId, year, month, totals);
+      // The days must be one of the placement's parts now: the shifts may have changed since the form was opened.
+      const parts = (await shiftPartsOf(tx, companyId, [placement.workerId], year, month)).get(placement.workerId)!;
+      const part = parts.find((s) => s.from === input.from && s.until === input.until && placementDaysIn(s, placement));
+      if (!part) throw conflict('monthlyHours.partChanged');
 
-      const previous = await tx.monthlyHours.findFirst({ where: { assignmentId, year, month }, orderBy: { seq: 'desc' } });
+      const totals: MonthlyTotals = Object.fromEntries(TOTAL_FIELDS.map((f) => [f, input[f]])) as unknown as MonthlyTotals;
+      await this.assertFitsPart(tx, companyId, placement.siteId, year, month, part, totals);
+
+      const previous = await tx.monthlyHours.findFirst({
+        where: { assignmentId, year, month, fromDay: dayToDate(part.from), untilDay: dayToDate(part.until) },
+        orderBy: { seq: 'desc' },
+      });
       const before = previous && toTotals(previous);
       if (before && TOTAL_FIELDS.every((f) => before[f] === totals[f])) throw conflict('monthlyHours.unchanged');
 
       const row = await tx.monthlyHours.create({
-        data: { companyId, assignmentId, year, month, ...totals, note: input.note, setById: auth.user.id },
+        data: {
+          companyId,
+          assignmentId,
+          year,
+          month,
+          fromDay: dayToDate(part.from),
+          untilDay: dayToDate(part.until),
+          ...totals,
+          note: input.note,
+          setById: auth.user.id,
+        },
       });
       await this.audit.record(
         {
@@ -177,6 +235,7 @@ export class MonthlyHoursService {
             workerId: placement.workerId,
             year,
             month,
+            part: { from: part.from, until: part.until, shiftId: part.shift },
             from: before ? { ...before } : null,
             to: { ...totals },
             note: input.note,
@@ -196,19 +255,24 @@ export class MonthlyHoursService {
     if (daily > 0) throw conflict('hours.otherSource');
   }
 
-  /** The totals must fit the month under the rules of the placement's site. */
-  private async assertFitsMonth(
+  /**
+   * The totals must fit the part's days under the rules of the placement's site, with the
+   * part's shift's normal hours (the rule set's without a shift).
+   */
+  private async assertFitsPart(
     tx: Tx,
     companyId: string,
     siteId: string,
     year: number,
     month: number,
+    part: ShiftPart,
     totals: MonthlyTotals,
   ) {
     const set = await this.rules.ruleSetForSite(companyId, siteId, tx);
     const m = set && (await this.rules.month(companyId, set.id, year, month, tx));
     if (!m?.rules || !m.calendar) throw conflict('payRules.notSet');
-    const issues = checkTotals([{ place: siteId, totals }], m.calendar, m.rules.settings.normalHoursPerDay);
+    const normalHoursPerDay = part.shiftInfo?.normalHoursPerDay ?? m.rules.settings.normalHoursPerDay;
+    const issues = checkTotals([{ place: siteId, totals }], spanCalendar(m.calendar, part), normalHoursPerDay);
     if (issues.length > 0) throw badRequest('validation', { issues: issues.map((i) => PROBLEM_FIELDS[i.problem]) });
   }
 }

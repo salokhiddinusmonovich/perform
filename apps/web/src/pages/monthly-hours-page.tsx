@@ -74,9 +74,15 @@ function MonthlyHoursView() {
         cell: ({ row }) => (
           <div className="min-w-36">
             <div>{row.original.siteName}</div>
-            <div className="text-sm text-muted-foreground">
-              {placementDates(row.original, month, format.date, t)}
-            </div>
+            <div className="text-sm text-muted-foreground">{partDates(row.original, month, format.date, t)}</div>
+            {row.original.shift && (
+              <div className="text-sm text-muted-foreground">
+                {t('workers.shiftWithHours', {
+                  name: row.original.shift.name,
+                  hours: format.number(row.original.shift.normalHoursPerDay),
+                })}
+              </div>
+            )}
           </div>
         ),
       },
@@ -98,6 +104,8 @@ function MonthlyHoursView() {
             <StatusBadge tone="info">{t('monthlyHours.dailyEntries')}</StatusBadge>
           ) : row.original.history.length > 0 ? (
             <StatusBadge tone="success">{t('monthlyHours.entered')}</StatusBadge>
+          ) : row.original.outdated.length > 0 ? (
+            <StatusBadge tone="warning">{t('monthlyHours.shiftChanged')}</StatusBadge>
           ) : (
             <StatusBadge tone="warning">{t('monthlyHours.notEntered')}</StatusBadge>
           ),
@@ -129,7 +137,7 @@ function MonthlyHoursView() {
         isLoading={data.isPending}
         isError={data.isError}
         onRetry={() => data.refetch()}
-        searchText={(r) => `${workerName(r.worker)} ${r.siteName}`}
+        searchText={(r) => [workerName(r.worker), r.siteName, r.shift?.name].filter(Boolean).join(' ')}
         toolbar={
           <div className="flex flex-wrap items-center gap-2">
             <MonthSwitcher value={month} onChange={setMonth} />
@@ -141,8 +149,8 @@ function MonthlyHoursView() {
       />
       {editing && (
         <HoursDialog
-          // A fresh form for each placement opened
-          key={editing.assignmentId}
+          // A fresh form for each placement and part opened
+          key={`${editing.assignmentId}/${editing.part.from}`}
           month={month}
           row={editing}
           locked={locked}
@@ -161,20 +169,25 @@ function MonthlyHoursView() {
   );
 }
 
-/** "1.09.2026 – 15.09.2026" when the placement starts or ends inside the month; empty otherwise. */
-function placementDates(
-  row: Pick<MonthlyHoursRow, 'from' | 'until'>,
+/**
+ * The days the row's totals cover: "1.09.2026 – 14.09.2026" for a part of a shift change,
+ * else when the placement starts or ends inside the month; empty for the whole month.
+ */
+function partDates(
+  row: Pick<MonthlyHoursRow, 'part' | 'days'>,
   { year, month }: YearMonth,
   date: (value: string) => string,
   t: (key: string, options?: Record<string, string>) => string,
 ): string {
   const first = `${year}-${String(month).padStart(2, '0')}-01`;
   const last = `${year}-${String(month).padStart(2, '0')}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, '0')}`;
-  const starts = row.from > first;
-  const ends = row.until !== null && row.until < last;
-  if (starts && ends) return t('monthlyHours.fromUntil', { from: date(row.from), until: date(row.until!) });
-  if (starts) return t('monthlyHours.fromDay', { date: date(row.from) });
-  if (ends) return t('monthlyHours.untilDay', { date: date(row.until!) });
+  const { days } = row;
+  const split = row.part.from > first || row.part.until < last;
+  const starts = days.from > first;
+  const ends = days.until < last;
+  if (split || (starts && ends)) return t('monthlyHours.fromUntil', { from: date(days.from), until: date(days.until) });
+  if (starts) return t('monthlyHours.fromDay', { date: date(days.from) });
+  if (ends) return t('monthlyHours.untilDay', { date: date(days.until) });
   return '';
 }
 
@@ -191,7 +204,7 @@ function HoursSummary({ entry }: { entry: MonthlyHoursEntry }) {
   return <span className="text-sm tabular-nums">{parts.length > 0 ? parts.join(' · ') : t('monthlyHours.nothing')}</span>;
 }
 
-const EMPTY: MonthlyHoursInput = {
+const EMPTY: Omit<MonthlyHoursInput, 'from' | 'until'> = {
   normalHours: '0',
   overtimeHours: '0',
   restDayHours: '0',
@@ -223,9 +236,11 @@ function HoursDialog({
   const current = row.history[0];
   const form = useForm<MonthlyHoursInput, unknown, MonthlyHours>({
     resolver: zodResolver(monthlyHoursSchema),
-    defaultValues: current
-      ? { ...Object.fromEntries([...HOUR_FIELDS, ...DAY_FIELDS].map((f) => [f, current[f]])), note: '' }
-      : EMPTY,
+    defaultValues: {
+      ...(current ? { ...Object.fromEntries([...HOUR_FIELDS, ...DAY_FIELDS].map((f) => [f, current[f]])), note: '' } : EMPTY),
+      // The part the totals are for; the API refuses them if the worker's shifts changed meanwhile.
+      ...row.part,
+    },
   });
   const { errors } = form.formState;
   const readOnly = locked || row.hasDailyEntries;
@@ -244,7 +259,10 @@ function HoursDialog({
         <DialogHeader>
           <DialogTitle>{t('monthlyHours.dialogTitle', { month: format.month(month.year, month.month) })}</DialogTitle>
           <DialogDescription>
-            {workerName(row.worker)} · {row.siteName} · {t('monthlyHours.dialogHint')}
+            {[workerName(row.worker), row.siteName, partDates(row, month, format.date, t)].filter(Boolean).join(' · ')} ·{' '}
+            {row.shift
+              ? t('monthlyHours.dialogHintShift', { name: row.shift.name, hours: format.number(row.shift.normalHoursPerDay) })
+              : t('monthlyHours.dialogHint')}
           </DialogDescription>
         </DialogHeader>
         {readOnly ? (
@@ -293,6 +311,25 @@ function HoursDialog({
             </Field>
             <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
           </form>
+        )}
+        {row.outdated.length > 0 && (
+          <section className="space-y-2 border-t pt-4">
+            <h3 className="text-sm font-medium">{t('monthlyHours.outdated')}</h3>
+            <p className="text-sm text-muted-foreground">{t('monthlyHours.outdatedHint')}</p>
+            <ul className="space-y-2 text-sm">
+              {row.outdated.map((h) => (
+                <li key={h.id} className="flex flex-col gap-0.5 text-muted-foreground">
+                  <span>{t('monthlyHours.fromUntil', { from: format.date(h.part.from), until: format.date(h.part.until) })}</span>
+                  <span className="line-through">
+                    <HoursSummary entry={h} />
+                  </span>
+                  <span>
+                    {h.setBy.fullName} · {format.date(h.setAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
         {row.history.length > 0 && (
           <section className="space-y-2 border-t pt-4">

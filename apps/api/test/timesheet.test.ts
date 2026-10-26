@@ -49,7 +49,7 @@ async function company({ timesheetModule = true, planFrom = '2000-01-01' } = {})
 async function hire(agent: Agent, siteId: string, teamId: string | null, lastName: string, from = '2026-09-01') {
   const res = await agent
     .post('/api/workers')
-    .send({ worker: { lastName, firstName: 'Test', employmentType: 'DIRECT' }, placement: { siteId, teamId, from, shift: 'DAY' } })
+    .send({ worker: { lastName, firstName: 'Test', employmentType: 'DIRECT' }, placement: { siteId, teamId, from } })
     .expect(201);
   return res.body.id as string;
 }
@@ -155,6 +155,7 @@ describe('daily hour entry', () => {
     const { agent, siteA, teamA, workerId } = await company();
     const placement = (await agent.get(`/api/workers/${workerId}`).expect(200)).body.placement.id as string;
     const totals = {
+      from: '2026-09-01', until: '2026-09-30',
       normalHours: '9', overtimeHours: '0', restDayHours: '0', holidayHours: '0',
       workdaysWorked: 1, leaveDays: 0, sickDays: 0, travelDays: 0,
     };

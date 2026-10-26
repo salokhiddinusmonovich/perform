@@ -30,7 +30,8 @@
     "payrollRun": "Maaş hesabı",
     "timesheet": "Puantaj",
     "timesheetSettings": "Puantaj girişi",
-    "codes": "Kodlar"
+    "codes": "Kodlar",
+    "shifts": "Vardiyalar"
   },
   "settings": {
     "language": "Dil",
@@ -304,7 +305,8 @@
     "codeTaken": "Bu kod listede zaten var",
     "gridCodeOne": "Bu devamsızlığın puantajda görünecek tam olarak bir kodunu işaretleyin",
     "gridCodeNotForStatus": "Puantajda yalnızca devamsızlıklar görünür",
-    "tooMany": "Çok fazla kayıt"
+    "tooMany": "Çok fazla kayıt",
+    "chooseWorkers": "En az bir işçi seçin"
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -412,7 +414,8 @@
     },
     "monthlyHours": {
       "notInMonth": "İşçi bu ay bu şantiyede çalışmadı.",
-      "unchanged": "Bu ay için tam olarak aynı saatler zaten girildi."
+      "unchanged": "Bu ay için tam olarak aynı saatler zaten girildi.",
+      "partChanged": "Bu sırada işçinin vardiyaları değişti. Ayı yeniden açın ve her parçanın saatlerini girin."
     },
     "adjustment": {
       "notInMonth": "İşçi bu ay çalışmadı.",
@@ -432,6 +435,17 @@
       "moduleOff": "Bu ayın paketinde Puantaj modülü yok, bu yüzden bu aya saat girilemez.",
       "wholeDay": "Devamsızlık işçinin bütün günüdür: o gün başka kayıt olamaz.",
       "dayTooManyHours": "İşçinin bu günkü saatleri toplamda 24’ü geçiyor."
+    },
+    "shift": {
+      "notFound": "Bu vardiya yok.",
+      "nameTaken": "Bu adla bir vardiya zaten var.",
+      "inUse": "Bu vardiya bir işçiye verildi, bu yüzden saati değişemez. Bunun yerine yeni bir vardiya ekleyin.",
+      "inactive": "Bu vardiya arşivde, işçilere verilemez."
+    },
+    "workerShift": {
+      "notFound": "Bu vardiya kaydı yok.",
+      "dayTaken": "Bu günde zaten bir vardiya başlıyor. Sahip veya yönetici düzeltebilir.",
+      "unchanged": "Hiçbir şey değişmedi."
     }
   },
   "payRules": {
@@ -694,10 +708,6 @@
     "firstDay": "İlk iş günü",
     "firstDayThere": "Oradaki ilk gün",
     "shift": "Vardiya",
-    "shiftName": {
-      "DAY": "Gündüz",
-      "NIGHT": "Gece"
-    },
     "move": "Başka şantiyeye veya ekibe aktar",
     "moveHint": "Mevcut yeri bir gün önce sona erer. Önceki günler oldukları yerde kalır.",
     "rehire": "Yeniden işe al",
@@ -722,7 +732,32 @@
     "addSalary": "Maaş ekle",
     "salaryHistory": "Maaş geçmişi",
     "noSalaryYet": "Henüz maaş girilmedi.",
-    "salaryFromAmount": "{{amount}} · {{month}} itibarıyla"
+    "salaryFromAmount": "{{amount}} · {{month}} itibarıyla",
+    "shiftAction": "Vardiya",
+    "setShift": "Vardiya ata",
+    "setShiftHint": "Birkaç işçiye bir günden itibaren aynı vardiya. Her biri yenisine kadar bu vardiyada kalır.",
+    "noShift": "Vardiyasız",
+    "shiftWithHours": "{{name}} · {{hours}} sa",
+    "shiftFrom": "Başlangıç günü",
+    "shiftFromDay": "{{date}} itibarıyla: {{shift}}",
+    "shiftTitle": "Vardiyalar",
+    "shiftHint": "Vardiya kendi gününden bir sonrakine kadar geçerlidir. Gece yarısından sonra biten gece vardiyası bittiği güne sayılır.",
+    "shiftCorrecting": "Düzeltiliyor: {{row}}",
+    "addShift": "Vardiya ekle",
+    "shiftHistory": "Vardiya geçmişi",
+    "noShiftYet": "Henüz vardiya yok: ücret kurallarındaki normal saat uygulanır.",
+    "correctShift": "Düzelt: {{row}}",
+    "removeShift": "Kaldır: {{row}}",
+    "confirmRemoveShift": {
+      "title": "Bu vardiya kaldırılsın mı?",
+      "description": "{{name}}: “{{row}}” kaldırılacak ve önceki vardiya devam edecek. Değişiklik denetim kaydına yazılır.",
+      "button": "Kaldır"
+    },
+    "shiftUnchanged": "İşçi o günden itibaren zaten bu vardiyada.",
+    "shiftsSet": "Vardiya atanan işçiler: {{count}}",
+    "shiftsSetSome": "Vardiya atanan işçiler: {{added}}. Zaten bu vardiyada: {{unchanged}}.",
+    "chooseWorkers": "Seçilen işçiler: {{count}}",
+    "allShown": "Gösterilen tüm işçiler"
   },
   "impersonation": {
     "banner": "{{name}} olarak giriş yaptınız.",
@@ -873,7 +908,11 @@
     },
     "note": "Not",
     "noteHint": "İsteğe bağlı, örneğin: neden düzeltildi",
-    "history": "Kayıtlar"
+    "history": "Kayıtlar",
+    "shiftChanged": "Vardiya değişti: yeniden girin",
+    "dialogHintShift": "{{name}} vardiyası, günde {{hours}} normal saat. Girilen saatler değiştirilmez: düzeltme yeni kayıt olarak eklenir.",
+    "outdated": "Vardiya değişikliğinden önce girilenler",
+    "outdatedHint": "Bu saatler artık ayın tek bir parçası olmayan günler için, bu yüzden sayılmaz. Her parçanın saatlerini yeniden girin."
   },
   "adjustments": {
     "title": "Ek ödeme ve kesintiler",
@@ -936,7 +975,8 @@
       "noRules": "Bu ay için ödeme kuralı yok: {{sites}}.",
       "noCompanyRules": "Şirketin bu ay için ödeme kuralları yok. Yuvarlama adımı bu kurallarda.",
       "totalsInvalid": "Aylık saatler aya uymuyor (ödeme kuralları değişmiş olabilir):",
-      "invalidHours": "Günlük puantaj kayıtları birbiriyle çelişiyor."
+      "invalidHours": "Günlük puantaj kayıtları birbiriyle çelişiyor.",
+      "daysWithoutHours": "{{site}} için saat yok ({{from}} – {{until}})."
     },
     "totalsProblems": {
       "NORMAL_ABOVE_DAYS_WORKED": "normal saatler çalışılan iş günü × günlük normalden fazla",
@@ -1065,6 +1105,35 @@
       "TRAVEL": "Görev / transfer",
       "OFF": "Tatil (hafta tatili veya bayram)",
       "NOT_EMPLOYED": "Çalışmıyor"
+    }
+  },
+  "shifts": {
+    "title": "Vardiyalar",
+    "description": "Kendi günlük normal saati olan vardiyalar, örneğin 10 saatlik gece vardiyası. Vardiyası olmayan işçiye ücret kurallarındaki normal saat uygulanır.",
+    "create": "Vardiya ekle",
+    "edit": "Vardiyayı düzenle",
+    "name": "Adı",
+    "normalHoursPerDay": "Günlük normal saat",
+    "normalHoursHint": "İşçinin bu vardiyada olduğu günlerde ücret kuralları yerine kullanılır: saatlik ücret, fazla mesai ve devamsızlık saatleri için.",
+    "offered": "Kullanımda",
+    "archived": "Arşivde",
+    "archive": "Arşivle",
+    "restore": "Geri al",
+    "empty": "Henüz vardiya yok",
+    "emptyDescription": "Vardiyalar isteğe bağlıdır. Vardiya olmadan işçilere ücret kurallarındaki normal saat uygulanır.",
+    "dialogDescription": "Gece yarısından sonra biten gece vardiyası, bittiği güne sayılır.",
+    "hoursFixed": "Bu vardiya bir işçiye verildi, bu yüzden saati değişemez: çalışılmış aylar değişirdi. Başka saat için yeni bir vardiya ekleyin.",
+    "confirm": {
+      "archive": {
+        "title": "Vardiya arşivlensin mi?",
+        "description": "“{{name}}” artık sunulmayacak. Bu vardiyadaki işçilerde kalır.",
+        "button": "Arşivle"
+      },
+      "restore": {
+        "title": "Vardiya geri alınsın mı?",
+        "description": "“{{name}}” tekrar işçilere verilebilir.",
+        "button": "Geri al"
+      }
     }
   }
 }

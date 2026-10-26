@@ -80,6 +80,10 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/timesheet-codes-page')).TimesheetCodesPage }),
       },
       {
+        path: 'settings/shifts',
+        lazy: async () => ({ Component: (await import('@/pages/shifts-page')).ShiftsPage }),
+      },
+      {
         path: 'platform/companies',
         lazy: async () => ({
           Component: (await import('@/pages/platform-companies-page')).PlatformCompaniesPage,

@@ -67,6 +67,17 @@ export function entersHoursAt(
 }
 
 /**
+ * Giving a worker a shift from a day (AGENTS.md: Shifts): owners, admins and accountants
+ * for every worker; timekeepers for workers placed on their sites that day (`placement`:
+ * the worker's placement on the day, null for none).
+ */
+export function assignsShift(auth: CompanyAuthContext, placement: { siteId: string; teamId: string | null } | null): boolean {
+  const { role } = auth.company;
+  if (role === 'OWNER' || role === 'ADMIN' || role === 'ACCOUNTANT') return true;
+  return role === 'TIMEKEEPER' && placement !== null && seesPlacement(auth, placement.siteId, placement.teamId);
+}
+
+/**
  * Teams and workers on this site: owners and admins anywhere, project managers on
  * their own sites. Throws for everyone else.
  */

@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   MapPin,
   Scale,
+  SunMoon,
   Tags,
   UserCog,
   Users,
@@ -76,6 +77,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { path: '/settings/working-days', labelKey: 'nav.workingDays', icon: CalendarCheck, visible: canViewPayRules },
       { path: '/settings/timesheet', labelKey: 'nav.timesheetSettings', icon: ClipboardPen, visible: canManageTimesheet },
       { path: '/settings/codes', labelKey: 'nav.codes', icon: Tags, visible: canManageCompany },
+      { path: '/settings/shifts', labelKey: 'nav.shifts', icon: SunMoon, visible: canManageCompany },
     ],
   },
   {

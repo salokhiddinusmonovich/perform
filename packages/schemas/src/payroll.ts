@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { optionalText } from './organisation.js';
-import { decimalSchema } from './pay-rules.js';
+import { decimalSchema, isoDateSchema } from './pay-rules.js';
 
 // Hours entered as monthly totals and the payroll run (AGENTS.md: Modules, Pay model).
 
@@ -17,6 +17,12 @@ const daysSchema = z
  * @puantaj/payroll). Only ever added: a correction is a newer entry.
  */
 export const monthlyHoursSchema = z.object({
+  /**
+   * The part of the month the totals are for: the days of one shift in it (AGENTS.md:
+   * Shifts), the whole month while the worker's shift doesn't change.
+   */
+  from: isoDateSchema,
+  until: isoDateSchema,
   normalHours: monthHoursSchema,
   overtimeHours: monthHoursSchema,
   restDayHours: monthHoursSchema,

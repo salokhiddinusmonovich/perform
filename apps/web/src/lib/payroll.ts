@@ -2,11 +2,20 @@ import type { MonthlyTotals, PayOut, PayOutAdjustment, PayResult, TotalsProblem 
 import type { AdjustmentType, YearMonth } from '@puantaj/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
+import type { ShiftInfo } from './organisation';
 
 // Monthly hours, adjustments and the payroll run as the API returns them (apps/api/src/payroll).
 
+/** First and last day of a part of the month. */
+export interface DaySpan {
+  from: string;
+  until: string;
+}
+
 export interface MonthlyHoursEntry extends MonthlyTotals {
   id: string;
+  /** The part of the month it was entered for */
+  part: DaySpan;
   note: string | null;
   /** A newer entry corrected this one, so it never counts. */
   corrected: boolean;
@@ -29,8 +38,16 @@ export interface MonthlyHoursRow {
   teamName: string | null;
   from: string;
   until: string | null;
+  /** The days of one shift in the month that totals are entered for: the whole month without a shift change */
+  part: DaySpan;
+  /** The placement's days in the part */
+  days: DaySpan;
+  /** The part's shift; null: the normal hours of the pay rules */
+  shift: ShiftInfo | null;
   /** Newest first; the first one counts. */
   history: MonthlyHoursEntry[];
+  /** Entered for days that are no longer a part (the shift changed since): they count for nothing */
+  outdated: MonthlyHoursEntry[];
   /** Daily entries exist for the worker this month, so totals can't be added. */
   hasDailyEntries: boolean;
 }
@@ -46,7 +63,8 @@ export type PayrollProblem =
   | { code: 'noSalary' }
   | { code: 'noHours' }
   | { code: 'twoSources' }
-  | { code: 'placementWithoutHours'; assignmentId: string; siteName: string; from: string }
+  /** until is absent in months locked before shifts */
+  | { code: 'placementWithoutHours'; assignmentId: string; siteName: string; from: string; until?: string }
   | { code: 'noRules'; siteNames: string[] }
   | { code: 'noCompanyRules' }
   | { code: 'totalsInvalid'; issues: { siteName: string | null; problem: TotalsProblem }[] }
@@ -61,6 +79,10 @@ export interface PlaceLabel {
 export interface PayrollPart {
   /** null: the company default rules */
   ruleSetSiteName: string | null;
+  /** The part's shift, or null: the rules' normal hours. Absent in months locked before shifts. */
+  shift?: Pick<ShiftInfo, 'name' | 'normalHoursPerDay'> | null;
+  /** The part's days. Absent in months locked before shifts. */
+  days?: DaySpan;
   rulesFrom: YearMonth;
   placementIds: string[];
   places: Record<string, PlaceLabel>;

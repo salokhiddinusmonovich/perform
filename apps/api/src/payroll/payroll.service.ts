@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type MonthlyHours as MonthlyHoursRow } from '@prisma/client';
 import {
   calculatePay,
   checkTotals,
   payOut,
+  spanCalendar,
   type DayEntry,
   type PayOut,
   type PayOutAdjustment,
@@ -18,6 +19,7 @@ import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict } from '../common/api-error';
 import { inMonth, isoDay, monthSpan, todayIn } from '../common/dates';
 import { seesPlacement } from '../organisation/access';
+import { placementDaysIn, shiftPartsOf, type ShiftPart } from '../organisation/worker-shifts';
 import { SALARY_ORDER } from '../organisation/workers.service';
 import { lockCompanyMonths } from '../pay-rules/months';
 import { PayRulesService, type MonthRules, type StoredPayRules } from '../pay-rules/pay-rules.service';
@@ -31,8 +33,12 @@ export type PayrollProblem =
   | { code: 'noHours' }
   /** Daily entries and monthly totals both exist: one source per worker-month */
   | { code: 'twoSources' }
-  /** Hours come from totals, but this placement in the month has none */
-  | { code: 'placementWithoutHours'; assignmentId: string; siteName: string; from: string }
+  /**
+   * Hours come from totals, but these days of a placement have none: the placement in the
+   * month, or its part of a shift change (totals entered before the change count for nothing).
+   * until is absent in months locked before shifts.
+   */
+  | { code: 'placementWithoutHours'; assignmentId: string; siteName: string; from: string; until?: string }
   /** No pay rules for the month at these sites */
   | { code: 'noRules'; siteNames: string[] }
   /** The company default rules, which hold the rounding step, are not set for the month */
@@ -61,10 +67,17 @@ export interface PlaceLabel {
  */
 const placeKey = (siteId: string, teamId: string | null) => (teamId ? `${siteId}/${teamId}` : siteId);
 
-/** The days of the worker's placements under one rule set, paid under its rules. */
+/**
+ * The days of the worker's placements under one rule set and on one shift, paid under the
+ * rule set's rules with the shift's normal hours.
+ */
 export interface PayrollPartView {
   /** Site whose own rules apply, or null: the company default */
   ruleSetSiteName: string | null;
+  /** The part's shift, or null: the rule set's normal hours. Absent in months locked before shifts. */
+  shift?: { name: string; normalHoursPerDay: string } | null;
+  /** First and last day of the part. Absent in months locked before shifts. */
+  days?: { from: string; until: string };
   /** Month the rule version in force starts from */
   rulesFrom: { year: number; month: number };
   placementIds: string[];
@@ -138,15 +151,22 @@ const PLACEMENT_INCLUDE = {
 } as const satisfies Prisma.AssignmentInclude;
 
 type Placement = Prisma.AssignmentGetPayload<{ include: typeof PLACEMENT_INCLUDE }> & {
-  totals: ReturnType<typeof toTotals> | null;
+  /** The month's totals, newest first; the newest for a part's days counts */
+  monthlyHours: MonthlyHoursRow[];
 };
+
+type PartEntry = Prisma.TimesheetEntryGetPayload<{
+  include: { site: { select: { name: true } }; team: { select: { name: true } } };
+}>;
 
 /**
  * Works out every worker's pay for a month with @puantaj/payroll, from salaries, hours
  * (daily entries or monthly totals), pay rules and travel pay. Split by placement
  * (AGENTS.md: Pay model): the worker's placements are grouped by the rule set of their
- * site, and each group is a part paid under its own rules. The parts and the worker's
- * adjustments make the amount to pay out, rounded once with the company's step.
+ * site, and each group is paid under its own rules. Split by shift (AGENTS.md: Shifts):
+ * each group is split again where the worker's shift changes, each part with its shift's
+ * normal hours. The parts and the worker's adjustments make the amount to pay out,
+ * rounded once with the company's step.
  */
 @Injectable()
 export class PayrollService {
@@ -315,19 +335,17 @@ export class PayrollService {
       where: { AND: [{ companyId }, inMonth(year, month)] },
       include: {
         ...PLACEMENT_INCLUDE,
-        monthlyHours: { where: { year, month }, orderBy: { seq: 'desc' }, take: 1 },
+        monthlyHours: { where: { year, month }, orderBy: { seq: 'desc' } },
       },
       orderBy: { hiredOn: 'asc' },
     });
 
     const visible = new Set(rows.filter(sees).map((p) => p.workerId));
-    const placements: Placement[] = rows
-      .filter((p) => visible.has(p.workerId))
-      .map(({ monthlyHours, ...p }) => ({ ...p, totals: monthlyHours[0] ? toTotals(monthlyHours[0]) : null }));
+    const placements: Placement[] = rows.filter((p) => visible.has(p.workerId));
     const assignmentIds = placements.map((p) => p.id);
     const workerIds = [...visible];
 
-    const [salaries, entries, travelAmounts, adjustments, companyRules] = await Promise.all([
+    const [salaries, entries, travelAmounts, adjustments, companyRules, shiftParts] = await Promise.all([
       db.salary.findMany({
         where: {
           companyId,
@@ -353,6 +371,7 @@ export class PayrollService {
       this.rules
         .defaultRuleSet(companyId, db)
         .then((set) => (set ? this.rules.month(companyId, set.id, year, month, db) : null)),
+      shiftPartsOf(db, companyId, workerIds, year, month),
     ]);
     const roundingStep = companyRules?.rules?.settings.payRoundingStep ?? null;
 
@@ -390,7 +409,8 @@ export class PayrollService {
       };
       workers.push(view);
 
-      const hasTotals = own.some((p) => p.totals);
+      const parts = shiftParts.get(workerId)!;
+      const hasTotals = own.some((p) => p.monthlyHours.length > 0);
       if (hasTotals && ownEntries.length > 0) view.problems.push({ code: 'twoSources' });
       else if (hasTotals) view.source = 'TOTALS';
       else if (ownEntries.length > 0) view.source = 'DAILY';
@@ -398,8 +418,11 @@ export class PayrollService {
       if (!salary) view.problems.push({ code: 'noSalary' });
       if (view.source === 'TOTALS') {
         for (const p of own) {
-          if (!p.totals) {
-            view.problems.push({ code: 'placementWithoutHours', assignmentId: p.id, siteName: p.site.name, from: isoDay(p.hiredOn) });
+          for (const part of parts) {
+            const days = placementDaysIn(part, p);
+            if (days && !totalsFor(p, part)) {
+              view.problems.push({ code: 'placementWithoutHours', assignmentId: p.id, siteName: p.site.name, ...days });
+            }
           }
         }
       }
@@ -421,71 +444,18 @@ export class PayrollService {
       else if (roundingStep === null) view.problems.push({ code: 'noCompanyRules' });
       if (view.problems.length > 0 || !salary) continue;
 
-      for (const { rules, placements: inPart } of groups.values()) {
-        const m = rules.month!;
-        const settings = m.rules!.settings;
-        const ids = new Set(inPart.map((p) => p.id));
-        const places: Record<string, PlaceLabel> = {};
-        const base = {
-          monthlySalary: salary.monthlySalary.toString(),
-          workingDays: m.workingDays!,
-          calendar: m.calendar!,
-          settings: paySettings(settings),
-        };
-        let result: PayResult;
-        try {
-          if (view.source === 'TOTALS') {
-            const totals = inPart.map((p) => ({ place: p.id, totals: p.totals! }));
-            const issues = checkTotals(totals, m.calendar!, settings.normalHoursPerDay);
-            if (issues.length > 0) {
-              const siteName = (place: string | null) => inPart.find((p) => p.id === place)?.site.name ?? null;
-              view.problems.push({
-                code: 'totalsInvalid',
-                issues: issues.map((i) => ({ siteName: siteName(i.place), problem: i.problem })),
-              });
-              continue;
-            }
-            for (const p of inPart) {
-              places[p.id] = { siteName: p.site.name, from: isoDay(p.hiredOn), until: p.leftOn ? isoDay(p.leftOn) : null };
-            }
-            const routes = Object.fromEntries(inPart.map((p) => [p.id, route(p)]));
-            result = calculatePay({ ...base, totals, travel: travel(settings, routes, inPart, travelAmounts) });
-          } else {
-            const inThisPart = ownEntries.filter((e) => ids.has(e.assignmentId));
-            const partEntries: DayEntry[] = inThisPart.map((e) => ({
-              date: isoDay(e.date),
-              place: placeKey(e.siteId, e.teamId),
-              seq: Number(e.seq),
-              status: e.status,
-              hours: e.hours.toString(),
-            }));
-            // A place's route is the worker's route on their placement at its site; elsewhere none.
-            const routes: Record<string, ReturnType<typeof route>> = {};
-            for (const e of inThisPart) {
-              const key = placeKey(e.siteId, e.teamId);
-              places[key] = { siteName: e.site.name, teamName: e.team?.name ?? null, from: null, until: null };
-              const p = inPart.find((x) => x.siteId === e.siteId);
-              routes[key] = p ? route(p) : null;
-            }
-            result = calculatePay({ ...base, entries: partEntries, travel: travel(settings, routes, inPart, travelAmounts) });
-          }
-        } catch (error) {
-          if (!(error instanceof RangeError)) throw error;
-          view.problems.push({ code: 'invalidHours', detail: error.message });
-          continue;
+      for (const { rules, placements: inGroup } of groups.values()) {
+        for (const shiftPart of parts) {
+          const inPart = inGroup.filter((p) => placementDaysIn(shiftPart, p));
+          if (inPart.length === 0) continue;
+          const part = payPart(view, salary, rules.siteId, rules.month!, shiftPart, inPart, ownEntries, travelAmounts);
+          if (part) view.parts.push(part);
         }
-        view.parts.push({
-          ruleSetSiteName: rules.siteId ? inPart.find((p) => p.siteId === rules.siteId)?.site.name ?? null : null,
-          rulesFrom: { year: m.rules!.fromYear, month: m.rules!.fromMonth },
-          placementIds: inPart.map((p) => p.id),
-          places,
-          result,
-        });
       }
       if (view.problems.length > 0) view.parts = [];
       else {
-        // Parts in the order of their first placement.
-        view.parts.sort((a, b) => firstDay(own, a) - firstDay(own, b));
+        // Parts in the order of their days.
+        view.parts.sort((a, b) => a.days!.from.localeCompare(b.days!.from));
         const ownAdjustments = adjustments.filter((a) => a.workerId === workerId);
         const out = payOut(
           view.parts.map((p) => p.result),
@@ -508,6 +478,95 @@ export class PayrollService {
     return workers;
   }
 
+}
+
+/**
+ * One part of a worker's month: the placements of one rule set on the days of one shift,
+ * paid with the shift's normal hours (the rule set's without a shift) on the part's own
+ * calendar. Working days stay the rule set's for the month. Returns null after adding a
+ * problem when the hours can't be paid.
+ */
+function payPart(
+  view: PayrollWorkerView,
+  salary: { monthlySalary: Prisma.Decimal },
+  ruleSetSiteId: string | null,
+  m: MonthRules,
+  shiftPart: ShiftPart,
+  inPart: readonly Placement[],
+  ownEntries: readonly PartEntry[],
+  travelAmounts: readonly { assignmentId: string; amount: Prisma.Decimal }[],
+): PayrollPartView | null {
+  const settings = m.rules!.settings;
+  const normalHoursPerDay = shiftPart.shiftInfo?.normalHoursPerDay ?? settings.normalHoursPerDay;
+  const calendar = spanCalendar(m.calendar!, shiftPart);
+  const ids = new Set(inPart.map((p) => p.id));
+  const covered = inPart.map((p) => placementDaysIn(shiftPart, p)!);
+  const days = { from: covered.map((d) => d.from).sort()[0], until: covered.map((d) => d.until).sort().at(-1)! };
+  const places: Record<string, PlaceLabel> = {};
+  const base = {
+    monthlySalary: salary.monthlySalary.toString(),
+    workingDays: m.workingDays!,
+    calendar,
+    settings: { ...paySettings(settings), normalHoursPerDay },
+  };
+  let result: PayResult;
+  try {
+    if (view.source === 'TOTALS') {
+      const totals = inPart.map((p) => ({ place: p.id, totals: toTotals(totalsFor(p, shiftPart)!) }));
+      const issues = checkTotals(totals, calendar, normalHoursPerDay);
+      if (issues.length > 0) {
+        const siteName = (place: string | null) => inPart.find((p) => p.id === place)?.site.name ?? null;
+        view.problems.push({
+          code: 'totalsInvalid',
+          issues: issues.map((i) => ({ siteName: siteName(i.place), problem: i.problem })),
+        });
+        return null;
+      }
+      for (const p of inPart) {
+        places[p.id] = { siteName: p.site.name, from: isoDay(p.hiredOn), until: p.leftOn ? isoDay(p.leftOn) : null };
+      }
+      const routes = Object.fromEntries(inPart.map((p) => [p.id, route(p)]));
+      result = calculatePay({ ...base, totals, travel: travel(settings, routes, inPart, travelAmounts) });
+    } else {
+      const inThisPart = ownEntries.filter(
+        (e) => ids.has(e.assignmentId) && isoDay(e.date) >= shiftPart.from && isoDay(e.date) <= shiftPart.until,
+      );
+      const partEntries: DayEntry[] = inThisPart.map((e) => ({
+        date: isoDay(e.date),
+        place: placeKey(e.siteId, e.teamId),
+        seq: Number(e.seq),
+        status: e.status,
+        hours: e.hours.toString(),
+      }));
+      // A place's route is the worker's route on their placement at its site; elsewhere none.
+      const routes: Record<string, ReturnType<typeof route>> = {};
+      for (const e of inThisPart) {
+        const key = placeKey(e.siteId, e.teamId);
+        places[key] = { siteName: e.site.name, teamName: e.team?.name ?? null, from: null, until: null };
+        const p = inPart.find((x) => x.siteId === e.siteId);
+        routes[key] = p ? route(p) : null;
+      }
+      result = calculatePay({ ...base, entries: partEntries, travel: travel(settings, routes, inPart, travelAmounts) });
+    }
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    view.problems.push({ code: 'invalidHours', detail: error.message });
+    return null;
+  }
+  return {
+    ruleSetSiteName: ruleSetSiteId ? inPart.find((p) => p.siteId === ruleSetSiteId)?.site.name ?? null : null,
+    shift: shiftPart.shiftInfo && { name: shiftPart.shiftInfo.name, normalHoursPerDay: shiftPart.shiftInfo.normalHoursPerDay },
+    days,
+    rulesFrom: { year: m.rules!.fromYear, month: m.rules!.fromMonth },
+    placementIds: inPart.map((p) => p.id),
+    places,
+    result,
+  };
+}
+
+/** A placement's newest totals for a part's days, if any. */
+function totalsFor(p: Placement, part: Pick<ShiftPart, 'from' | 'until'>): MonthlyHoursRow | undefined {
+  return p.monthlyHours.find((h) => isoDay(h.fromDay) === part.from && isoDay(h.untilDay) === part.until);
 }
 
 /** Pay rules (Settings) as the engine takes them. Normal hours are always paid at × 1. */
@@ -585,10 +644,5 @@ function changesBetween(
       },
     ];
   });
-}
-
-function firstDay(placements: readonly Placement[], part: PayrollPartView): number {
-  const days = placements.filter((p) => part.placementIds.includes(p.id)).map((p) => p.hiredOn.getTime());
-  return Math.min(...days);
 }
 

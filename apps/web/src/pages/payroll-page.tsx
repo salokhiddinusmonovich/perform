@@ -390,7 +390,12 @@ function PayslipDialog({
         ) : (
           <>
             {worker.parts.map((part, i) => (
-              <PartView key={i} part={part} currency={currency} showRules={worker.parts.length > 1 || part.ruleSetSiteName !== null} />
+              <PartView
+                key={i}
+                part={part}
+                currency={currency}
+                showHeading={worker.parts.length > 1 || part.ruleSetSiteName !== null || Boolean(part.shift)}
+              />
             ))}
             <PayOutView payOut={worker.payOut!} currency={currency} showEarned={worker.parts.length > 1} />
             {canAddAdjustments(me) && (
@@ -410,7 +415,13 @@ function ProblemText({ problem }: { problem: PayrollProblem }) {
   const format = useFormat();
   switch (problem.code) {
     case 'placementWithoutHours':
-      return t('payroll.problems.placementWithoutHours', { site: problem.siteName, date: format.date(problem.from) });
+      return problem.until
+        ? t('payroll.problems.daysWithoutHours', {
+            site: problem.siteName,
+            from: format.date(problem.from),
+            until: format.date(problem.until),
+          })
+        : t('payroll.problems.placementWithoutHours', { site: problem.siteName, date: format.date(problem.from) });
     case 'noRules':
       return t('payroll.problems.noRules', { sites: problem.siteNames.join(', ') });
     case 'totalsInvalid':
@@ -439,7 +450,11 @@ function ProblemText({ problem }: { problem: PayrollProblem }) {
   }
 }
 
-function PartView({ part, currency, showRules }: { part: PayrollPart; currency: string; showRules: boolean }) {
+/**
+ * One part of the month: its rules, days and shift when the month has several parts (or
+ * site rules or a shift), the hourly rate and every line.
+ */
+function PartView({ part, currency, showHeading }: { part: PayrollPart; currency: string; showHeading: boolean }) {
   const { t } = useTranslation();
   const format = useFormat();
   const { result } = part;
@@ -478,11 +493,15 @@ function PartView({ part, currency, showRules }: { part: PayrollPart; currency: 
 
   return (
     <section className="space-y-3">
-      {showRules && (
+      {showHeading && (
         <h3 className="text-sm font-medium">
-          {part.ruleSetSiteName
-            ? t('payroll.siteRules', { site: part.ruleSetSiteName })
-            : t('payroll.defaultRules')}
+          {[
+            part.ruleSetSiteName ? t('payroll.siteRules', { site: part.ruleSetSiteName }) : t('payroll.defaultRules'),
+            part.days && t('monthlyHours.fromUntil', { from: format.date(part.days.from), until: format.date(part.days.until) }),
+            part.shift && t('workers.shiftWithHours', { name: part.shift.name, hours: format.number(part.shift.normalHoursPerDay) }),
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </h3>
       )}
       <p className="text-sm text-muted-foreground">
@@ -508,7 +527,7 @@ function PartView({ part, currency, showRules }: { part: PayrollPart; currency: 
           </li>
         ))}
       </ul>
-      {showRules && (
+      {showHeading && (
         <div className="flex justify-between text-sm">
           <span>{t('payroll.partTotal')}</span>
           <span className="font-medium tabular-nums">{format.money(result.total, currency)}</span>

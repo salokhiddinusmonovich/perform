@@ -30,7 +30,8 @@
     "payrollRun": "Ish haqi hisobi",
     "timesheet": "Tabel",
     "timesheetSettings": "Tabel kiritish",
-    "codes": "Kodlar"
+    "codes": "Kodlar",
+    "shifts": "Smenalar"
   },
   "settings": {
     "language": "Til",
@@ -304,7 +305,8 @@
     "codeTaken": "Bu kod roʻyxatda bor",
     "gridCodeOne": "Bu holatning tabelda koʻrinadigan bitta kodini belgilang",
     "gridCodeNotForStatus": "Tabelda faqat kelmaslik holatlari koʻrinadi",
-    "tooMany": "Juda koʻp yozuv"
+    "tooMany": "Juda koʻp yozuv",
+    "chooseWorkers": "Kamida bitta ishchini tanlang"
   },
   "errors": {
     "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
@@ -412,7 +414,8 @@
     },
     "monthlyHours": {
       "notInMonth": "Ishchi bu oyda ushbu obyektda ishlamagan.",
-      "unchanged": "Bu oy uchun aynan shu soatlar allaqachon kiritilgan."
+      "unchanged": "Bu oy uchun aynan shu soatlar allaqachon kiritilgan.",
+      "partChanged": "Shu orada ishchining smenalari oʻzgardi. Oyni qayta oching va har bir qism soatlarini kiriting."
     },
     "adjustment": {
       "notInMonth": "Ishchi bu oyda ishlamagan.",
@@ -432,6 +435,17 @@
       "moduleOff": "Bu oyning tarifida Tabel moduli yoʻq, shuning uchun unga soat kiritib boʻlmaydi.",
       "wholeDay": "Ishga kelmaslik ishchining butun kuni: u boshqa yozuvlar bilan bir kunda boʻlolmaydi.",
       "dayTooManyHours": "Ishchining bu kundagi soatlari jami 24 dan oshadi."
+    },
+    "shift": {
+      "notFound": "Bunday smena yoʻq.",
+      "nameTaken": "Bu nomli smena allaqachon bor.",
+      "inUse": "Bu smena ishchiga berilgan, shuning uchun soati oʻzgarmaydi. Oʻrniga yangi smena qoʻshing.",
+      "inactive": "Bu smena arxivda, uni ishchilarga berib boʻlmaydi."
+    },
+    "workerShift": {
+      "notFound": "Bunday smena yozuvi yoʻq.",
+      "dayTaken": "Bu kundan smena allaqachon boshlangan. Egasi yoki administrator tuzatishi mumkin.",
+      "unchanged": "Hech narsa oʻzgarmadi."
     }
   },
   "payRules": {
@@ -694,10 +708,6 @@
     "firstDay": "Birinchi ish kuni",
     "firstDayThere": "U yerdagi birinchi kun",
     "shift": "Smena",
-    "shiftName": {
-      "DAY": "Kunduzgi",
-      "NIGHT": "Tungi"
-    },
     "move": "Boshqa obyekt yoki brigadaga oʻtkazish",
     "moveHint": "Hozirgi joyi bir kun oldin tugaydi. Oldingi kunlar oʻz joyida qoladi.",
     "rehire": "Qayta ishga olish",
@@ -722,7 +732,32 @@
     "addSalary": "Maosh qoʻshish",
     "salaryHistory": "Maosh tarixi",
     "noSalaryYet": "Hali maosh kiritilmagan.",
-    "salaryFromAmount": "{{amount}} · boshlanishi: {{month}}"
+    "salaryFromAmount": "{{amount}} · boshlanishi: {{month}}",
+    "shiftAction": "Smena",
+    "setShift": "Smena belgilash",
+    "setShiftHint": "Bir nechta ishchiga bir kundan boshlab bitta smena. Har biri yangisigacha shu smenada boʻladi.",
+    "noShift": "Smenasiz",
+    "shiftWithHours": "{{name}} · {{hours}} soat",
+    "shiftFrom": "Qaysi kundan",
+    "shiftFromDay": "{{date}} dan: {{shift}}",
+    "shiftTitle": "Smenalar",
+    "shiftHint": "Smena oʻz kunidan keyingisigacha amal qiladi. Yarim tundan keyin tugaydigan tungi smena tugagan kuniga hisoblanadi.",
+    "shiftCorrecting": "Tuzatilmoqda: {{row}}",
+    "addShift": "Smena qoʻshish",
+    "shiftHistory": "Smenalar tarixi",
+    "noShiftYet": "Hali smena yoʻq: ish haqi qoidalaridagi normal soat qoʻllanadi.",
+    "correctShift": "Tuzatish: {{row}}",
+    "removeShift": "Oʻchirish: {{row}}",
+    "confirmRemoveShift": {
+      "title": "Bu smenani oʻchirasizmi?",
+      "description": "{{name}}: “{{row}}” oʻchiriladi va undan oldingi smena davom etadi. Oʻzgarish audit jurnaliga yoziladi.",
+      "button": "Oʻchirish"
+    },
+    "shiftUnchanged": "Ishchi shu kundan allaqachon shu smenada.",
+    "shiftsSet": "Smena belgilangan ishchilar: {{count}}",
+    "shiftsSetSome": "Smena belgilangan ishchilar: {{added}}. Allaqachon shu smenada: {{unchanged}}.",
+    "chooseWorkers": "Tanlangan ishchilar: {{count}}",
+    "allShown": "Koʻrsatilgan barcha ishchilar"
   },
   "impersonation": {
     "banner": "Siz {{name}} nomidan kirgansiz.",
@@ -873,7 +908,11 @@
     },
     "note": "Izoh",
     "noteHint": "Ixtiyoriy, masalan: nima uchun tuzatildi",
-    "history": "Kiritilganlar"
+    "history": "Kiritilganlar",
+    "shiftChanged": "Smena oʻzgardi: qayta kiriting",
+    "dialogHintShift": "{{name}} smenasi, kuniga {{hours}} normal soat. Kiritilgan soatlar oʻzgartirilmaydi: tuzatish yangi yozuv sifatida qoʻshiladi.",
+    "outdated": "Smena oʻzgarishidan oldin kiritilgan",
+    "outdatedHint": "Bu soatlar endi oyning bitta qismi boʻlmagan kunlar uchun, shuning uchun hisobga olinmaydi. Har bir qism soatlarini qayta kiriting."
   },
   "adjustments": {
     "title": "Qoʻshimcha va ushlanmalar",
@@ -936,7 +975,8 @@
       "noRules": "Bu oy uchun toʻlov qoidalari yoʻq: {{sites}}.",
       "noCompanyRules": "Kompaniyaning shu oy uchun toʻlov qoidalari yoʻq. Yaxlitlash qadami ularda.",
       "totalsInvalid": "Oylik soatlar oyga mos kelmaydi (balki toʻlov qoidalari oʻzgargandir):",
-      "invalidHours": "Kunlik tabel yozuvlari bir-biriga zid."
+      "invalidHours": "Kunlik tabel yozuvlari bir-biriga zid.",
+      "daysWithoutHours": "{{site}} uchun soatlar yoʻq ({{from}} – {{until}})."
     },
     "totalsProblems": {
       "NORMAL_ABOVE_DAYS_WORKED": "normal soatlar ishlangan ish kunlari × kunlik normadan koʻp",
@@ -1065,6 +1105,35 @@
       "TRAVEL": "Safar / koʻchish",
       "OFF": "Dam olish (dam olish yoki bayram kuni)",
       "NOT_EMPLOYED": "Ishga olinmagan"
+    }
+  },
+  "shifts": {
+    "title": "Smenalar",
+    "description": "Oʻz kunlik normal soati bor smenalar, masalan 10 soatlik tungi smena. Smenasiz ishchiga ish haqi qoidalaridagi normal soat qoʻllanadi.",
+    "create": "Smena qoʻshish",
+    "edit": "Smenani tahrirlash",
+    "name": "Nomi",
+    "normalHoursPerDay": "Kunlik normal soat",
+    "normalHoursHint": "Ishchi shu smenada boʻlgan kunlarda ish haqi qoidalari oʻrniga qoʻllanadi: soatlik stavka, qoʻshimcha ish va yoʻqlik soatlari uchun.",
+    "offered": "Faol",
+    "archived": "Arxivda",
+    "archive": "Arxivlash",
+    "restore": "Qaytarish",
+    "empty": "Hali smenalar yoʻq",
+    "emptyDescription": "Smenalar majburiy emas. Smenasiz ishchilarga ish haqi qoidalaridagi normal soat qoʻllanadi.",
+    "dialogDescription": "Yarim tundan keyin tugaydigan tungi smena tugagan kuniga hisoblanadi.",
+    "hoursFixed": "Bu smena ishchiga berilgan, shuning uchun soati oʻzgarmaydi: aks holda ishlangan oylar oʻzgarardi. Boshqa soat uchun yangi smena qoʻshing.",
+    "confirm": {
+      "archive": {
+        "title": "Smenani arxivlaysizmi?",
+        "description": "“{{name}}” endi taklif qilinmaydi. Unga ega ishchilarda u qoladi.",
+        "button": "Arxivlash"
+      },
+      "restore": {
+        "title": "Smenani qaytarasizmi?",
+        "description": "“{{name}}” yana ishchilarga berilishi mumkin.",
+        "button": "Qaytarish"
+      }
     }
   }
 }

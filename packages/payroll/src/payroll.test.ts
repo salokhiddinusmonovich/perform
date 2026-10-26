@@ -6,6 +6,7 @@ import { missingMovingHolidays, uzbekistanFixedHolidays } from './holidays.js';
 import { calculatePay, type PaySettings, type TravelInput } from './pay.js';
 import { payOut } from './pay-out.js';
 import { checkTotals, summarizeMonth, type MonthlyTotals } from './summary.js';
+import { shiftSpans, spanCalendar } from './shifts.js';
 
 // September 2026: Sept 1 (Tue) is Independence Day, Sundays are 6/13/20/27.
 const september = buildMonthCalendar(2026, 9, { restWeekdays: [7], holidays: ['2026-09-01'] });
@@ -684,5 +685,105 @@ describe('payOut', () => {
   it('refuses amounts that are not positive', () => {
     expect(() => payOut([earned('1')], [{ id: 'a', type: 'BONUS', amount: '0' }], '1000')).toThrow(RangeError);
     expect(() => payOut([earned('1')], [{ id: 'a', type: 'BONUS', amount: '-5' }], '1000')).toThrow(RangeError);
+  });
+});
+
+describe('shifts', () => {
+  const day = { ...settings, normalHoursPerDay: '8' };
+  const night = { ...settings, normalHoursPerDay: '10' };
+  /** One part of September: its own days, the month's working days. */
+  const part = (span: { from: string; until: string }, partSettings: PaySettings, entries: DayEntry[]) =>
+    calculatePay({
+      monthlySalary: '7500000',
+      workingDays: workingDays(september),
+      calendar: spanCalendar(september, span),
+      settings: partSettings,
+      travel: null,
+      entries: entries.filter((e) => e.date >= span.from && e.date <= span.until),
+    });
+
+  it('splits the month where a shift starts, starting with the shift in force on the 1st', () => {
+    expect(shiftSpans(september, [])).toEqual([{ from: '2026-09-01', until: '2026-09-30', shift: null }]);
+    expect(shiftSpans(september, [{ from: '2026-08-10', shift: 'night' }])).toEqual([
+      { from: '2026-09-01', until: '2026-09-30', shift: 'night' },
+    ]);
+    expect(
+      shiftSpans(september, [
+        { from: '2026-10-01', shift: 'day' },
+        { from: '2026-09-15', shift: 'night' },
+        { from: '2026-08-10', shift: 'day' },
+      ]),
+    ).toEqual([
+      { from: '2026-09-01', until: '2026-09-14', shift: 'day' },
+      { from: '2026-09-15', until: '2026-09-30', shift: 'night' },
+    ]);
+    // Back to no shift, and the same shift again changes nothing.
+    expect(
+      shiftSpans(september, [
+        { from: '2026-09-01', shift: 'night' },
+        { from: '2026-09-10', shift: 'night' },
+        { from: '2026-09-20', shift: null },
+      ]),
+    ).toEqual([
+      { from: '2026-09-01', until: '2026-09-19', shift: 'night' },
+      { from: '2026-09-20', until: '2026-09-30', shift: null },
+    ]);
+    expect(() => shiftSpans(september, [{ from: '2026-09-15', shift: 'day' }, { from: '2026-09-15', shift: 'night' }])).toThrow(
+      RangeError,
+    );
+  });
+
+  it("pays a full month split only by shift exactly the salary, each part at its shift's normal hours", () => {
+    const [first, second] = shiftSpans(september, [{ from: '2026-09-15', shift: 'night' }, { from: '2026-08-01', shift: 'day' }]);
+    const entries = september.flatMap((d) =>
+      d.kind === 'WORKDAY' ? [worked(d.date, d.date < '2026-09-15' ? '8' : '10')] : [],
+    );
+    const a = part(first, day, entries);
+    const b = part(second, night, entries);
+    // 11 working days on 1–14 (the 1st is a holiday) and 14 on 15–30, of the month's 25.
+    expect(a.lines).toEqual([expect.objectContaining({ kind: 'NORMAL', hours: '88.00', amount: '3300000.00' })]);
+    expect(b.lines).toEqual([expect.objectContaining({ kind: 'NORMAL', hours: '140.00', amount: '4200000.00' })]);
+    expect(a.hourlyRate).toMatchObject({ normalHoursPerDay: '8.00', workingDays: { effective: 25 }, rounded: '37500.00' });
+    expect(b.hourlyRate).toMatchObject({ normalHoursPerDay: '10.00', workingDays: { effective: 25 }, rounded: '30000.00' });
+    expect(payOut([a, b], [], '1000').total).toBe('7500000.00');
+  });
+
+  it("uses the shift's normal hours for overtime and for absences that follow normal hours", () => {
+    const span = { from: '2026-09-01', until: '2026-09-30' };
+    const entries = [worked('2026-09-02', '10'), status('2026-09-03', 'LEAVE'), status('2026-09-04', 'SICK')];
+    const onDay = part(span, day, entries);
+    const onNight = part(span, night, entries);
+    expect(onDay.lines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'NORMAL', hours: '8.00' }),
+        expect.objectContaining({ kind: 'OVERTIME', hours: '2.00' }),
+        expect.objectContaining({ absence: 'LEAVE', hoursPerDay: '8.00', hoursPerDaySource: 'NORMAL_DAY' }),
+      ]),
+    );
+    expect(onNight.lines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'NORMAL', hours: '10.00' }),
+        expect.objectContaining({ absence: 'LEAVE', hoursPerDay: '10.00', hoursPerDaySource: 'NORMAL_DAY' }),
+        // Sick days are paid the hours set for them, whatever the shift.
+        expect.objectContaining({ absence: 'SICK', hoursPerDay: '8.00', hoursPerDaySource: 'SETTING' }),
+      ]),
+    );
+    expect(onNight.lines.some((l) => l.type === 'HOURS' && l.kind === 'OVERTIME')).toBe(false);
+  });
+
+  it("checks a part's totals against its own days", () => {
+    const second = spanCalendar(september, { from: '2026-09-15', until: '2026-09-30' });
+    const totals: MonthlyTotals = {
+      normalHours: '150',
+      overtimeHours: '0',
+      restDayHours: '0',
+      holidayHours: '0',
+      workdaysWorked: 15,
+      leaveDays: 0,
+      sickDays: 0,
+      travelDays: 0,
+    };
+    expect(checkTotals([{ place: 'p', totals }], second, '10')).toEqual([{ place: 'p', problem: 'DAYS_ABOVE_WORKING_DAYS' }]);
+    expect(checkTotals([{ place: 'p', totals: { ...totals, normalHours: '140', workdaysWorked: 14 } }], second, '10')).toEqual([]);
   });
 });

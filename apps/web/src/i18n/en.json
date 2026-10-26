@@ -30,7 +30,8 @@
     "payrollRun": "Pay calculation",
     "timesheet": "Timesheet",
     "timesheetSettings": "Timesheet entry",
-    "codes": "Codes"
+    "codes": "Codes",
+    "shifts": "Shifts"
   },
   "settings": {
     "language": "Language",
@@ -304,7 +305,8 @@
     "codeTaken": "This code is already in the list",
     "gridCodeOne": "Tick exactly one code of this absence to show in the timesheet",
     "gridCodeNotForStatus": "Only absences are shown in the timesheet",
-    "tooMany": "Too many entries"
+    "tooMany": "Too many entries",
+    "chooseWorkers": "Choose at least one worker"
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -412,7 +414,8 @@
     },
     "monthlyHours": {
       "notInMonth": "The worker wasn’t at this site in this month.",
-      "unchanged": "These hours are already entered for this month."
+      "unchanged": "These hours are already entered for this month.",
+      "partChanged": "The worker’s shifts changed meanwhile. Open the month again and enter the hours of each part."
     },
     "adjustment": {
       "notInMonth": "The worker wasn’t employed in this month.",
@@ -432,6 +435,17 @@
       "moduleOff": "This month’s plan doesn’t include the Timesheet module, so hours can’t be entered for it.",
       "wholeDay": "An absence is the worker’s whole day: it can’t share the day with other entries.",
       "dayTooManyHours": "The worker’s hours on this day add up to more than 24."
+    },
+    "shift": {
+      "notFound": "This shift doesn’t exist.",
+      "nameTaken": "A shift with this name already exists.",
+      "inUse": "A worker has had this shift, so its hours can’t change. Add a new shift instead.",
+      "inactive": "This shift is archived and can’t be given to workers."
+    },
+    "workerShift": {
+      "notFound": "This shift entry doesn’t exist.",
+      "dayTaken": "A shift already starts on this day. An owner or admin can correct it.",
+      "unchanged": "Nothing changed."
     }
   },
   "payRules": {
@@ -694,10 +708,6 @@
     "firstDay": "First working day",
     "firstDayThere": "First day there",
     "shift": "Shift",
-    "shiftName": {
-      "DAY": "Day",
-      "NIGHT": "Night"
-    },
     "move": "Move to another site or team",
     "moveHint": "Their current placement ends the day before. Earlier days stay where they were.",
     "rehire": "Hire again",
@@ -722,7 +732,32 @@
     "addSalary": "Add salary",
     "salaryHistory": "Salary history",
     "noSalaryYet": "No salary has been added yet.",
-    "salaryFromAmount": "{{amount}} · from {{month}}"
+    "salaryFromAmount": "{{amount}} · from {{month}}",
+    "shiftAction": "Shift",
+    "setShift": "Set shift",
+    "setShiftHint": "The same shift from a day for several workers. Each keeps it until a newer one.",
+    "noShift": "No shift",
+    "shiftWithHours": "{{name}} · {{hours}} h",
+    "shiftFrom": "From",
+    "shiftFromDay": "From {{date}}: {{shift}}",
+    "shiftTitle": "Shifts",
+    "shiftHint": "A shift applies from its day until the next one. A night shift that ends after midnight counts on the day it ends.",
+    "shiftCorrecting": "Correcting: {{row}}",
+    "addShift": "Add shift",
+    "shiftHistory": "Shift history",
+    "noShiftYet": "No shift yet: the normal hours of the pay rules apply.",
+    "correctShift": "Correct {{row}}",
+    "removeShift": "Remove {{row}}",
+    "confirmRemoveShift": {
+      "title": "Remove this shift?",
+      "description": "{{name}}: “{{row}}” will be removed and the shift before it will continue. The change is recorded in the audit log.",
+      "button": "Remove"
+    },
+    "shiftUnchanged": "The worker is already on this shift from that day.",
+    "shiftsSet": "Shift set for workers: {{count}}",
+    "shiftsSetSome": "Shift set for workers: {{added}}. Already on it: {{unchanged}}.",
+    "chooseWorkers": "Workers chosen: {{count}}",
+    "allShown": "All workers shown"
   },
   "impersonation": {
     "banner": "You are logged in as {{name}}.",
@@ -873,7 +908,11 @@
     },
     "note": "Note",
     "noteHint": "Optional, e.g. why it was corrected",
-    "history": "Entries"
+    "history": "Entries",
+    "shiftChanged": "Shift changed: enter again",
+    "dialogHintShift": "Shift {{name}}, {{hours}} normal hours per day. Entered hours are never changed: a correction is added as a new entry.",
+    "outdated": "Entered before a shift change",
+    "outdatedHint": "These hours are for days that are no longer one part of the month, so they count for nothing. Enter the hours of each part again."
   },
   "adjustments": {
     "title": "Adjustments",
@@ -936,7 +975,8 @@
       "noRules": "No pay rules for this month: {{sites}}.",
       "noCompanyRules": "The company’s pay rules for this month are missing. They hold the rounding step.",
       "totalsInvalid": "The monthly hours don’t fit the month (the pay rules may have changed):",
-      "invalidHours": "The daily timesheet entries contradict each other."
+      "invalidHours": "The daily timesheet entries contradict each other.",
+      "daysWithoutHours": "No hours for {{site}} ({{from}} – {{until}})."
     },
     "totalsProblems": {
       "NORMAL_ABOVE_DAYS_WORKED": "more normal hours than the working days worked × normal hours per day",
@@ -1065,6 +1105,35 @@
       "TRAVEL": "Travel / transfer",
       "OFF": "Day off (rest day or holiday)",
       "NOT_EMPLOYED": "Not employed"
+    }
+  },
+  "shifts": {
+    "title": "Shifts",
+    "description": "Shifts with their own normal hours per day, e.g. a 10-hour night shift. A worker without a shift has the normal hours of the pay rules.",
+    "create": "Add shift",
+    "edit": "Edit shift",
+    "name": "Name",
+    "normalHoursPerDay": "Normal hours per day",
+    "normalHoursHint": "Used instead of the pay rules on the days a worker is on this shift: for the hourly rate, overtime and absence hours.",
+    "offered": "In use",
+    "archived": "Archived",
+    "archive": "Archive",
+    "restore": "Bring back",
+    "empty": "No shifts yet",
+    "emptyDescription": "Shifts are optional. Without one, workers have the normal hours of the pay rules.",
+    "dialogDescription": "A night shift that ends after midnight counts on the day it ends.",
+    "hoursFixed": "A worker has had this shift, so its hours can’t change: that would change months already worked. For other hours, add a new shift.",
+    "confirm": {
+      "archive": {
+        "title": "Archive the shift?",
+        "description": "“{{name}}” will no longer be offered. Workers who have it keep it.",
+        "button": "Archive"
+      },
+      "restore": {
+        "title": "Bring the shift back?",
+        "description": "“{{name}}” can be given to workers again.",
+        "button": "Bring back"
+      }
     }
   }
 }

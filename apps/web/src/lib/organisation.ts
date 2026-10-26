@@ -1,4 +1,4 @@
-import type { EmploymentType, Role, Shift } from '@puantaj/schemas';
+import type { EmploymentType, Role } from '@puantaj/schemas';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 
@@ -46,8 +46,9 @@ export interface WorkerItem {
     teamName: string | null;
     from: string;
     until: string | null;
-    shift: Shift;
   } | null;
+  /** The worker's shift today; null: none, the normal hours of the pay rules */
+  shift: ShiftInfo | null;
   /** null for timekeepers and foremen: the API doesn't send it to them */
   personal: {
     pinfl: string | null;
@@ -75,6 +76,31 @@ export interface SalaryItem {
   setAt: string;
 }
 
+/** A shift as workers and the payslip show it. */
+export interface ShiftInfo {
+  id: string;
+  name: string;
+  /** Decimal string, e.g. "10" */
+  normalHoursPerDay: string;
+}
+
+/** A company shift (Settings). */
+export interface ShiftItem extends ShiftInfo {
+  isActive: boolean;
+  /** A worker has had it, so its normal hours can't change any more */
+  inUse: boolean;
+}
+
+/** A row of a worker's shift history, oldest first: the shift from a day until the next row. */
+export interface WorkerShiftItem {
+  id: string;
+  from: string;
+  /** null: no shift from this day */
+  shift: ShiftInfo | null;
+  setBy: { fullName: string };
+  setAt: string;
+}
+
 export const SITES_KEY = ['sites'] as const;
 export const WORKERS_KEY = ['workers'] as const;
 
@@ -91,6 +117,18 @@ export const salariesKey = (workerId: string) => [...WORKERS_KEY, workerId, 'sal
 
 export function useSalaries(workerId: string) {
   return useQuery({ queryKey: salariesKey(workerId), queryFn: () => api.get<SalaryItem[]>(`/workers/${workerId}/salaries`) });
+}
+
+export const SHIFTS_KEY = ['shifts'] as const;
+
+export function useShifts() {
+  return useQuery({ queryKey: SHIFTS_KEY, queryFn: () => api.get<ShiftItem[]>('/shifts') });
+}
+
+export const workerShiftsKey = (workerId: string) => [...WORKERS_KEY, workerId, 'shifts'] as const;
+
+export function useWorkerShifts(workerId: string) {
+  return useQuery({ queryKey: workerShiftsKey(workerId), queryFn: () => api.get<WorkerShiftItem[]>(`/workers/${workerId}/shifts`) });
 }
 
 /** After any change to sites, teams or workers: counts and lists on both pages change. */

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   adjustmentSchema,
+  shiftSchema,
+  workerShiftsSchema,
   cancelAdjustmentSchema,
   changePasswordSchema,
   companySettingsSchema,
@@ -271,7 +273,7 @@ describe('worker and placement schemas', () => {
   it('normalizes a worker and accepts its own output', () => {
     const once = createWorkerSchema.parse({
       worker,
-      placement: { siteId: '7c9e6679-7425-40de-944b-e07fc1f90ae7', teamId: '', from: '2026-09-01', shift: 'DAY' },
+      placement: { siteId: '7c9e6679-7425-40de-944b-e07fc1f90ae7', teamId: '', from: '2026-09-01' },
     });
     expect(once.worker).toMatchObject({ lastName: 'Testov', pinfl: '12345678901234', passportSeries: 'AB', phone: null, patronymic: null });
     expect(once.placement.teamId).toBeNull();
@@ -282,5 +284,28 @@ describe('worker and placement schemas', () => {
     expect(messages(workerSchema.safeParse({ ...worker, pinfl: '123' }))).toEqual(['validation.pinflInvalid']);
     expect(messages(workerSchema.safeParse({ ...worker, birthDate: '1985-02-30' }))).toEqual(['validation.dateInvalid']);
     expect(messages(siteSchema.safeParse({ name: ' ' }))).toEqual(['validation.required']);
+  });
+});
+
+describe('shifts', () => {
+  it('reads normal hours like the pay rules do', () => {
+    expect(shiftSchema.parse({ name: ' Night ', normalHoursPerDay: '10,5' })).toEqual({ name: 'Night', normalHoursPerDay: '10.5' });
+    expect(messages(shiftSchema.safeParse({ name: 'Night', normalHoursPerDay: '0' }))).toEqual(['validation.normalHoursRange']);
+    expect(messages(shiftSchema.safeParse({ name: 'Night', normalHoursPerDay: '25' }))).toEqual(['validation.normalHoursRange']);
+  });
+
+  it('gives a shift to many workers from a day, or takes it away', () => {
+    const id = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+    expect(workerShiftsSchema.parse({ workerIds: [id], shiftId: '', from: '2026-10-05' })).toEqual({
+      workerIds: [id],
+      shiftId: null,
+      from: '2026-10-05',
+    });
+    expect(messages(workerShiftsSchema.safeParse({ workerIds: [], shiftId: id, from: '2026-10-05' }))).toEqual([
+      'validation.chooseWorkers',
+    ]);
+    expect(messages(workerShiftsSchema.safeParse({ workerIds: [id, id], shiftId: id, from: '2026-10-05' }))).toEqual([
+      'validation.invalid',
+    ]);
   });
 });

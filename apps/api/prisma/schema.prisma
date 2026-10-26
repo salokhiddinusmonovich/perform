@@ -44,6 +44,7 @@ model Company {
   travelRoutes      TravelRoute[]
   timesheetCodes    TimesheetCode[]
   timesheetSettings TimesheetSettings?
+  shifts            Shift[]
 }
 
 /// What a company pays for: a limit of active workers (workers with a placement
@@ -144,6 +145,7 @@ model User {
   createdEntries       TimesheetEntry[]      @relation("EntryCreatedBy")
   updatedEntries       TimesheetEntry[]      @relation("EntryUpdatedBy")
   timesheetSettings    TimesheetSettings[]
+  workerShifts         WorkerShift[]
 }
 
 /// How a session's token is sent: the browser's httpOnly cookie, or the mobile app's
@@ -353,15 +355,55 @@ model Worker {
   salaries         Salary[]
   payrollSnapshots PayrollSnapshotWorker[]
   adjustments      Adjustment[]
+  shifts           WorkerShift[]
 
   @@unique([companyId, pinfl])
   @@unique([id, companyId])
   @@index([companyId, lastName])
 }
 
-enum Shift {
-  DAY
-  NIGHT
+/// A company's shift (AGENTS.md: Shifts): a name and its own normal hours per day, which
+/// replace the rule set's normal hours on the days a worker is on it. Owners and admins
+/// define them. The normal hours are fixed once a worker has had the shift (shift.inUse),
+/// since a change would reach months already worked; other hours make a new shift. An
+/// inactive shift isn't offered any more but stays where it is used. The hours range is a
+/// CHECK constraint in the migration.
+model Shift {
+  id                String   @id @default(uuid()) @db.Uuid
+  companyId         String   @db.Uuid
+  name              String
+  normalHoursPerDay Decimal  @db.Decimal(4, 2)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+
+  company Company       @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  workers WorkerShift[]
+
+  @@unique([companyId, name])
+  @@unique([id, companyId])
+}
+
+/// A worker's shift from a day on, until the worker's next row (AGENTS.md: Shifts). Before
+/// the first row, and from a row without a shift, the worker has none: the rule set's
+/// normal hours apply. Owners, admins, accountants and timekeepers (their sites) add rows;
+/// only owners and admins correct or remove one, audited with old and new values.
+model WorkerShift {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  workerId  String   @db.Uuid
+  /// null = no shift from this day on
+  shiftId   String?  @db.Uuid
+  fromDay   DateTime @db.Date
+  setById   String   @db.Uuid
+  setAt     DateTime @default(now())
+
+  worker Worker @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+  shift  Shift? @relation(fields: [shiftId, companyId], references: [id, companyId], onDelete: NoAction)
+  setBy  User   @relation(fields: [setById], references: [id], onDelete: NoAction)
+
+  @@unique([workerId, fromDay])
+  @@index([companyId])
+  @@index([shiftId])
 }
 
 /// A worker's placement on a site (and team) for a span of time. Moving to another
@@ -379,7 +421,6 @@ model Assignment {
   travelRouteId String?   @db.Uuid
   hiredOn       DateTime  @db.Date
   leftOn        DateTime? @db.Date
-  shift         Shift     @default(DAY)
   createdAt     DateTime  @default(now())
 
   worker        Worker           @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
@@ -724,8 +765,12 @@ model TimesheetSettings {
 }
 
 /// One placement's hours for a month entered as totals instead of daily entries
-/// (AGENTS.md: Modules), by an owner, admin or accountant. Only ever added: a correction
-/// is a newer row, and the newest (highest seq) of a placement and month counts. A
+/// (AGENTS.md: Modules), by an owner, admin or accountant. A shift change in the month
+/// splits it into parts (AGENTS.md: Shifts), each with its own totals: fromDay and
+/// untilDay are the days of the part's shift in the month (the whole month without a
+/// change, never cut to the placement). Totals for days that are no longer a part count
+/// for nothing. Only ever added: a correction is a newer row, and the newest (highest
+/// seq) of a placement, month and days counts. A
 /// worker-month has one source of hours, so these and TimesheetEntry rows never both
 /// exist for one worker and month (checked by the API). Ranges are CHECK constraints in
 /// the migration.
@@ -736,6 +781,9 @@ model MonthlyHours {
   year           Int
   /// 1-based
   month          Int
+  /// First and last day of the part's shift in the month
+  fromDay        DateTime @db.Date
+  untilDay       DateTime @db.Date
   normalHours    Decimal  @db.Decimal(5, 2)
   overtimeHours  Decimal  @db.Decimal(5, 2)
   restDayHours   Decimal  @db.Decimal(5, 2)

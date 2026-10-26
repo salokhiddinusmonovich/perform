@@ -103,6 +103,15 @@ export function canAddSalaries(me: Me | null | undefined): boolean {
   return role === 'OWNER' || role === 'ADMIN' || role === 'ACCOUNTANT';
 }
 
+/**
+ * Can give workers a shift from a day (timekeepers: workers on their sites; the API checks
+ * which). Correcting or removing one is canManageCompany.
+ */
+export function canAssignShifts(me: Me | null | undefined): boolean {
+  const role = me?.activeCompany?.role;
+  return role === 'OWNER' || role === 'ADMIN' || role === 'ACCOUNTANT' || role === 'TIMEKEEPER';
+}
+
 /** Can enter hours as monthly totals (only ever added). */
 export function canEnterMonthlyHours(me: Me | null | undefined): boolean {
   const role = me?.activeCompany?.role;

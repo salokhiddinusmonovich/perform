@@ -1,27 +1,36 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
 import {
   createWorkerSchema,
   leaveSchema,
   placementSchema,
   salarySchema,
+  shiftSchema,
   siteSchema,
   staffSchema,
   teamSchema,
   updateSiteSchema,
+  updateShiftSchema,
   updateTeamSchema,
   workerSchema,
+  workerShiftSchema,
+  workerShiftsSchema,
   type CreateWorker,
   type Leave,
   type Placement,
   type Salary,
+  type Shift,
   type Site,
   type Team,
   type UpdateSite,
+  type UpdateShift,
   type UpdateTeam,
   type Worker,
+  type WorkerShift,
+  type WorkerShifts,
 } from '@puantaj/schemas';
 import { CompanyAuth, ForModule, Roles, type CompanyAuthContext } from '../auth/auth.context';
 import { ZodPipe } from '../common/zod.pipe';
+import { ShiftsService, type ShiftView, type WorkerShiftView } from './shifts.service';
 import { SitesService, type SiteView, type StaffView } from './sites.service';
 import { WorkersService, type SalaryView, type WorkerView } from './workers.service';
 
@@ -136,7 +145,10 @@ export class TeamsController {
 @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER', 'TIMEKEEPER', 'FOREMAN')
 @Controller('workers')
 export class WorkersController {
-  constructor(private readonly workers: WorkersService) {}
+  constructor(
+    private readonly workers: WorkersService,
+    private readonly shifts: ShiftsService,
+  ) {}
 
   @Get()
   list(@CompanyAuth() auth: CompanyAuthContext): Promise<WorkerView[]> {
@@ -195,6 +207,36 @@ export class WorkersController {
     return this.workers.addSalary(auth, id, body);
   }
 
+  /** The worker's shifts, oldest first. A shift carries no pay amounts, so everyone who sees the worker sees them. */
+  @Get(':id/shifts')
+  workerShifts(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<WorkerShiftView[]> {
+    return this.shifts.forWorker(auth, id);
+  }
+
+  /** Corrects a shift row: owners and admins only (others add a newer one). */
+  @Put(':id/shifts/:rowId')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  correctShift(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('rowId', ParseUUIDPipe) rowId: string,
+    @Body(new ZodPipe(workerShiftSchema)) body: WorkerShift,
+  ): Promise<void> {
+    return this.shifts.correct(auth, id, rowId, body);
+  }
+
+  @Delete(':id/shifts/:rowId')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  removeShift(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('rowId', ParseUUIDPipe) rowId: string,
+  ): Promise<void> {
+    return this.shifts.remove(auth, id, rowId);
+  }
+
   @Post(':id/leave')
   @Roles('OWNER', 'ADMIN', 'PROJECT_MANAGER')
   @HttpCode(204)
@@ -204,5 +246,57 @@ export class WorkersController {
     @Body(new ZodPipe(leaveSchema)) body: Leave,
   ): Promise<void> {
     return this.workers.leave(auth, id, body.date);
+  }
+}
+
+/**
+ * The company's shifts (AGENTS.md: Shifts). Everyone sees them; owners and admins define
+ * them.
+ */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER', 'TIMEKEEPER', 'FOREMAN')
+@Controller('shifts')
+export class ShiftsController {
+  constructor(private readonly shifts: ShiftsService) {}
+
+  @Get()
+  list(@CompanyAuth() auth: CompanyAuthContext): Promise<ShiftView[]> {
+    return this.shifts.list(auth);
+  }
+
+  @Post()
+  @Roles('OWNER', 'ADMIN')
+  create(@CompanyAuth() auth: CompanyAuthContext, @Body(new ZodPipe(shiftSchema)) body: Shift): Promise<{ id: string }> {
+    return this.shifts.create(auth, body);
+  }
+
+  @Patch(':id')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  update(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(updateShiftSchema)) body: UpdateShift,
+  ): Promise<void> {
+    return this.shifts.update(auth, id, body);
+  }
+}
+
+/**
+ * Giving workers a shift from a day, one or many at once: owners, admins and accountants
+ * for every worker, timekeepers for workers placed on their sites (access.ts).
+ */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'TIMEKEEPER')
+@Controller('worker-shifts')
+export class WorkerShiftsController {
+  constructor(private readonly shifts: ShiftsService) {}
+
+  @Post()
+  assign(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Body(new ZodPipe(workerShiftsSchema)) body: WorkerShifts,
+  ): Promise<{ added: number; unchanged: number }> {
+    return this.shifts.assign(auth, body);
   }
 }

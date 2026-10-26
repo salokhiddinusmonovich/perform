@@ -62,11 +62,9 @@ export const updateTeamSchema = teamSchema
   .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
 export type UpdateTeam = z.output<typeof updateTeamSchema>;
 
-/** Mirrors EmploymentType and Shift in apps/api/prisma/schema.prisma. */
+/** Mirrors EmploymentType in apps/api/prisma/schema.prisma. */
 export const EMPLOYMENT_TYPES = ['DIRECT', 'INDIRECT'] as const;
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
-export const SHIFTS = ['DAY', 'NIGHT'] as const;
-export type Shift = (typeof SHIFTS)[number];
 
 /** Uzbek personal ID: 14 digits. */
 const pinflSchema = z
@@ -102,7 +100,6 @@ export const placementSchema = z.object({
   teamId: optionalUuid,
   /** First day at this site (the hire date for a new worker). */
   from: isoDateSchema,
-  shift: z.enum(SHIFTS, { error: 'validation.required' }),
 });
 export type PlacementInput = z.input<typeof placementSchema>;
 export type Placement = z.output<typeof placementSchema>;
@@ -130,6 +127,43 @@ export const salarySchema = z.object({
 });
 export type SalaryInput = z.input<typeof salarySchema>;
 export type Salary = z.output<typeof salarySchema>;
+
+/**
+ * A company's shift with its own normal hours per day (AGENTS.md: Shifts). Same range as
+ * the pay rules' normal hours per day.
+ */
+export const shiftSchema = z.object({
+  name: requiredName(60),
+  normalHoursPerDay: decimalSchema({ min: 0, minExclusive: true, max: 24, rangeError: 'validation.normalHoursRange' }),
+});
+export type ShiftInput = z.input<typeof shiftSchema>;
+export type Shift = z.output<typeof shiftSchema>;
+
+/** Renaming a shift, changing its hours while nobody has had it, or (de)activating it. */
+export const updateShiftSchema = shiftSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
+export type UpdateShift = z.output<typeof updateShiftSchema>;
+
+/** A worker's shift from a day on, until a newer one. No shift (null): the rule set's normal hours. */
+export const workerShiftSchema = z.object({
+  shiftId: optionalUuid,
+  from: isoDateSchema,
+});
+export type WorkerShiftInput = z.input<typeof workerShiftSchema>;
+export type WorkerShift = z.output<typeof workerShiftSchema>;
+
+/** The same shift from a day for many workers at once ("night shift from day X"). */
+export const workerShiftsSchema = workerShiftSchema.extend({
+  workerIds: z
+    .array(uuid)
+    .min(1, { error: 'validation.chooseWorkers' })
+    .max(1000, { error: 'validation.tooMany' })
+    .refine((ids) => new Set(ids).size === ids.length, { error: 'validation.invalid' }),
+});
+export type WorkerShiftsInput = z.input<typeof workerShiftsSchema>;
+export type WorkerShifts = z.output<typeof workerShiftsSchema>;
 
 /** Assigning a company member to a site (project manager, timekeeper) or a team (foreman). */
 export const staffSchema = z.object({ userId: uuid });

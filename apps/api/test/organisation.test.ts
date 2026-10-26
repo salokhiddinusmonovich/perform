@@ -42,7 +42,7 @@ async function member(companyId: string, role: Role) {
 async function hire(agent: Awaited<ReturnType<typeof company>>['agent'], siteId: string, teamId: string | null, extra = {}) {
   const res = await agent
     .post('/api/workers')
-    .send({ worker: { ...WORKER, pinfl: '', ...extra }, placement: { siteId, teamId, from: '2026-09-01', shift: 'DAY' } })
+    .send({ worker: { ...WORKER, pinfl: '', ...extra }, placement: { siteId, teamId, from: '2026-09-01' } })
     .expect(201);
   return res.body.id as string;
 }
@@ -97,7 +97,7 @@ describe('sites and teams', () => {
   it('refuses closing a site or team that a worker is placed in from a later day', async () => {
     const { agent, siteA, siteB, teamA } = await company();
     const worker = await hire(agent, siteB, null);
-    await agent.post(`/api/workers/${worker}/placements`).send({ siteId: siteA, teamId: teamA, from: daysFromToday(7), shift: 'DAY' }).expect(204);
+    await agent.post(`/api/workers/${worker}/placements`).send({ siteId: siteA, teamId: teamA, from: daysFromToday(7) }).expect(204);
     expect((await agent.patch(`/api/teams/${teamA}`).send({ isActive: false }).expect(409)).body.code).toBe('team.hasWorkers');
     expect((await agent.patch(`/api/sites/${siteA}`).send({ isActive: false }).expect(409)).body.code).toBe('site.hasWorkers');
   });
@@ -189,7 +189,7 @@ describe('workers', () => {
     const { company: c, agent, siteA, teamA } = await company();
     const res = await agent
       .post('/api/workers')
-      .send({ worker: WORKER, placement: { siteId: siteA, teamId: teamA, from: '2026-09-01', shift: 'DAY' } })
+      .send({ worker: WORKER, placement: { siteId: siteA, teamId: teamA, from: '2026-09-01' } })
       .expect(201);
     const full = (await agent.get(`/api/workers/${res.body.id}`).expect(200)).body;
     expect(full).toEqual({
@@ -207,8 +207,8 @@ describe('workers', () => {
         teamName: 'Team A',
         from: '2026-09-01',
         until: null,
-        shift: 'DAY',
       },
+      shift: null,
       personal: {
         pinfl: '12345678901234',
         birthDate: '1990-05-01',
@@ -239,12 +239,12 @@ describe('workers', () => {
     await hire(agent, siteA, teamA, { pinfl: '12345678901234' });
     const dup = await agent
       .post('/api/workers')
-      .send({ worker: WORKER, placement: { siteId: siteA, teamId: null, from: '2026-09-01', shift: 'DAY' } })
+      .send({ worker: WORKER, placement: { siteId: siteA, teamId: null, from: '2026-09-01' } })
       .expect(409);
     expect(dup.body.code).toBe('worker.pinflTaken');
     const wrongTeam = await agent
       .post('/api/workers')
-      .send({ worker: { ...WORKER, pinfl: '' }, placement: { siteId: siteB, teamId: teamA, from: '2026-09-01', shift: 'DAY' } })
+      .send({ worker: { ...WORKER, pinfl: '' }, placement: { siteId: siteB, teamId: teamA, from: '2026-09-01' } })
       .expect(400);
     expect(wrongTeam.body.issues).toEqual([{ path: 'teamId', message: 'validation.teamNotOnSite' }]);
   });
@@ -252,12 +252,12 @@ describe('workers', () => {
   it('moves a worker to another site from a day, keeping the old placement as history', async () => {
     const { agent, siteA, siteB, teamA } = await company();
     const id = await hire(agent, siteA, teamA);
-    const early = await agent.post(`/api/workers/${id}/placements`).send({ siteId: siteB, from: '2026-09-01', shift: 'DAY' }).expect(400);
+    const early = await agent.post(`/api/workers/${id}/placements`).send({ siteId: siteB, from: '2026-09-01' }).expect(400);
     expect(early.body.issues).toEqual([{ path: 'from', message: 'validation.placementBeforeCurrent' }]);
 
-    await agent.post(`/api/workers/${id}/placements`).send({ siteId: siteB, teamId: null, from: '2026-10-15', shift: 'NIGHT' }).expect(204);
+    await agent.post(`/api/workers/${id}/placements`).send({ siteId: siteB, teamId: null, from: '2026-10-15' }).expect(204);
     const worker = (await agent.get(`/api/workers/${id}`).expect(200)).body;
-    expect(worker.placement).toMatchObject({ siteId: siteB, teamId: null, from: '2026-10-15', until: null, shift: 'NIGHT' });
+    expect(worker.placement).toMatchObject({ siteId: siteB, teamId: null, from: '2026-10-15', until: null });
     const placements = await ctx.prisma.assignment.findMany({ where: { workerId: id }, orderBy: { hiredOn: 'asc' } });
     expect(placements.map((p) => [p.siteId, p.leftOn?.toISOString().slice(0, 10) ?? null])).toEqual([
       [siteA, '2026-10-14'],
@@ -273,7 +273,7 @@ describe('workers', () => {
     await agent.post(`/api/workers/${id}/leave`).send({ date: '2026-09-20' }).expect(204);
     expect((await agent.get(`/api/workers/${id}`).expect(200)).body.placement.until).toBe('2026-09-20');
 
-    await agent.post(`/api/workers/${id}/placements`).send({ siteId: siteA, from: '2026-11-01', shift: 'DAY' }).expect(204);
+    await agent.post(`/api/workers/${id}/placements`).send({ siteId: siteA, from: '2026-11-01' }).expect(204);
     const placements = await ctx.prisma.assignment.count({ where: { workerId: id } });
     expect(placements).toBe(2);
   });
@@ -283,10 +283,10 @@ describe('workers', () => {
     const id = await hire(agent, siteA, null);
     await lock(c.id, 2026, 10);
     expect((await agent.post(`/api/workers/${id}/leave`).send({ date: '2026-09-20' }).expect(409)).body.code).toBe('period.locked');
-    await agent.post(`/api/workers/${id}/placements`).send({ siteId: siteB, from: '2026-09-15', shift: 'DAY' }).expect(409);
+    await agent.post(`/api/workers/${id}/placements`).send({ siteId: siteB, from: '2026-09-15' }).expect(409);
     const hired = await agent
       .post('/api/workers')
-      .send({ worker: { ...WORKER, pinfl: '' }, placement: { siteId: siteA, from: '2026-10-05', shift: 'DAY' } })
+      .send({ worker: { ...WORKER, pinfl: '' }, placement: { siteId: siteA, from: '2026-10-05' } })
       .expect(409);
     expect(hired.body.code).toBe('period.locked');
   });
@@ -302,10 +302,10 @@ describe('workers', () => {
     await pm.agent.get(`/api/workers/${theirs}`).expect(404);
     await pm.agent.patch(`/api/workers/${theirs}`).send({ ...WORKER, pinfl: '' }).expect(404);
     // Can't move their worker away to a site they don't manage.
-    await pm.agent.post(`/api/workers/${mine}/placements`).send({ siteId: siteB, from: '2026-10-01', shift: 'DAY' }).expect(403);
+    await pm.agent.post(`/api/workers/${mine}/placements`).send({ siteId: siteB, from: '2026-10-01' }).expect(403);
     await pm.agent
       .post('/api/workers')
-      .send({ worker: { ...WORKER, pinfl: '' }, placement: { siteId: siteB, from: '2026-09-01', shift: 'DAY' } })
+      .send({ worker: { ...WORKER, pinfl: '' }, placement: { siteId: siteB, from: '2026-09-01' } })
       .expect(403);
   });
 
@@ -329,13 +329,13 @@ describe('workers', () => {
     const ids = async (fm: typeof fmA) => (await fm.agent.get('/api/workers').expect(200)).body.map((w: { id: string }) => w.id);
 
     const moving = await hire(agent, siteA, teamA);
-    await agent.post(`/api/workers/${moving}/placements`).send({ siteId: siteA, teamId: teamB, from: daysFromToday(7), shift: 'DAY' }).expect(204);
+    await agent.post(`/api/workers/${moving}/placements`).send({ siteId: siteA, teamId: teamB, from: daysFromToday(7) }).expect(204);
     expect(await ids(fmA)).toEqual([moving]);
     await fmA.agent.get(`/api/workers/${moving}`).expect(200);
     expect(await ids(fmB)).toEqual([moving]);
 
     const moved = await hire(agent, siteA, teamA, { firstName: 'Moved' });
-    await agent.post(`/api/workers/${moved}/placements`).send({ siteId: siteA, teamId: teamB, from: '2026-10-01', shift: 'DAY' }).expect(204);
+    await agent.post(`/api/workers/${moved}/placements`).send({ siteId: siteA, teamId: teamB, from: '2026-10-01' }).expect(204);
     expect(await ids(fmA)).toEqual([moving]);
     await fmA.agent.get(`/api/workers/${moved}`).expect(404);
   });
@@ -474,7 +474,7 @@ describe('tenant isolation', () => {
     // B's member can't be assigned to A's site either.
     await a.agent.post(`/api/sites/${a.siteA}/staff`).send({ userId: bTk.user.id }).expect(404);
     // A's site in B's worker placement is refused.
-    await b.agent.post(`/api/workers/${bWorker}/placements`).send({ siteId: a.siteA, from: '2026-10-01', shift: 'DAY' }).expect(404);
+    await b.agent.post(`/api/workers/${bWorker}/placements`).send({ siteId: a.siteA, from: '2026-10-01' }).expect(404);
     expect(await ctx.prisma.site.count({ where: { name: 'Taken over' } })).toBe(0);
   });
 });

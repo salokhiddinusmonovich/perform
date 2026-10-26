@@ -212,7 +212,7 @@ describe('plan changes', () => {
     expect(me.activeCompany).toMatchObject({ modules: ['PAYROLL'], subscription: { planName: null } });
     // No limit this month.
     const siteId = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
-    const hire = (from: string) => ({ worker: WORKER, placement: { siteId, teamId: null, from, shift: 'DAY' } });
+    const hire = (from: string) => ({ worker: WORKER, placement: { siteId, teamId: null, from } });
     await owner.agent.post('/api/workers').send(hire(day(0))).expect(201);
     await owner.agent.post('/api/workers').send(hire(day(0))).expect(201);
     // Next month's limit applies to placements starting then.
@@ -358,7 +358,7 @@ describe('worker limit', () => {
   }
   const hire = (siteId: string, from = day(0)) => ({
     worker: WORKER,
-    placement: { siteId, teamId: null, from, shift: 'DAY' },
+    placement: { siteId, teamId: null, from },
   });
 
   it('refuses a worker beyond the plan’s limit of active workers', async () => {
@@ -375,7 +375,7 @@ describe('worker limit', () => {
     await agent.post('/api/workers').send(hire(siteA)).expect(201);
     await ctx.prisma.plan.update({ where: { id: plan.id }, data: { maxActiveWorkers: 1 } });
 
-    await agent.post(`/api/workers/${first}/placements`).send({ siteId: siteB, teamId: null, from: day(1), shift: 'DAY' }).expect(204);
+    await agent.post(`/api/workers/${first}/placements`).send({ siteId: siteB, teamId: null, from: day(1) }).expect(204);
     expect((await agent.post('/api/workers').send(hire(siteA)).expect(409)).body.code).toBe('plan.workerLimitReached');
   });
 
