@@ -103,6 +103,14 @@ Multi-company web app for construction **timesheets and payroll** ("puantaj" in 
   - In a company without the Timesheet module, periods count the absence days for monthly totals, still one source per worker-month.
   - **Worker history:** one timeline per worker in date order (hire, placements and moves, salary changes, absence periods, adjustments, exit). It is a view over existing records, not a new store.
   - Later, not now: leave balance, attaching a photo of the sick note.
+- **Departments (decided 2026-10-28):** a company's own tree of departments (e.g. HSE, QA/QC, IT), with sub-departments to any depth. Departments are company-wide, not per site.
+  - **A company setting turns departments on.** When on, every placement must have a department; when off, departments are hidden. Existing companies keep working unchanged.
+  - A worker can be placed in a department at **any level** (e.g. the HSE manager in HSE itself, inspectors in a sub-department).
+  - **A brigade (team) belongs to one department**, as well as to its site. A placement in a brigade takes the brigade's department, so the two never disagree. Brigades stay optional.
+  - **Who:** only an owner or admin creates, renames, moves or deactivates departments (like sites). Project managers create brigades in a department on their sites. A department is deactivated, never deleted, once used, and can't be moved under its own sub-department.
+  - Moving to another department is a new placement from a date, like a site move. Departments don't affect pay: pay rules still follow the site's rule set.
+  - Workers, payroll results and exports can be filtered and totalled by department, and a department's totals include its sub-departments.
+  - Department names are company data, not translated. Access is not scoped by department (yet).
 - **Adjustments (decided 2026-10-24):** money added to or taken from a worker's pay for one month: **bonus** (+), **advance** (−, money already handed over) and **deduction** (−). The amount is always entered as positive; the type gives the sign.
   - An adjustment belongs to the **worker-month**, not to a placement (like salaries). On a split payslip it shows once, in its own block after the parts. The monthly travel amount is separate and stays per placement, since it follows the route.
   - **Who:** owner, admin and accountant add them; project managers only view them on their sites; timekeepers and foremen never see them. Only in an open month.
