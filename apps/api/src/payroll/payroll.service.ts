@@ -19,6 +19,7 @@ import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict } from '../common/api-error';
 import { inMonth, isoDay, monthSpan, todayIn } from '../common/dates';
 import { seesPlacement } from '../organisation/access';
+import { subtreeIds } from '../organisation/departments.service';
 import { placementDaysIn, shiftPartsOf, type ShiftPart } from '../organisation/worker-shifts';
 import { SALARY_ORDER } from '../organisation/workers.service';
 import { lockCompanyMonths } from '../pay-rules/months';
@@ -93,6 +94,12 @@ export interface PayOutView extends Omit<PayOut, 'adjustments'> {
 
 export interface PayrollWorkerView {
   worker: { id: string; lastName: string; firstName: string; patronymic: string | null; position: string | null };
+  /**
+   * The worker's department for the month (AGENTS.md: Departments): the one of their last
+   * placement in it, so each worker counts in one department's totals. null: none set;
+   * absent in months locked before departments.
+   */
+  department?: { id: string; name: string } | null;
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
   /** Where the hours came from, or null when there are none */
   source: 'DAILY' | 'TOTALS' | null;
@@ -127,6 +134,20 @@ export interface LockView {
   unlocked: { at: Date; by: { fullName: string } | null; reason: string } | null;
 }
 
+/**
+ * A department's workers and pay in the month (AGENTS.md: Departments), including its
+ * sub-departments. Each worker counts in their department of the month (PayrollWorkerView).
+ */
+export interface DepartmentTotalView {
+  /** null: workers without a department */
+  departmentId: string | null;
+  workers: number;
+  /** Workers that can't be paid yet, so not in the total */
+  withProblems: number;
+  /** Sum of the workers that could be paid */
+  total: string;
+}
+
 export interface PayrollMonthView {
   year: number;
   month: number;
@@ -137,6 +158,8 @@ export interface PayrollMonthView {
   total: string;
   /** While locked: what the latest lock saved. Otherwise worked out now. */
   workers: PayrollWorkerView[];
+  /** Totals per department with workers this month, a department's including its sub-departments */
+  departments: DepartmentTotalView[];
   /** Every lock of the month, oldest first */
   locks: LockView[];
 }
@@ -147,6 +170,7 @@ type Sees = (placement: { siteId: string; teamId: string | null }) => boolean;
 const PLACEMENT_INCLUDE = {
   worker: { select: { id: true, lastName: true, firstName: true, patronymic: true, position: true } },
   site: { select: { name: true } },
+  department: { select: { id: true, name: true } },
   travelRoute: { select: { name: true, amountPerDay: true } },
 } as const satisfies Prisma.AssignmentInclude;
 
@@ -214,6 +238,7 @@ export class PayrollService {
       ended: monthEnded(auth.company.timezone, ym),
       total: sumTotals(workers),
       workers,
+      departments: await this.departmentTotals(companyId, workers),
       locks: snapshots.map((snap, i) => {
         const unlock = unlocks.find((u) => (u.data as { lockNumber?: number }).lockNumber === snap.lockNumber);
         return {
@@ -319,6 +344,28 @@ export class PayrollService {
     });
   }
 
+  /** Totals per department, each including the departments under it; workers without one last. */
+  private async departmentTotals(companyId: string, workers: readonly PayrollWorkerView[]): Promise<DepartmentTotalView[]> {
+    const all = await this.prisma.department.findMany({
+      where: { companyId },
+      select: { id: true, parentId: true },
+      orderBy: { name: 'asc' },
+    });
+    const totals = (rows: readonly PayrollWorkerView[]) => ({
+      workers: rows.length,
+      withProblems: rows.filter((w) => w.total === null).length,
+      total: sumTotals(rows),
+    });
+    const out: DepartmentTotalView[] = all.flatMap((d) => {
+      const ids = subtreeIds(all, d.id);
+      const rows = workers.filter((w) => w.department && ids.has(w.department.id));
+      return rows.length > 0 ? [{ departmentId: d.id, ...totals(rows) }] : [];
+    });
+    const without = workers.filter((w) => !w.department);
+    if (without.length > 0) out.push({ departmentId: null, ...totals(without) });
+    return out;
+  }
+
   /** Workers with a placement in the month that the caller sees. */
   private async visibleWorkers(companyId: string, { year, month }: YearMonth, sees: Sees): Promise<Set<string>> {
     const rows = await this.prisma.assignment.findMany({
@@ -396,6 +443,8 @@ export class PayrollService {
       const ownEntries = entries.filter((e) => own.some((p) => p.id === e.assignmentId));
       const view: PayrollWorkerView = {
         worker: own[0].worker,
+        // Placements are in the order of their first day.
+        department: own.at(-1)!.department,
         salary: salary && {
           fromYear: salary.fromYear,
           fromMonth: salary.fromMonth,

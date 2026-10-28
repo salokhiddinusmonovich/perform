@@ -11,6 +11,7 @@ import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
+import { DepartmentFilter, inDepartmentFilter, type DepartmentFilterValue } from '@/components/department-select';
 import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
 import { MonthSwitcher } from '@/components/month-switcher';
 import { PageHeader } from '@/components/page-header';
@@ -22,9 +23,18 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
-import { canAddAdjustments, canEnterMonthlyHours, canLockMonths, canUnlockMonths, seesPay, useMe, type Me } from '@/lib/auth';
+import {
+  canAddAdjustments,
+  canEnterMonthlyHours,
+  canLockMonths,
+  canUnlockMonths,
+  seesPay,
+  useMe,
+  usesDepartments,
+  type Me,
+} from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { workerName } from '@/lib/organisation';
+import { departmentTree, useDepartments, workerName, type DepartmentNode } from '@/lib/organisation';
 import {
   ADJUSTMENTS_KEY,
   currentMonth,
@@ -32,6 +42,7 @@ import {
   MONTHLY_HOURS_KEY,
   PAYROLL_KEY,
   usePayroll,
+  type DepartmentTotal,
   type LockItem,
   type PayrollMonth,
   type PayrollPart,
@@ -61,6 +72,17 @@ function PayrollView({ me }: { me: Me }) {
   const [open, setOpen] = useState<PayrollWorker | null>(null);
   const data = usePayroll(month);
   const withProblems = data.data?.workers.filter((w) => w.problems.length > 0).length ?? 0;
+  const showDepartments = usesDepartments(me);
+  const departments = useDepartments();
+  const tree = useMemo(() => departmentTree(departments.data ?? []), [departments.data]);
+  const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilterValue>('all');
+  const rows = useMemo(
+    () =>
+      showDepartments
+        ? data.data?.workers.filter((w) => inDepartmentFilter(departmentFilter, w.department?.id, departments.data ?? []))
+        : data.data?.workers,
+    [data.data, showDepartments, departmentFilter, departments.data],
+  );
 
   const columns = useMemo<ColumnDef<PayrollWorker, unknown>[]>(
     () => [
@@ -77,6 +99,16 @@ function PayrollView({ me }: { me: Me }) {
           </div>
         ),
       },
+      ...(showDepartments
+        ? [
+            {
+              id: 'department',
+              accessorFn: (w) => (w.department ? (tree.find((d) => d.id === w.department!.id)?.path ?? w.department.name) : ''),
+              header: t('departments.department'),
+              cell: ({ getValue }) => (getValue() as string) || '—',
+            } satisfies ColumnDef<PayrollWorker, unknown>,
+          ]
+        : []),
       {
         id: 'salary',
         accessorFn: (w) => (w.salary ? Number(w.salary.monthlySalary) : -1),
@@ -123,7 +155,7 @@ function PayrollView({ me }: { me: Me }) {
         ),
       },
     ],
-    [t, format, currency],
+    [t, format, currency, showDepartments, tree],
   );
 
   const monthName = format.month(month.year, month.month);
@@ -167,14 +199,24 @@ function PayrollView({ me }: { me: Me }) {
       )}
       <DataTable
         columns={columns}
-        data={data.data?.workers}
+        data={rows}
         isLoading={data.isPending}
         isError={data.isError}
         onRetry={() => data.refetch()}
-        toolbar={<MonthSwitcher value={month} onChange={setMonth} />}
+        toolbar={
+          <>
+            <MonthSwitcher value={month} onChange={setMonth} />
+            {showDepartments && (
+              <DepartmentFilter departments={departments.data ?? []} value={departmentFilter} onChange={setDepartmentFilter} />
+            )}
+          </>
+        }
         emptyTitle={t('payroll.emptyTitle')}
         emptyDescription={t('payroll.emptyDescription')}
       />
+      {showDepartments && data.data && data.data.departments.length > 0 && (
+        <DepartmentTotals totals={data.data.departments} tree={tree} currency={currency} />
+      )}
       {data.data && data.data.locks.length > 0 && <LockHistory locks={data.data.locks} currency={currency} />}
       {open && <PayslipDialog worker={open} month={month} currency={currency} onClose={() => setOpen(null)} />}
       {data.data && (
@@ -285,6 +327,61 @@ function UnlockDialog({ month, onClose, onSaved }: { month: YearMonth; onClose: 
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** The month's pay per department, in tree order; a department's total includes its sub-departments. */
+function DepartmentTotals({
+  totals,
+  tree,
+  currency,
+}: {
+  totals: DepartmentTotal[];
+  tree: DepartmentNode[];
+  currency: string;
+}) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const rows = useMemo(
+    () => [
+      ...tree.flatMap((d) => totals.filter((x) => x.departmentId === d.id).map((x) => ({ ...x, label: d.path }))),
+      ...totals.filter((x) => x.departmentId === null).map((x) => ({ ...x, label: t('departments.none') })),
+    ],
+    [totals, tree, t],
+  );
+  const columns = useMemo<ColumnDef<(typeof rows)[number], unknown>[]>(
+    () => [
+      { id: 'department', accessorKey: 'label', header: t('departments.department'), enableSorting: false },
+      {
+        id: 'workers',
+        header: t('departments.workers'),
+        enableSorting: false,
+        cell: ({ row }) => <span className="tabular-nums">{row.original.workers}</span>,
+      },
+      {
+        id: 'total',
+        header: t('payroll.pay'),
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold tabular-nums">{format.money(row.original.total, currency)}</span>
+            {row.original.withProblems > 0 && (
+              <StatusBadge tone="warning">{t('payroll.workersWithProblems', { count: row.original.withProblems })}</StatusBadge>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [t, format, currency],
+  );
+  return (
+    <section className="mt-4 space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold">{t('payroll.byDepartment')}</h2>
+        <p className="text-sm text-muted-foreground">{t('payroll.byDepartmentHint')}</p>
+      </div>
+      <DataTable columns={columns} data={rows} />
+    </section>
   );
 }
 

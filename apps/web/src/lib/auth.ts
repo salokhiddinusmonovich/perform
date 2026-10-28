@@ -20,6 +20,8 @@ export interface Me {
     role: Role;
     /** PAYROLL always; TIMESHEET when the company has it */
     modules: ('PAYROLL' | 'TIMESHEET')[];
+    /** The company uses departments: placements need one, and they are shown */
+    departments: boolean;
     /** Sites a project manager or timekeeper works on; null for other roles */
     siteIds: string[] | null;
     /** Teams a foreman leads; null for other roles */
@@ -143,6 +145,11 @@ export function inCompany(me: Me | null | undefined): boolean {
 /** The company has the Timesheet module (daily hours). */
 export function hasTimesheet(me: Me | null | undefined): boolean {
   return me?.activeCompany?.modules.includes('TIMESHEET') === true;
+}
+
+/** The company uses departments (switched on by an owner or admin). */
+export function usesDepartments(me: Me | null | undefined): boolean {
+  return me?.activeCompany?.departments === true;
 }
 
 /** Can change who enters daily hours (Timesheet module, owners and admins). */

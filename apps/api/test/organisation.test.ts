@@ -205,6 +205,9 @@ describe('workers', () => {
         siteName: 'Site A',
         teamId: teamA,
         teamName: 'Team A',
+        // The company doesn't use departments, and the team has none.
+        departmentId: null,
+        departmentName: null,
         from: '2026-09-01',
         until: null,
       },
@@ -246,7 +249,7 @@ describe('workers', () => {
       .post('/api/workers')
       .send({ worker: { ...WORKER, pinfl: '' }, placement: { siteId: siteB, teamId: teamA, from: '2026-09-01' } })
       .expect(400);
-    expect(wrongTeam.body.issues).toEqual([{ path: 'teamId', message: 'validation.teamNotOnSite' }]);
+    expect(wrongTeam.body.issues).toEqual([{ path: 'placement.teamId', message: 'validation.teamNotOnSite' }]);
   });
 
   it('moves a worker to another site from a day, keeping the old placement as history', async () => {

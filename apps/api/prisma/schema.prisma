@@ -15,20 +15,23 @@ datasource db {
 // ---------- Tenancy & access ----------
 
 model Company {
-  id        String    @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String    @unique
+  id                 String    @id @default(uuid()) @db.Uuid
+  name               String
+  slug               String    @unique
   /// ISO 4217, e.g. "UZS"
-  currency  String    @default("UZS")
+  currency           String    @default("UZS")
   /// IANA zone used to interpret timesheet dates
-  timezone  String    @default("Asia/Tashkent")
+  timezone           String    @default("Asia/Tashkent")
   /// Deactivated companies can't be used by their members
-  isActive  Boolean   @default(true)
+  isActive           Boolean   @default(true)
   /// The last month paid for (its 1st day): then a 14-day grace period after that month,
   /// then the company is read-only.
   /// Set at creation, then by each SubscriptionPayment.
-  paidThrough DateTime? @db.Date
-  createdAt DateTime  @default(now())
+  paidThrough        DateTime? @db.Date
+  /// Departments are used (AGENTS.md: Departments): every new placement needs one, and
+  /// they are shown. Off: hidden, and nothing needs one. Owners and admins switch it.
+  departmentsEnabled Boolean   @default(false)
+  createdAt          DateTime  @default(now())
 
   /// Its plan per month (no rows only for companies from before plans: no limits, Payroll only)
   plans             CompanyPlan[]
@@ -45,6 +48,7 @@ model Company {
   timesheetCodes    TimesheetCode[]
   timesheetSettings TimesheetSettings?
   shifts            Shift[]
+  departments       Department[]
 }
 
 /// What a company pays for: a limit of active workers (workers with a placement
@@ -302,26 +306,55 @@ model Site {
   @@index([companyId])
 }
 
-model Team {
-  id          String  @id @default(uuid()) @db.Uuid
-  companyId   String  @db.Uuid
-  siteId      String  @db.Uuid
-  name        String
-  /// e.g. ELECTRICAL, MECHANICAL, ADMIN
-  department  String?
-  foremanName String?
-  isActive    Boolean @default(true)
+/// A company's department (AGENTS.md: Departments), e.g. HSE or QA/QC, in a tree of any
+/// depth: parentId null is a top-level department. Company-wide, not per site. Owners
+/// and admins manage them; one is deactivated, never deleted, once used. Names are unique
+/// among siblings, ignoring case (a unique index added by hand in the migration). The API
+/// refuses a parent that would make a cycle.
+model Department {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  parentId  String?  @db.Uuid
+  name      String
+  code      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
 
-  company     Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  site        Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  parent      Department?  @relation("DepartmentTree", fields: [parentId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  children    Department[] @relation("DepartmentTree")
+  teams       Team[]
   assignments Assignment[]
-  entries     TimesheetEntry[]
-  foremen     MemberTeam[]
+
+  @@unique([id, companyId])
+  @@index([companyId])
+}
+
+model Team {
+  id           String  @id @default(uuid()) @db.Uuid
+  companyId    String  @db.Uuid
+  siteId       String  @db.Uuid
+  name         String
+  /// The brigade's department. Its placements take it (Assignment.departmentId), so it is
+  /// fixed once one of them has it (team.departmentInUse). null while none is set.
+  departmentId String? @db.Uuid
+  isActive     Boolean @default(true)
+
+  company                  Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  site                     Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  department               Department?      @relation(fields: [departmentId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  assignments              Assignment[]     @relation("PlacementTeam")
+  /// The same placements, through the foreign key that keeps their department the team's
+  teamDepartmentPlacements Assignment[]     @relation("PlacementTeamDepartment")
+  entries                  TimesheetEntry[]
+  foremen                  MemberTeam[]
 
   @@unique([siteId, name])
   @@unique([id, companyId])
   /// Target of TimesheetEntry's foreign key, which also checks the team is on the entry's site
   @@unique([id, siteId, companyId])
+  /// Target of Assignment's foreign key, which keeps a placement's department the team's
+  @@unique([id, departmentId, companyId])
   @@index([companyId])
 }
 
@@ -417,24 +450,32 @@ model Assignment {
   workerId      String    @db.Uuid
   siteId        String    @db.Uuid
   teamId        String?   @db.Uuid
+  /// The placement's department (AGENTS.md: Departments); with a team, always the team's
+  /// (composite foreign key). The API requires it for new placements while the company
+  /// uses departments; placements from before stay null until it is filled in.
+  departmentId  String?   @db.Uuid
   /// Used when travel pay is PER_DAY_WORKED; null = no travel pay
   travelRouteId String?   @db.Uuid
   hiredOn       DateTime  @db.Date
   leftOn        DateTime? @db.Date
   createdAt     DateTime  @default(now())
 
-  worker        Worker           @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
-  site          Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
-  team          Team?            @relation(fields: [teamId, companyId], references: [id, companyId], onDelete: NoAction)
-  travelRoute   TravelRoute?     @relation(fields: [travelRouteId, companyId], references: [id, companyId], onDelete: NoAction)
-  entries       TimesheetEntry[]
-  monthlyHours  MonthlyHours[]
-  travelAmounts TravelAmount[]
+  worker         Worker           @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+  site           Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  team           Team?            @relation("PlacementTeam", fields: [teamId, companyId], references: [id, companyId], onDelete: NoAction)
+  department     Department?      @relation(fields: [departmentId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  /// Checked only when the placement has both a team and a department (MATCH SIMPLE)
+  teamDepartment Team?            @relation("PlacementTeamDepartment", fields: [teamId, departmentId, companyId], references: [id, departmentId, companyId], onDelete: NoAction, onUpdate: NoAction)
+  travelRoute    TravelRoute?     @relation(fields: [travelRouteId, companyId], references: [id, companyId], onDelete: NoAction)
+  entries        TimesheetEntry[]
+  monthlyHours   MonthlyHours[]
+  travelAmounts  TravelAmount[]
 
   @@unique([id, companyId])
   @@index([companyId])
   @@index([siteId, hiredOn])
   @@index([workerId])
+  @@index([departmentId])
 }
 
 /// A worker's monthly salary from a month on. It belongs to the worker, not to a

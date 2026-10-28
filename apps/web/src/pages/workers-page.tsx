@@ -3,6 +3,7 @@ import {
   createWorkerSchema,
   EMPLOYMENT_TYPES,
   leaveSchema,
+  placementDepartmentSchema,
   placementSchema,
   salarySchema,
   workerSchema,
@@ -13,6 +14,8 @@ import {
   type Leave,
   type LeaveInput,
   type Placement,
+  type PlacementDepartment,
+  type PlacementDepartmentInput,
   type PlacementInput,
   type Salary,
   type SalaryInput,
@@ -26,14 +29,21 @@ import {
 } from '@puantaj/schemas';
 import { useMutation } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowRightLeft, LogOut, MoreHorizontal, Pencil, SunMoon, Trash2, UserPlus, Wallet } from 'lucide-react';
+import { ArrowRightLeft, Building2, LogOut, MoreHorizontal, Pencil, SunMoon, Trash2, UserPlus, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm, type Control, type FieldError, type FieldErrors, type FieldPath, type FieldValues } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
 import { DatePicker } from '@/components/date-picker';
+import {
+  DepartmentFilter,
+  DepartmentSelect,
+  inDepartmentFilter,
+  type DepartmentFilterValue,
+} from '@/components/department-select';
 import { ErrorState } from '@/components/error-state';
 import { Field, fieldControlProps, FormActions, FormError, MonthField } from '@/components/form';
 import { LoadingState } from '@/components/loading-state';
@@ -63,11 +73,14 @@ import {
   seesPay,
   seesPersonalData,
   useMe,
+  usesDepartments,
   type Me,
 } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
 import { today } from '@/lib/format';
 import {
+  departmentTree,
+  useDepartments,
   useRefreshOrganisation,
   useSalaries,
   useShifts,
@@ -75,6 +88,7 @@ import {
   useWorkers,
   useWorkerShifts,
   workerName,
+  type DepartmentItem,
   type ShiftItem,
   type SiteItem,
   type WorkerItem,
@@ -111,14 +125,22 @@ export function WorkersPage() {
   );
 }
 
-type Action = { kind: 'edit' | 'move' | 'leave' | 'salary' | 'shift'; worker: WorkerItem };
+type Action = { kind: 'edit' | 'move' | 'leave' | 'salary' | 'shift' | 'department'; worker: WorkerItem };
 
 function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; onAddingChange: (open: boolean) => void }) {
   const { t } = useTranslation();
   const format = useFormat();
   const workers = useWorkers();
   const sites = useSites();
+  const departments = useDepartments();
   const refresh = useRefreshOrganisation();
+  const showDepartments = usesDepartments(me);
+  // The forms offer departments only while the company uses them.
+  const departmentChoices = showDepartments ? (departments.data ?? []) : null;
+  const paths = useMemo(
+    () => new Map(departmentTree(departments.data ?? []).map((d) => [d.id, d.path])),
+    [departments.data],
+  );
   const manage = canManageWorkers(me);
   const personal = seesPersonalData(me);
   const pay = seesPay(me);
@@ -126,6 +148,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
   const currency = me.activeCompany!.currency;
   const [siteFilter, setSiteFilter] = useState<string>(ALL);
   const [status, setStatus] = useState<Status>('working');
+  const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilterValue>(ALL);
   const [action, setAction] = useState<Action | null>(null);
   const [settingShifts, setSettingShifts] = useState(false);
 
@@ -134,9 +157,10 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
       workers.data?.filter(
         (w) =>
           (siteFilter === ALL || w.placement?.siteId === siteFilter) &&
+          (!showDepartments || inDepartmentFilter(departmentFilter, w.placement?.departmentId, departments.data ?? [])) &&
           (status === 'all' || (status === 'left') === hasLeft(w)),
       ),
-    [workers.data, siteFilter, status],
+    [workers.data, siteFilter, status, showDepartments, departmentFilter, departments.data],
   );
 
   const columns = useMemo<ColumnDef<WorkerItem, unknown>[]>(
@@ -168,6 +192,20 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
           );
         },
       },
+      ...(showDepartments
+        ? [
+            {
+              id: 'department',
+              accessorFn: (w) => (w.placement?.departmentId ? (paths.get(w.placement.departmentId) ?? '') : ''),
+              header: t('departments.department'),
+              cell: ({ row }) => {
+                const p = row.original.placement;
+                if (p?.departmentId) return <div className="min-w-32">{paths.get(p.departmentId) ?? p.departmentName}</div>;
+                return hasLeft(row.original) ? '—' : <StatusBadge tone="warning">{t('departments.none')}</StatusBadge>;
+              },
+            } satisfies ColumnDef<WorkerItem, unknown>,
+          ]
+        : []),
       {
         id: 'shift',
         accessorFn: (w) => w.shift?.name ?? '',
@@ -252,6 +290,12 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
                       <LogOut aria-hidden />
                       {row.original.placement?.until ? t('workers.changeLastDay') : t('workers.leave')}
                     </DropdownMenuItem>
+                    {showDepartments && row.original.placement && !row.original.placement.departmentId && (
+                      <DropdownMenuItem onSelect={() => setAction({ kind: 'department', worker: row.original })}>
+                        <Building2 aria-hidden />
+                        {t('workers.setDepartment')}
+                      </DropdownMenuItem>
+                    )}
                   </>
                 )}
                 {pay && (
@@ -269,7 +313,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
           ),
       },
     ],
-    [t, format, manage, personal, pay, currency],
+    [t, format, manage, personal, pay, currency, showDepartments, paths],
   );
 
   const activeSites = (sites.data ?? []).filter((s) => s.isActive);
@@ -290,7 +334,15 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         onRetry={() => workers.refetch()}
         searchable
         searchText={(w) =>
-          [workerName(w), w.position, w.personal?.pinfl, w.placement?.siteName, w.placement?.teamName, w.shift?.name]
+          [
+            workerName(w),
+            w.position,
+            w.personal?.pinfl,
+            w.placement?.siteName,
+            w.placement?.teamName,
+            showDepartments && w.placement?.departmentId ? paths.get(w.placement.departmentId) : null,
+            w.shift?.name,
+          ]
             .filter(Boolean)
             .join(' ')
         }
@@ -309,6 +361,9 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
                 ))}
               </SelectContent>
             </Select>
+            {showDepartments && (
+              <DepartmentFilter departments={departments.data ?? []} value={departmentFilter} onChange={setDepartmentFilter} />
+            )}
             <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
               <SelectTrigger className="w-full sm:w-40" aria-label={t('workers.status')}>
                 <SelectValue />
@@ -331,14 +386,30 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         emptyDescription={manage ? t('workers.emptyDescription') : undefined}
       />
 
-      {adding && <AddWorkerDialog sites={activeSites} onClose={() => onAddingChange(false)} onSaved={done} />}
+      {adding && (
+        <AddWorkerDialog sites={activeSites} departments={departmentChoices} onClose={() => onAddingChange(false)} onSaved={done} />
+      )}
       {action?.kind === 'edit' && (
         <EditWorkerDialog worker={action.worker} personal={personal} onClose={() => setAction(null)} onSaved={done} />
       )}
       {action?.kind === 'move' && (
-        <MoveDialog worker={action.worker} sites={activeSites} onClose={() => setAction(null)} onSaved={done} />
+        <MoveDialog
+          worker={action.worker}
+          sites={activeSites}
+          departments={departmentChoices}
+          onClose={() => setAction(null)}
+          onSaved={done}
+        />
       )}
       {action?.kind === 'leave' && <LeaveDialog worker={action.worker} onClose={() => setAction(null)} onSaved={done} />}
+      {action?.kind === 'department' && (
+        <PlacementDepartmentDialog
+          worker={action.worker}
+          departments={departments.data ?? []}
+          onClose={() => setAction(null)}
+          onSaved={done}
+        />
+      )}
       {action?.kind === 'shift' && (
         <WorkerShiftDialog
           worker={action.worker}
@@ -398,14 +469,24 @@ function toWorkerInput(w: WorkerItem): WorkerInput {
   };
 }
 
-function AddWorkerDialog({ sites, onClose, onSaved }: { sites: SiteItem[]; onClose: () => void; onSaved: () => void }) {
+function AddWorkerDialog({
+  sites,
+  departments,
+  onClose,
+  onSaved,
+}: {
+  sites: SiteItem[];
+  departments: DepartmentItem[] | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { t } = useTranslation();
   const [formError, setFormError] = useState<string>();
   const form = useForm<CreateWorkerInput, unknown, CreateWorker>({
     resolver: zodResolver(createWorkerSchema),
     defaultValues: {
       worker: EMPTY_WORKER,
-      placement: { siteId: sites.length === 1 ? sites[0].id : '', teamId: '', from: today() },
+      placement: { siteId: sites.length === 1 ? sites[0].id : '', teamId: '', departmentId: '', from: today() },
     },
   });
 
@@ -436,7 +517,14 @@ function AddWorkerDialog({ sites, onClose, onSaved }: { sites: SiteItem[]; onClo
           <WorkerFields control={form.control} prefix="worker." errors={form.formState.errors.worker} personal />
           <section className="space-y-4 border-t pt-4">
             <h3 className="font-semibold">{t('workers.placement')}</h3>
-            <PlacementFields control={form.control} prefix="placement." errors={form.formState.errors.placement} sites={sites} fromLabel={t('workers.firstDay')} />
+            <PlacementFields
+              control={form.control}
+              prefix="placement."
+              errors={form.formState.errors.placement}
+              sites={sites}
+              departments={departments}
+              fromLabel={t('workers.firstDay')}
+            />
           </section>
           <FormActions submitLabel={t('workers.add')} pending={save.isPending} onCancel={onClose} />
         </form>
@@ -498,11 +586,13 @@ function EditWorkerDialog({
 function MoveDialog({
   worker,
   sites,
+  departments,
   onClose,
   onSaved,
 }: {
   worker: WorkerItem;
   sites: SiteItem[];
+  departments: DepartmentItem[] | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -513,6 +603,7 @@ function MoveDialog({
     defaultValues: {
       siteId: worker.placement?.siteId ?? '',
       teamId: worker.placement?.teamId ?? '',
+      departmentId: worker.placement?.departmentId ?? '',
       from: today(),
     },
   });
@@ -544,7 +635,14 @@ function MoveDialog({
           })}
         >
           <FormError message={formError} />
-          <PlacementFields control={form.control} prefix="" errors={form.formState.errors} sites={sites} fromLabel={t('workers.firstDayThere')} />
+          <PlacementFields
+            control={form.control}
+            prefix=""
+            errors={form.formState.errors}
+            sites={sites}
+            departments={departments}
+            fromLabel={t('workers.firstDayThere')}
+          />
           <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
         </form>
       </DialogContent>
@@ -597,6 +695,92 @@ function LeaveDialog({ worker, onClose, onSaved }: { worker: WorkerItem; onClose
           />
           <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Fills in the department of a worker's placement that has none (from before the company
+ * used departments). A placement in a brigade takes the brigade's, set on its site page.
+ */
+function PlacementDepartmentDialog({
+  worker,
+  departments,
+  onClose,
+  onSaved,
+}: {
+  worker: WorkerItem;
+  departments: DepartmentItem[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useTranslation();
+  const placement = worker.placement!;
+  const [formError, setFormError] = useState<string>();
+  const form = useForm<PlacementDepartmentInput, unknown, PlacementDepartment>({
+    resolver: zodResolver(placementDepartmentSchema),
+    defaultValues: { departmentId: '' },
+  });
+
+  const save = useMutation({
+    mutationFn: (values: PlacementDepartment) =>
+      api.put(`/workers/${worker.id}/placements/${placement.id}/department`, values),
+    onSuccess: onSaved,
+    onError: (error) => {
+      if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('workers.setDepartment')}</DialogTitle>
+          <DialogDescription>
+            {workerName(worker)} · {t('workers.setDepartmentHint')}
+          </DialogDescription>
+        </DialogHeader>
+        {placement.teamId ? (
+          <div className="space-y-4">
+            <p className="text-sm">{t('workers.departmentFromTeam', { team: placement.teamName })}</p>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={onClose}>
+                {t('common.cancel')}
+              </Button>
+              <Button asChild>
+                <Link to={`/sites/${placement.siteId}`}>{t('workers.openSite', { site: placement.siteName })}</Link>
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <form
+            className="space-y-4"
+            noValidate
+            onSubmit={form.handleSubmit((values) => {
+              setFormError(undefined);
+              save.mutate(values);
+            })}
+          >
+            <FormError message={formError} />
+            <Controller
+              control={form.control}
+              name="departmentId"
+              render={({ field, fieldState }) => (
+                <Field id="pd-department" label={t('departments.department')} error={fieldState.error}>
+                  <DepartmentSelect
+                    id="pd-department"
+                    departments={departments}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    invalid={!!fieldState.error}
+                  />
+                </Field>
+              )}
+            />
+            <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -844,12 +1028,15 @@ function PlacementFields<T extends FieldValues>({
   prefix,
   errors,
   sites,
+  departments,
   fromLabel,
 }: {
   control: Control<T>;
   prefix: '' | 'placement.';
   errors: FieldErrors<PlacementInput> | undefined;
   sites: SiteItem[];
+  /** The company's departments while it uses them; null: departments are off */
+  departments: DepartmentItem[] | null;
   fromLabel: string;
 }) {
   const { t } = useTranslation();
@@ -877,28 +1064,59 @@ function PlacementFields<T extends FieldValues>({
             </Field>
             <Controller
               control={control}
-              name={name('teamId')}
-              render={({ field: team }) => {
-                const teams = sites.find((s) => s.id === site.value)?.teams.filter((x) => x.isActive) ?? [];
-                const value = teams.some((x) => x.id === team.value) ? (team.value as string) : NO_TEAM;
-                return (
-                  <Field id="p-team" label={t('workers.team')} error={errors?.teamId}>
-                    <Select value={value} onValueChange={(v) => team.onChange(v === NO_TEAM ? '' : v)} disabled={!site.value}>
-                      <SelectTrigger id="p-team" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={NO_TEAM}>{t('workers.noTeam')}</SelectItem>
-                        {teams.map((x) => (
-                          <SelectItem key={x.id} value={x.id}>
-                            {x.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                );
-              }}
+              name={name('departmentId')}
+              render={({ field: department }) => (
+                <Controller
+                  control={control}
+                  name={name('teamId')}
+                  render={({ field: team }) => {
+                    const teams = sites.find((s) => s.id === site.value)?.teams.filter((x) => x.isActive) ?? [];
+                    const chosen = teams.find((x) => x.id === team.value);
+                    // A placement in a brigade takes the brigade's department.
+                    const chooseTeam = (v: string) => {
+                      team.onChange(v === NO_TEAM ? '' : v);
+                      const next = teams.find((x) => x.id === v);
+                      if (next) department.onChange(next.departmentId ?? '');
+                    };
+                    return (
+                      <>
+                        <Field id="p-team" label={t('workers.team')} error={errors?.teamId}>
+                          <Select value={chosen ? chosen.id : NO_TEAM} onValueChange={chooseTeam} disabled={!site.value}>
+                            <SelectTrigger id="p-team" className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_TEAM}>{t('workers.noTeam')}</SelectItem>
+                              {teams.map((x) => (
+                                <SelectItem key={x.id} value={x.id}>
+                                  {x.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                        {departments && (
+                          <Field
+                            id="p-department"
+                            label={t('departments.department')}
+                            error={errors?.departmentId}
+                            hint={chosen ? t('workers.departmentOfTeam') : undefined}
+                          >
+                            <DepartmentSelect
+                              id="p-department"
+                              departments={departments}
+                              value={chosen ? (chosen.departmentId ?? '') : ((department.value as string | null) ?? '')}
+                              onChange={department.onChange}
+                              invalid={!!errors?.departmentId}
+                              disabled={Boolean(chosen)}
+                            />
+                          </Field>
+                        )}
+                      </>
+                    );
+                  }}
+                />
+              )}
             />
           </>
         )}

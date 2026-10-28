@@ -8,6 +8,7 @@ import { badRequest, conflict, forbidden, notFound } from '../common/api-error';
 import { currentOn, notEndedBefore, todayIn } from '../common/dates';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertManagesSite, isCompanyManager, visibleSites, visibleTeams } from './access';
+import { findDepartment } from './departments.service';
 
 export interface StaffView {
   userId: string;
@@ -19,7 +20,10 @@ export interface TeamView {
   id: string;
   siteId: string;
   name: string;
-  department: string | null;
+  /** The brigade's department (AGENTS.md: Departments); null while none is set */
+  departmentId: string | null;
+  /** A placement has the department, so it can't change any more (team.departmentInUse) */
+  departmentFixed: boolean;
   isActive: boolean;
   foremen: StaffView[];
   /** Workers placed in this team today */
@@ -61,7 +65,11 @@ export class SitesService {
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
       include: {
         members: member,
-        teams: { where: visibleTeams(auth), orderBy: [{ isActive: 'desc' }, { name: 'asc' }], include: { foremen: member } },
+        teams: {
+          where: visibleTeams(auth),
+          orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+          include: { foremen: member, _count: { select: { teamDepartmentPlacements: true } } },
+        },
       },
     });
     const placed = await this.prisma.assignment.groupBy({
@@ -84,7 +92,8 @@ export class SitesService {
         id: t.id,
         siteId: t.siteId,
         name: t.name,
-        department: t.department,
+        departmentId: t.departmentId,
+        departmentFixed: t._count.teamDepartmentPlacements > 0,
         isActive: t.isActive,
         foremen: staff(t.foremen),
         workerCount: placed.filter((p) => p.teamId === t.id).reduce((n, p) => n + p._count._all, 0),
@@ -131,6 +140,8 @@ export class SitesService {
       assertManagesSite(auth, site.id);
       if (!site.isActive) throw conflict('site.inactive');
       if (await tx.team.findFirst({ where: { siteId: site.id, name: input.name } })) throw conflict('team.nameTaken');
+      if (input.departmentId) await findDepartment(tx, companyId, input.departmentId);
+      else if (auth.company.departments) throw departmentRequired();
       const team = await tx.team.create({ data: { companyId, ...input } });
       await this.record(tx, auth, 'team.create', 'Team', team.id, { ...input });
       return { id: team.id };
@@ -154,8 +165,30 @@ export class SitesService {
         const today = todayIn(auth.company.timezone);
         if (await tx.assignment.count({ where: { teamId: id, ...notEndedBefore(today) } })) throw conflict('team.hasWorkers');
       }
+      const departmentId = input.departmentId === undefined ? before.departmentId : input.departmentId;
+      const departmentChange = departmentId !== before.departmentId;
+      if (departmentChange) {
+        if (departmentId) await findDepartment(tx, auth.company.id, departmentId);
+        else if (auth.company.departments) throw departmentRequired();
+        // Placements keep the department they had: a brigade in another department is a new brigade.
+        if (await tx.assignment.count({ where: { teamId: id, departmentId: { not: null } } })) {
+          throw conflict('team.departmentInUse');
+        }
+      }
+      // An active brigade is in an active department (a new one was checked above).
+      if (input.isActive === true && !before.isActive && departmentId && !departmentChange) {
+        await findDepartment(tx, auth.company.id, departmentId);
+      }
       await tx.team.update({ where: { id }, data: input });
-      await this.record(tx, auth, 'team.update', 'Team', id, diff(before, input));
+      // The brigade's placements without a department take the one it now has.
+      const filled =
+        departmentChange && departmentId
+          ? (await tx.assignment.updateMany({ where: { teamId: id, departmentId: null }, data: { departmentId } })).count
+          : 0;
+      await this.record(tx, auth, 'team.update', 'Team', id, {
+        ...diff(before, input),
+        ...(filled > 0 ? { placementsFilled: filled } : {}),
+      });
     });
   }
 
@@ -260,3 +293,7 @@ export class SitesService {
     );
   }
 }
+
+/** A brigade needs a department while the company uses them. */
+const departmentRequired = () =>
+  badRequest('validation', { issues: [{ path: 'departmentId', message: 'validation.required' }] });

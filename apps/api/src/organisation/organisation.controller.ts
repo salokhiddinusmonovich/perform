@@ -1,13 +1,17 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
 import {
   createWorkerSchema,
+  departmentSchema,
+  departmentSettingsSchema,
   leaveSchema,
+  placementDepartmentSchema,
   placementSchema,
   salarySchema,
   shiftSchema,
   siteSchema,
   staffSchema,
   teamSchema,
+  updateDepartmentSchema,
   updateSiteSchema,
   updateShiftSchema,
   updateTeamSchema,
@@ -15,12 +19,16 @@ import {
   workerShiftSchema,
   workerShiftsSchema,
   type CreateWorker,
+  type Department,
+  type DepartmentSettings,
   type Leave,
   type Placement,
+  type PlacementDepartment,
   type Salary,
   type Shift,
   type Site,
   type Team,
+  type UpdateDepartment,
   type UpdateSite,
   type UpdateShift,
   type UpdateTeam,
@@ -30,6 +38,7 @@ import {
 } from '@puantaj/schemas';
 import { CompanyAuth, ForModule, Roles, type CompanyAuthContext } from '../auth/auth.context';
 import { ZodPipe } from '../common/zod.pipe';
+import { DepartmentsService, type DepartmentView } from './departments.service';
 import { ShiftsService, type ShiftView, type WorkerShiftView } from './shifts.service';
 import { SitesService, type SiteView, type StaffView } from './sites.service';
 import { WorkersService, type SalaryView, type WorkerView } from './workers.service';
@@ -189,6 +198,22 @@ export class WorkersController {
     return this.workers.place(auth, id, body);
   }
 
+  /**
+   * Fills in the department of a placement that has none, e.g. from before the company used
+   * departments. A department set once is changed only by a new placement from a day.
+   */
+  @Put(':id/placements/:placementId/department')
+  @Roles('OWNER', 'ADMIN', 'PROJECT_MANAGER')
+  @HttpCode(204)
+  placementDepartment(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('placementId', ParseUUIDPipe) placementId: string,
+    @Body(new ZodPipe(placementDepartmentSchema)) body: PlacementDepartment,
+  ): Promise<void> {
+    return this.workers.fillDepartment(auth, id, placementId, body.departmentId);
+  }
+
   /** Salary history. Timekeepers and foremen never see salaries. */
   @Get(':id/salaries')
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER')
@@ -279,6 +304,52 @@ export class ShiftsController {
     @Body(new ZodPipe(updateShiftSchema)) body: UpdateShift,
   ): Promise<void> {
     return this.shifts.update(auth, id, body);
+  }
+}
+
+/**
+ * The company's departments (AGENTS.md: Departments). Everyone sees them; owners and admins
+ * manage them and switch them on or off.
+ */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER', 'TIMEKEEPER', 'FOREMAN')
+@Controller('departments')
+export class DepartmentsController {
+  constructor(private readonly departments: DepartmentsService) {}
+
+  @Get()
+  list(@CompanyAuth() auth: CompanyAuthContext): Promise<DepartmentView[]> {
+    return this.departments.list(auth);
+  }
+
+  @Post()
+  @Roles('OWNER', 'ADMIN')
+  create(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Body(new ZodPipe(departmentSchema)) body: Department,
+  ): Promise<{ id: string }> {
+    return this.departments.create(auth, body);
+  }
+
+  @Put('settings')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  settings(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Body(new ZodPipe(departmentSettingsSchema)) body: DepartmentSettings,
+  ): Promise<void> {
+    return this.departments.setEnabled(auth, body.enabled);
+  }
+
+  @Patch(':id')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  update(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(updateDepartmentSchema)) body: UpdateDepartment,
+  ): Promise<void> {
+    return this.departments.update(auth, id, body);
   }
 }
 

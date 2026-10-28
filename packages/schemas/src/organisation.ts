@@ -46,11 +46,14 @@ export const updateSiteSchema = siteSchema
   .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
 export type UpdateSite = z.output<typeof updateSiteSchema>;
 
+/**
+ * A brigade on a site. Its department (AGENTS.md: Departments) is required by the API while
+ * the company uses departments, and fixed once a placement has it.
+ */
 export const teamSchema = z.object({
   siteId: uuid,
   name: requiredName(120),
-  /** e.g. Electrical, Mechanical */
-  department: optionalText(60),
+  departmentId: optionalUuid,
 });
 export type TeamInput = z.input<typeof teamSchema>;
 export type Team = z.output<typeof teamSchema>;
@@ -94,15 +97,49 @@ export const workerSchema = z.object({
 export type WorkerInput = z.input<typeof workerSchema>;
 export type Worker = z.output<typeof workerSchema>;
 
-/** Where a worker works from a date on. */
+/**
+ * Where a worker works from a date on. The department (AGENTS.md: Departments) is the
+ * team's when there is a team; without one it is required by the API while the company
+ * uses departments.
+ */
 export const placementSchema = z.object({
   siteId: uuid,
   teamId: optionalUuid,
+  departmentId: optionalUuid,
   /** First day at this site (the hire date for a new worker). */
   from: isoDateSchema,
 });
 export type PlacementInput = z.input<typeof placementSchema>;
 export type Placement = z.output<typeof placementSchema>;
+
+/** Fills in the department of a placement that has none (placements from before departments were used). */
+export const placementDepartmentSchema = z.object({ departmentId: uuid });
+export type PlacementDepartmentInput = z.input<typeof placementDepartmentSchema>;
+export type PlacementDepartment = z.output<typeof placementDepartmentSchema>;
+
+/**
+ * A company's department (AGENTS.md: Departments): a name, an optional short code, and the
+ * department it sits under (none: top level).
+ */
+export const departmentSchema = z.object({
+  name: requiredName(80),
+  code: optionalText(20),
+  parentId: optionalUuid,
+});
+export type DepartmentInput = z.input<typeof departmentSchema>;
+export type Department = z.output<typeof departmentSchema>;
+
+/** Renaming, moving under another department, or (de)activating one. */
+export const updateDepartmentSchema = departmentSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
+export type UpdateDepartment = z.output<typeof updateDepartmentSchema>;
+
+/** Whether the company uses departments (every new placement then needs one). */
+export const departmentSettingsSchema = z.object({ enabled: z.boolean() });
+export type DepartmentSettingsInput = z.input<typeof departmentSettingsSchema>;
+export type DepartmentSettings = z.output<typeof departmentSettingsSchema>;
 
 export const createWorkerSchema = z.object({ worker: workerSchema, placement: placementSchema });
 export type CreateWorkerInput = z.input<typeof createWorkerSchema>;

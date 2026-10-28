@@ -88,11 +88,19 @@ async function main() {
       await prisma.membership.create({ data: { userId: u.id, companyId: demo.id, role, acceptedAt: new Date() } });
     }
 
+    // Departments are on: Construction with an Electrical sub-department, and HSE and QA/QC without brigades.
+    await prisma.company.update({ where: { id: demo.id }, data: { departmentsEnabled: true } });
+    const construction = await prisma.department.create({ data: { companyId: demo.id, name: 'Construction' } });
+    const electricalDept = await prisma.department.create({
+      data: { companyId: demo.id, parentId: construction.id, name: 'Electrical', code: 'EL' },
+    });
+    const hse = await prisma.department.create({ data: { companyId: demo.id, name: 'HSE' } });
+    await prisma.department.create({ data: { companyId: demo.id, name: 'QA/QC' } });
     // Two sites; the project manager and timekeeper work on the first, the foreman leads its team.
     const north = await prisma.site.create({ data: { companyId: demo.id, name: 'North Tower', code: 'NT' } });
     await prisma.site.create({ data: { companyId: demo.id, name: 'South Plant' } });
     const electrical = await prisma.team.create({
-      data: { companyId: demo.id, siteId: north.id, name: 'Electrical 1', department: 'Electrical' },
+      data: { companyId: demo.id, siteId: north.id, name: 'Electrical 1', departmentId: electricalDept.id },
     });
     await prisma.memberSite.createMany({
       data: [ids.pm, ids.timekeeper].map((userId) => ({ userId, companyId: demo.id, siteId: north.id })),
@@ -122,14 +130,23 @@ async function main() {
     });
     // Shifts are optional; one to give workers from the workers page.
     await prisma.shift.create({ data: { companyId: demo.id, name: 'Night', normalHoursPerDay: '10' } });
-    // The first worker has a salary and September's hours; the second shows how missing ones look.
-    for (const [lastName, firstName, position, monthlySalary] of [
-      ['Demoev', 'Ali', 'Electrician', '6000000'],
-      ['Testova', 'Malika', 'Cable installer', null],
+    // Two workers in the brigade: the first has a salary and September's hours, the second shows
+    // how missing ones look. The HSE inspector has no brigade.
+    for (const [lastName, firstName, position, monthlySalary, team] of [
+      ['Demoev', 'Ali', 'Electrician', '6000000', true],
+      ['Testova', 'Malika', 'Cable installer', null, true],
+      ['Namunov', 'Sardor', 'HSE inspector', '5000000', false],
     ] as const) {
       const worker = await prisma.worker.create({ data: { companyId: demo.id, lastName, firstName, position } });
       const placement = await prisma.assignment.create({
-        data: { companyId: demo.id, workerId: worker.id, siteId: north.id, teamId: electrical.id, hiredOn: new Date('2026-09-01') },
+        data: {
+          companyId: demo.id,
+          workerId: worker.id,
+          siteId: north.id,
+          teamId: team ? electrical.id : null,
+          departmentId: team ? electricalDept.id : hse.id,
+          hiredOn: new Date('2026-09-01'),
+        },
       });
       if (monthlySalary) {
         await prisma.salary.create({
@@ -210,6 +227,7 @@ async function removeDemoData(prisma: PrismaClient) {
     prisma.membership.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),
     prisma.worker.deleteMany({ where: inCompany }),
     prisma.team.deleteMany({ where: inCompany }),
+    prisma.department.deleteMany({ where: inCompany }),
     prisma.site.deleteMany({ where: inCompany }),
     prisma.session.deleteMany({ where: { userId: { in: userIds } } }),
     prisma.user.deleteMany({ where: { id: { in: userIds } } }),

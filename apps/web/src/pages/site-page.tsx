@@ -4,13 +4,14 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ArrowLeft, MoreHorizontal, Pencil, Plus, Power, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { AssignPeopleDialog, type Person } from '@/components/assign-people-dialog';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
+import { DepartmentSelect } from '@/components/department-select';
 import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
 import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
@@ -29,9 +30,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
-import { canManageCompany, inCompany, type Me } from '@/lib/auth';
+import { canManageCompany, inCompany, usesDepartments, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { useRefreshOrganisation, useSites, type SiteItem, type TeamItem } from '@/lib/organisation';
+import {
+  departmentTree,
+  useDepartments,
+  useRefreshOrganisation,
+  useSites,
+  type DepartmentItem,
+  type SiteItem,
+  type TeamItem,
+} from '@/lib/organisation';
 
 export function SitePage() {
   return <RequireAccess allowed={inCompany}>{(me) => <SiteView me={me} />}</RequireAccess>;
@@ -76,6 +85,12 @@ function SiteDetails({ me, site }: { me: Me; site: SiteItem }) {
   const [editingTeam, setEditingTeam] = useState<TeamItem | null>(null);
   const [foremenOf, setForemenOf] = useState<TeamItem | null>(null);
   const [toggling, setToggling] = useState<TeamItem | null>(null);
+  const departments = useDepartments();
+  const showDepartments = usesDepartments(me);
+  const paths = useMemo(
+    () => new Map(departmentTree(departments.data ?? []).map((d) => [d.id, d.path])),
+    [departments.data],
+  );
 
   const columns = useMemo<ColumnDef<TeamItem, unknown>[]>(
     () => [
@@ -85,7 +100,9 @@ function SiteDetails({ me, site }: { me: Me; site: SiteItem }) {
         cell: ({ row }) => (
           <div className="min-w-32">
             <div className="font-medium">{row.original.name}</div>
-            {row.original.department && <div className="text-sm text-muted-foreground">{row.original.department}</div>}
+            {showDepartments && row.original.departmentId && (
+              <div className="text-sm text-muted-foreground">{paths.get(row.original.departmentId)}</div>
+            )}
           </div>
         ),
       },
@@ -136,7 +153,7 @@ function SiteDetails({ me, site }: { me: Me; site: SiteItem }) {
           ),
       },
     ],
-    [t, managesSite],
+    [t, managesSite, showDepartments, paths],
   );
 
   // Who may be removed: owners and admins anyone; a project manager only timekeepers.
@@ -250,6 +267,7 @@ function SiteDetails({ me, site }: { me: Me; site: SiteItem }) {
         open={addingTeam || editingTeam !== null}
         siteId={site.id}
         team={editingTeam}
+        departments={showDepartments ? (departments.data ?? []) : null}
         onClose={() => {
           setAddingTeam(false);
           setEditingTeam(null);
@@ -289,6 +307,7 @@ function TeamDialog({
   open,
   siteId,
   team,
+  departments,
   onClose,
   onSaved,
 }: {
@@ -296,6 +315,8 @@ function TeamDialog({
   siteId: string;
   /** null = adding */
   team: TeamItem | null;
+  /** The company's departments while it uses them; null: departments are off */
+  departments: DepartmentItem[] | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -303,7 +324,7 @@ function TeamDialog({
   const [formError, setFormError] = useState<string>();
   const form = useForm<TeamInput, unknown, Team>({
     resolver: zodResolver(teamSchema),
-    defaultValues: { siteId, name: team?.name ?? '', department: team?.department ?? '' },
+    defaultValues: { siteId, name: team?.name ?? '', departmentId: team?.departmentId ?? '' },
   });
   const { errors } = form.formState;
 
@@ -334,9 +355,36 @@ function TeamDialog({
           <Field id="t-name" label={t('teams.name')} error={errors.name}>
             <Input {...fieldControlProps('t-name', errors.name)} {...form.register('name')} autoComplete="off" />
           </Field>
-          <Field id="t-department" label={t('teams.department')} error={errors.department} hint={t('teams.departmentHint')}>
-            <Input {...fieldControlProps('t-department', errors.department)} {...form.register('department')} autoComplete="off" />
-          </Field>
+          {departments &&
+            (team?.departmentFixed ? (
+              // Fixed once a placement has it; the form sends it back unchanged.
+              <div className="space-y-2">
+                <dl>
+                  <dt className="text-sm text-muted-foreground">{t('teams.department')}</dt>
+                  <dd className="font-medium">
+                    {departmentTree(departments).find((d) => d.id === team.departmentId)?.path ?? '—'}
+                  </dd>
+                </dl>
+                <p className="text-sm text-muted-foreground">{t('teams.departmentFixed')}</p>
+              </div>
+            ) : (
+              <Controller
+                control={form.control}
+                name="departmentId"
+                render={({ field }) => (
+                  <Field id="t-department" label={t('teams.department')} error={errors.departmentId} hint={t('teams.departmentHint')}>
+                    <DepartmentSelect
+                      id="t-department"
+                      departments={departments}
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      keep={team?.departmentId}
+                      invalid={!!errors.departmentId}
+                    />
+                  </Field>
+                )}
+              />
+            ))}
           <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
         </form>
       </DialogContent>

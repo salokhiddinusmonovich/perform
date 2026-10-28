@@ -31,7 +31,8 @@
     "timesheet": "Timesheet",
     "timesheetSettings": "Timesheet entry",
     "codes": "Codes",
-    "shifts": "Shifts"
+    "shifts": "Shifts",
+    "departments": "Departments"
   },
   "settings": {
     "language": "Language",
@@ -306,7 +307,9 @@
     "gridCodeOne": "Tick exactly one code of this absence to show in the timesheet",
     "gridCodeNotForStatus": "Only absences are shown in the timesheet",
     "tooMany": "Too many entries",
-    "chooseWorkers": "Choose at least one worker"
+    "chooseWorkers": "Choose at least one worker",
+    "departmentCycle": "A department can’t be put under itself or its own sub-department.",
+    "departmentNotTeams": "A worker in a brigade is in the brigade’s department."
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -377,7 +380,9 @@
       "notFound": "This team doesn't exist or you don't work with it.",
       "nameTaken": "This site already has a team with this name.",
       "hasWorkers": "Workers are placed in this team, now or from a later day. Move them first.",
-      "inactive": "This team is closed."
+      "inactive": "This team is closed.",
+      "departmentInUse": "Workers have been placed in this brigade, so its department can’t change. Add a new brigade instead.",
+      "noDepartment": "This brigade has no department yet. Set it on the site page first."
     },
     "staff": {
       "wrongRole": "This person's role isn't assigned here."
@@ -410,7 +415,9 @@
       "unchanged": "This salary already applies in that month."
     },
     "placement": {
-      "notFound": "Placement not found."
+      "notFound": "Placement not found.",
+      "hasDepartment": "This placement already has a department. Moving to another one is a move from a day.",
+      "departmentFromTeam": "This worker is in a brigade: set the brigade’s department instead."
     },
     "monthlyHours": {
       "notInMonth": "The worker wasn’t at this site in this month.",
@@ -446,6 +453,16 @@
       "notFound": "This shift entry doesn’t exist.",
       "dayTaken": "A shift already starts on this day. An owner or admin can correct it.",
       "unchanged": "Nothing changed."
+    },
+    "department": {
+      "notFound": "This department doesn’t exist.",
+      "nameTaken": "A department with this name is already there.",
+      "inactive": "This department is closed.",
+      "parentInactive": "The department above it is closed. Reopen that one first.",
+      "hasActiveChildren": "This department has open sub-departments. Close them first.",
+      "hasTeams": "This department has open brigades. Close them or move their workers first.",
+      "hasWorkers": "Workers are placed in this department, now or from a later day. Move them first.",
+      "noneActive": "Add a department before switching departments on."
     }
   },
   "payRules": {
@@ -645,7 +662,7 @@
     "edit": "Edit team",
     "name": "Team name",
     "department": "Department",
-    "departmentHint": "Optional, e.g. Electrical or Mechanical",
+    "departmentHint": "The brigade’s workers belong to this department.",
     "foremen": "Foremen",
     "manageForemen": "Foremen",
     "foremenDialogHint": "Foremen who lead {{team}}. They see and work only with their own teams.",
@@ -661,7 +678,8 @@
     "confirmReopen": {
       "title": "Reopen team?",
       "description": "{{name}} will be open for workers again."
-    }
+    },
+    "departmentFixed": "Workers have been placed in this brigade, so its department can’t change. For another department, add a new brigade."
   },
   "workers": {
     "title": "Workers",
@@ -757,7 +775,12 @@
     "shiftsSet": "Shift set for workers: {{count}}",
     "shiftsSetSome": "Shift set for workers: {{added}}. Already on it: {{unchanged}}.",
     "chooseWorkers": "Workers chosen: {{count}}",
-    "allShown": "All workers shown"
+    "allShown": "All workers shown",
+    "setDepartment": "Set department",
+    "setDepartmentHint": "This placement has no department yet. Moving to another department later is a move from a day.",
+    "departmentFromTeam": "This worker is in the brigade {{team}}: their department is the brigade’s. Set it on the site page.",
+    "openSite": "Open {{site}}",
+    "departmentOfTeam": "The brigade’s department"
   },
   "impersonation": {
     "banner": "You are logged in as {{name}}.",
@@ -1033,7 +1056,9 @@
     "owesHint": "Advances and deductions are more than the pay for this month. Nothing is carried to the next month by itself.",
     "earned": "Earned",
     "payOutTotal": "To pay out",
-    "goToAdjustments": "Go to adjustments"
+    "goToAdjustments": "Go to adjustments",
+    "byDepartment": "By department",
+    "byDepartmentHint": "Each worker counts in their department at the end of the month. A department includes its sub-departments."
   },
   "timesheet": {
     "title": "Timesheet",
@@ -1135,5 +1160,46 @@
         "button": "Bring back"
       }
     }
+  },
+  "departments": {
+    "title": "Departments",
+    "description": "Your company’s departments, e.g. HSE or QA/QC, with sub-departments. Brigades and workers belong to one.",
+    "create": "Add department",
+    "edit": "Edit department",
+    "addSub": "Add sub-department",
+    "close": "Close department",
+    "reopen": "Reopen department",
+    "name": "Name",
+    "code": "Short code",
+    "codeHint": "Optional, e.g. QA",
+    "parent": "Under department",
+    "parentHint": "Leave at the top level, or put it under another department.",
+    "topLevel": "Top level",
+    "under": "Under {{name}}",
+    "teams": "Brigades",
+    "workers": "Workers",
+    "status": "Status",
+    "active": "Active",
+    "closed": "Closed",
+    "empty": "No departments yet",
+    "emptyDescription": "Add the departments your company has, then switch them on.",
+    "dialogDescription": "Departments are shared by all sites.",
+    "use": "Use departments",
+    "useHint": "When on, every new placement needs a department, and departments show on workers, brigades and payroll.",
+    "useNeedsOne": "Add a department first, then switch them on.",
+    "missing": "Workers without a department: {{count}}",
+    "missingLink": "Set them on the Workers page",
+    "confirmClose": {
+      "title": "Close department?",
+      "description": "{{name}} will be closed: no brigades or workers can be put in it. Its history stays."
+    },
+    "confirmReopen": {
+      "title": "Reopen department?",
+      "description": "{{name}} will be open for brigades and workers again."
+    },
+    "choose": "Choose a department",
+    "department": "Department",
+    "all": "All departments",
+    "none": "No department"
   }
 }

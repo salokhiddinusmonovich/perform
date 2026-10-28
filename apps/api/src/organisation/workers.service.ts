@@ -8,6 +8,7 @@ import { dayToDate, isoDay, monthOfDay, previousDay, todayIn } from '../common/d
 import { assertMonthsOpen, monthIndex } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertManagesSite, seesPay, seesPersonalData, seesPlacement } from './access';
+import { findDepartment } from './departments.service';
 import { withinWorkerLimit } from './worker-limit';
 import { shiftInfo, type ShiftInfo } from './worker-shifts';
 
@@ -17,6 +18,9 @@ export interface PlacementView {
   siteName: string;
   teamId: string | null;
   teamName: string | null;
+  /** The placement's department (AGENTS.md: Departments); null: none set */
+  departmentId: string | null;
+  departmentName: string | null;
   /** First day at this site */
   from: string;
   /** Last day, or null while the worker is still there */
@@ -71,6 +75,7 @@ type Tx = Prisma.TransactionClient;
 const PLACEMENT_INCLUDE = {
   site: { select: { name: true } },
   team: { select: { name: true } },
+  department: { select: { name: true } },
 } as const satisfies Prisma.AssignmentInclude;
 
 /** Newest first: by from-month, then the one added last. The first row of a month is the one that counts. */
@@ -129,17 +134,17 @@ export class WorkersService {
     const { worker: details, placement } = input;
     assertManagesSite(auth, placement.siteId);
     return this.prisma.$transaction(async (tx) => {
-      await this.checkPlace(tx, companyId, placement);
+      const departmentId = await this.checkPlace(tx, auth, placement, 'placement.');
       await this.assertPinflFree(tx, companyId, details.pinfl, null);
       await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
       const { worker, assignment } = await withinWorkerLimit(tx, companyId, null, placement.from, async () => {
         const worker = await tx.worker.create({ data: { companyId, ...toColumns(details) } });
-        const assignment = await tx.assignment.create({ data: placementColumns(companyId, worker.id, placement) });
+        const assignment = await tx.assignment.create({ data: placementColumns(companyId, worker.id, placement, departmentId) });
         return { worker, assignment };
       });
       await this.record(tx, auth, 'worker.create', worker.id, {
         name: fullName(details),
-        placement: { assignmentId: assignment.id, ...placement },
+        placement: { assignmentId: assignment.id, ...placement, departmentId },
         personalData: PERSONAL_FIELDS.filter((f) => details[f] !== null),
       });
       return { id: worker.id };
@@ -175,7 +180,7 @@ export class WorkersService {
       const current = worker.assignments[0];
       assertManagesSite(auth, current.siteId);
       assertManagesSite(auth, placement.siteId);
-      await this.checkPlace(tx, companyId, placement);
+      const departmentId = await this.checkPlace(tx, auth, placement, '');
 
       const stillThere = current.leftOn === null || isoDay(current.leftOn) >= placement.from;
       const created = await withinWorkerLimit(tx, companyId, id, placement.from, async () => {
@@ -188,12 +193,37 @@ export class WorkersService {
         } else {
           await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
         }
-        return tx.assignment.create({ data: placementColumns(companyId, id, placement) });
+        return tx.assignment.create({ data: placementColumns(companyId, id, placement, departmentId) });
       });
       await this.record(tx, auth, 'worker.place', id, {
         assignmentId: created.id,
         ...placement,
+        departmentId,
         endedAssignmentId: stillThere ? current.id : null,
+      });
+    });
+  }
+
+  /**
+   * Fills in the department of a placement that has none (from before the company used
+   * departments). A placement in a brigade takes the brigade's, set on the brigade. Pay
+   * doesn't depend on it, so locked months don't stop it.
+   */
+  async fillDepartment(auth: CompanyAuthContext, id: string, placementId: string, departmentId: string): Promise<void> {
+    const companyId = auth.company.id;
+    await this.prisma.$transaction(async (tx) => {
+      const worker = await this.find(tx, auth, id);
+      const placement = worker.assignments.find((p) => p.id === placementId);
+      if (!placement) throw notFound('placement.notFound');
+      assertManagesSite(auth, placement.siteId);
+      if (placement.departmentId) throw conflict('placement.hasDepartment');
+      if (placement.teamId) throw conflict('placement.departmentFromTeam');
+      const department = await findDepartment(tx, companyId, departmentId);
+      await tx.assignment.update({ where: { id: placementId }, data: { departmentId } });
+      await this.record(tx, auth, 'worker.placementDepartment', id, {
+        assignmentId: placementId,
+        departmentId,
+        departmentName: department.name,
       });
     });
   }
@@ -283,17 +313,39 @@ export class WorkersService {
     await tx.assignment.update({ where: { id: assignmentId }, data: { leftOn: dayToDate(lastDay) } });
   }
 
-  /** The site and team must be this company's, active, and the team on that site. */
-  private async checkPlace(tx: Tx, companyId: string, placement: Placement) {
+  /**
+   * The site and team must be this company's, active, and the team on that site. Returns
+   * the placement's department: the team's when there is a team, otherwise the one chosen,
+   * which must be active. While the company uses departments, there must be one.
+   * `at` is where the placement sits in the request body, so field errors name its fields
+   * the way the form does ("placement.departmentId" when adding a worker).
+   */
+  private async checkPlace(
+    tx: Tx,
+    auth: CompanyAuthContext,
+    placement: Placement,
+    at: '' | 'placement.',
+  ): Promise<string | null> {
+    const companyId = auth.company.id;
+    const invalid = (field: keyof Placement, message: string) =>
+      badRequest('validation', { issues: [{ path: at + field, message }] });
     const site = await tx.site.findFirst({ where: { id: placement.siteId, companyId } });
     if (!site) throw notFound('site.notFound');
     if (!site.isActive) throw conflict('site.inactive');
     if (placement.teamId) {
       const team = await tx.team.findFirst({ where: { id: placement.teamId, companyId } });
       if (!team) throw notFound('team.notFound');
-      if (team.siteId !== site.id) throw badRequest('validation', { issues: [{ path: 'teamId', message: 'validation.teamNotOnSite' }] });
+      if (team.siteId !== site.id) throw invalid('teamId', 'validation.teamNotOnSite');
       if (!team.isActive) throw conflict('team.inactive');
+      if (placement.departmentId && placement.departmentId !== team.departmentId) {
+        throw invalid('departmentId', 'validation.departmentNotTeams');
+      }
+      if (auth.company.departments && !team.departmentId) throw conflict('team.noDepartment');
+      return team.departmentId;
     }
+    if (placement.departmentId) return (await findDepartment(tx, companyId, placement.departmentId)).id;
+    if (auth.company.departments) throw invalid('departmentId', 'validation.required');
+    return null;
   }
 
   private async assertPinflFree(tx: Tx, companyId: string, pinfl: string | null, exceptId: string | null) {
@@ -338,6 +390,8 @@ export class WorkersService {
             siteName: p.site.name,
             teamId: p.teamId,
             teamName: p.team?.name ?? null,
+            departmentId: p.departmentId,
+            departmentName: p.department?.name ?? null,
             from: isoDay(p.hiredOn),
             until: p.leftOn ? isoDay(p.leftOn) : null,
           }
@@ -395,8 +449,8 @@ function toInput(w: WorkerRow): Worker {
   };
 }
 
-function placementColumns(companyId: string, workerId: string, p: Placement) {
-  return { companyId, workerId, siteId: p.siteId, teamId: p.teamId, hiredOn: dayToDate(p.from) };
+function placementColumns(companyId: string, workerId: string, p: Placement, departmentId: string | null) {
+  return { companyId, workerId, siteId: p.siteId, teamId: p.teamId, departmentId, hiredOn: dayToDate(p.from) };
 }
 
 function shiftToday(auth: CompanyAuthContext, w: WorkerRow): ShiftInfo | null {

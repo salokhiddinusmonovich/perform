@@ -9,14 +9,17 @@ import {
   contactSchema,
   createMemberSchema,
   createWorkerSchema,
+  departmentSchema,
   holidaySchema,
   NEW_PAY_RULES,
   normalizePhone,
   parseIdentifier,
   payRulesSchema,
+  placementSchema,
   siteSchema,
   timesheetEntrySchema,
   timesheetSettingsSchema,
+  updateDepartmentSchema,
   workerSchema,
   workingDaysOverrideSchema,
 } from './index.js';
@@ -284,6 +287,30 @@ describe('worker and placement schemas', () => {
     expect(messages(workerSchema.safeParse({ ...worker, pinfl: '123' }))).toEqual(['validation.pinflInvalid']);
     expect(messages(workerSchema.safeParse({ ...worker, birthDate: '1985-02-30' }))).toEqual(['validation.dateInvalid']);
     expect(messages(siteSchema.safeParse({ name: ' ' }))).toEqual(['validation.required']);
+  });
+});
+
+describe('departments', () => {
+  const id = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+
+  it('reads a department, top level without a parent', () => {
+    expect(departmentSchema.parse({ name: ' QA/QC ', code: '', parentId: '' })).toEqual({ name: 'QA/QC', code: null, parentId: null });
+    expect(messages(departmentSchema.safeParse({ name: ' ', parentId: 'x' }))).toEqual(['validation.required', 'validation.invalid']);
+  });
+
+  it('changes only what an update names', () => {
+    expect(updateDepartmentSchema.parse({ isActive: false })).toEqual({ isActive: false });
+    expect(updateDepartmentSchema.parse({ parentId: null })).toEqual({ parentId: null });
+    expect(messages(updateDepartmentSchema.safeParse({}))).toEqual(['validation.nothingToUpdate']);
+  });
+
+  it('takes a placement without a department', () => {
+    expect(placementSchema.parse({ siteId: id, teamId: '', from: '2026-09-01' })).toEqual({
+      siteId: id,
+      teamId: null,
+      departmentId: null,
+      from: '2026-09-01',
+    });
   });
 });
 

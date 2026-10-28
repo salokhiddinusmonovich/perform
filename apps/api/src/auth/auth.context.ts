@@ -25,6 +25,8 @@ export interface ActiveCompany {
    * has it, or an earlier month that had it isn't locked yet (platform/company-plan.ts).
    */
   modules: CompanyModule[];
+  /** The company uses departments (AGENTS.md: Departments): placements need one, and they are shown. */
+  departments: boolean;
   /** Sites a project manager or timekeeper works on (MemberSite); null for other roles. */
   siteIds: string[] | null;
   /** Teams a foreman leads (MemberTeam); null for other roles. */

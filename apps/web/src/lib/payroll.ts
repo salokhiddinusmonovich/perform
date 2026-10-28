@@ -96,6 +96,8 @@ export interface PayrollPayOut extends Omit<PayOut, 'adjustments'> {
 
 export interface PayrollWorker {
   worker: WorkerName;
+  /** The worker's department of the month (of their last placement in it); absent in months locked before departments */
+  department?: { id: string; name: string } | null;
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
   source: 'DAILY' | 'TOTALS' | null;
   parts: PayrollPart[];
@@ -125,8 +127,19 @@ export interface PayrollMonth {
   total: string;
   /** While locked: what the latest lock saved */
   workers: PayrollWorker[];
+  /** Totals per department with workers this month, a department's including its sub-departments */
+  departments: DepartmentTotal[];
   /** Oldest first */
   locks: LockItem[];
+}
+
+/** A department's workers and pay in the month; departmentId null: workers without a department. */
+export interface DepartmentTotal {
+  departmentId: string | null;
+  workers: number;
+  /** Not in the total: they can't be paid yet */
+  withProblems: number;
+  total: string;
 }
 
 export interface AdjustmentItem {

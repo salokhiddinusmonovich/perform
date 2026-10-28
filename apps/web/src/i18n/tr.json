@@ -31,7 +31,8 @@
     "timesheet": "Puantaj",
     "timesheetSettings": "Puantaj girişi",
     "codes": "Kodlar",
-    "shifts": "Vardiyalar"
+    "shifts": "Vardiyalar",
+    "departments": "Bölümler"
   },
   "settings": {
     "language": "Dil",
@@ -306,7 +307,9 @@
     "gridCodeOne": "Bu devamsızlığın puantajda görünecek tam olarak bir kodunu işaretleyin",
     "gridCodeNotForStatus": "Puantajda yalnızca devamsızlıklar görünür",
     "tooMany": "Çok fazla kayıt",
-    "chooseWorkers": "En az bir işçi seçin"
+    "chooseWorkers": "En az bir işçi seçin",
+    "departmentCycle": "Bir bölüm kendisinin veya kendi alt bölümünün altına konamaz.",
+    "departmentNotTeams": "Ekipteki bir çalışan ekibin bölümündedir."
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -377,7 +380,9 @@
       "notFound": "Bu ekip yok ya da siz bu ekiple çalışmıyorsunuz.",
       "nameTaken": "Bu şantiyede bu adla bir ekip zaten var.",
       "hasWorkers": "Bu ekibe şimdi veya ileri bir tarihten itibaren yerleştirilmiş işçiler var. Önce onları aktarın.",
-      "inactive": "Bu ekip kapalı."
+      "inactive": "Bu ekip kapalı.",
+      "departmentInUse": "Bu ekibe çalışan görevlendirildi, bu yüzden bölümü değiştirilemez. Bunun yerine yeni bir ekip ekleyin.",
+      "noDepartment": "Bu ekibin henüz bölümü yok. Önce şantiye sayfasında belirleyin."
     },
     "staff": {
       "wrongRole": "Bu kişinin rolü buraya atanmaz."
@@ -410,7 +415,9 @@
       "unchanged": "Bu ay için zaten aynı maaş geçerli."
     },
     "placement": {
-      "notFound": "Görevlendirme bulunamadı."
+      "notFound": "Görevlendirme bulunamadı.",
+      "hasDepartment": "Bu görevlendirmenin zaten bir bölümü var. Başka birine geçmek, bir günden itibaren nakildir.",
+      "departmentFromTeam": "Bu çalışan bir ekipte: bunun yerine ekibin bölümünü belirleyin."
     },
     "monthlyHours": {
       "notInMonth": "İşçi bu ay bu şantiyede çalışmadı.",
@@ -446,6 +453,16 @@
       "notFound": "Bu vardiya kaydı yok.",
       "dayTaken": "Bu günde zaten bir vardiya başlıyor. Sahip veya yönetici düzeltebilir.",
       "unchanged": "Hiçbir şey değişmedi."
+    },
+    "department": {
+      "notFound": "Böyle bir bölüm yok.",
+      "nameTaken": "Burada bu adda bir bölüm zaten var.",
+      "inactive": "Bu bölüm kapalı.",
+      "parentInactive": "Üstteki bölüm kapalı. Önce onu yeniden açın.",
+      "hasActiveChildren": "Bu bölümün açık alt bölümleri var. Önce onları kapatın.",
+      "hasTeams": "Bu bölümün açık ekipleri var. Önce onları kapatın veya çalışanlarını nakledin.",
+      "hasWorkers": "Bu bölüme şimdi veya ileri bir günden itibaren çalışan görevlendirilmiş. Önce onları nakledin.",
+      "noneActive": "Bölümleri açmadan önce bir bölüm ekleyin."
     }
   },
   "payRules": {
@@ -645,7 +662,7 @@
     "edit": "Ekibi düzenle",
     "name": "Ekip adı",
     "department": "Bölüm",
-    "departmentHint": "İsteğe bağlı, örn. Elektrik veya Mekanik",
+    "departmentHint": "Ekibin çalışanları bu bölüme aittir.",
     "foremen": "Ekip başları",
     "manageForemen": "Ekip başları",
     "foremenDialogHint": "{{team}} ekibini yöneten ekip başları. Yalnızca kendi ekiplerini görürler.",
@@ -661,7 +678,8 @@
     "confirmReopen": {
       "title": "Ekip yeniden açılsın mı?",
       "description": "{{name}} işçiler için yeniden açılacak."
-    }
+    },
+    "departmentFixed": "Bu ekibe çalışan görevlendirildi, bu yüzden bölümü değiştirilemez. Başka bir bölüm için yeni bir ekip ekleyin."
   },
   "workers": {
     "title": "İşçiler",
@@ -757,7 +775,12 @@
     "shiftsSet": "Vardiya atanan işçiler: {{count}}",
     "shiftsSetSome": "Vardiya atanan işçiler: {{added}}. Zaten bu vardiyada: {{unchanged}}.",
     "chooseWorkers": "Seçilen işçiler: {{count}}",
-    "allShown": "Gösterilen tüm işçiler"
+    "allShown": "Gösterilen tüm işçiler",
+    "setDepartment": "Bölüm belirle",
+    "setDepartmentHint": "Bu görevlendirmenin henüz bölümü yok. Sonradan başka bir bölüme geçmek, bir günden itibaren nakildir.",
+    "departmentFromTeam": "Bu çalışan {{team}} ekibinde: bölümü ekibin bölümüdür. Bunu şantiye sayfasında belirleyin.",
+    "openSite": "{{site}} sayfasını aç",
+    "departmentOfTeam": "Ekibin bölümü"
   },
   "impersonation": {
     "banner": "{{name}} olarak giriş yaptınız.",
@@ -1033,7 +1056,9 @@
     "owesHint": "Avans ve kesintiler bu ayın ücretinden fazla. Hiçbir şey kendiliğinden sonraki aya aktarılmaz.",
     "earned": "Hak edilen",
     "payOutTotal": "Ödenecek",
-    "goToAdjustments": "Ek ödeme ve kesintilere git"
+    "goToAdjustments": "Ek ödeme ve kesintilere git",
+    "byDepartment": "Bölümlere göre",
+    "byDepartmentHint": "Her çalışan ay sonundaki bölümünde sayılır. Bir bölüm, alt bölümlerini de içerir."
   },
   "timesheet": {
     "title": "Puantaj",
@@ -1135,5 +1160,46 @@
         "button": "Geri al"
       }
     }
+  },
+  "departments": {
+    "title": "Bölümler",
+    "description": "Şirketinizin bölümleri, örneğin HSE veya QA/QC, alt bölümleriyle. Ekipler ve çalışanlar bir bölüme aittir.",
+    "create": "Bölüm ekle",
+    "edit": "Bölümü düzenle",
+    "addSub": "Alt bölüm ekle",
+    "close": "Bölümü kapat",
+    "reopen": "Bölümü yeniden aç",
+    "name": "Ad",
+    "code": "Kısa kod",
+    "codeHint": "İsteğe bağlı, örn. QA",
+    "parent": "Bağlı olduğu bölüm",
+    "parentHint": "En üst düzeyde bırakın veya başka bir bölümün altına koyun.",
+    "topLevel": "En üst düzey",
+    "under": "{{name}} altında",
+    "teams": "Ekipler",
+    "workers": "Çalışanlar",
+    "status": "Durum",
+    "active": "Etkin",
+    "closed": "Kapalı",
+    "empty": "Henüz bölüm yok",
+    "emptyDescription": "Şirketinizdeki bölümleri ekleyin, sonra açın.",
+    "dialogDescription": "Bölümler tüm şantiyeler için ortaktır.",
+    "use": "Bölümleri kullan",
+    "useHint": "Açıkken her yeni görevlendirme bir bölüm ister ve bölümler çalışanlarda, ekiplerde ve bordroda görünür.",
+    "useNeedsOne": "Önce bir bölüm ekleyin, sonra açın.",
+    "missing": "Bölümü olmayan çalışanlar: {{count}}",
+    "missingLink": "Çalışanlar sayfasında belirleyin",
+    "confirmClose": {
+      "title": "Bölüm kapatılsın mı?",
+      "description": "{{name}} kapatılacak: içine ekip veya çalışan konamaz. Geçmişi kalır."
+    },
+    "confirmReopen": {
+      "title": "Bölüm yeniden açılsın mı?",
+      "description": "{{name}} ekipler ve çalışanlar için yeniden açılacak."
+    },
+    "choose": "Bölüm seçin",
+    "department": "Bölüm",
+    "all": "Tüm bölümler",
+    "none": "Bölümsüz"
   }
 }

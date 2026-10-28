@@ -14,7 +14,10 @@ export interface TeamItem {
   id: string;
   siteId: string;
   name: string;
-  department: string | null;
+  /** The brigade's department; null while none is set */
+  departmentId: string | null;
+  /** A placement has the department, so it can't change any more */
+  departmentFixed: boolean;
   isActive: boolean;
   foremen: StaffMember[];
   workerCount: number;
@@ -44,6 +47,9 @@ export interface WorkerItem {
     siteName: string;
     teamId: string | null;
     teamName: string | null;
+    /** null: none set (from before the company used departments) */
+    departmentId: string | null;
+    departmentName: string | null;
     from: string;
     until: string | null;
   } | null;
@@ -101,6 +107,22 @@ export interface WorkerShiftItem {
   setAt: string;
 }
 
+/** A company department (AGENTS.md: Departments); parentId null is top level. */
+export interface DepartmentItem {
+  id: string;
+  parentId: string | null;
+  name: string;
+  code: string | null;
+  isActive: boolean;
+}
+
+/** A department in tree order: its depth (0 = top level) and its path from the top. */
+export interface DepartmentNode extends DepartmentItem {
+  depth: number;
+  /** e.g. "HSE › HSE Site A" */
+  path: string;
+}
+
 export const SITES_KEY = ['sites'] as const;
 export const WORKERS_KEY = ['workers'] as const;
 
@@ -125,6 +147,41 @@ export function useShifts() {
   return useQuery({ queryKey: SHIFTS_KEY, queryFn: () => api.get<ShiftItem[]>('/shifts') });
 }
 
+export const DEPARTMENTS_KEY = ['departments'] as const;
+
+export function useDepartments() {
+  return useQuery({ queryKey: DEPARTMENTS_KEY, queryFn: () => api.get<DepartmentItem[]>('/departments') });
+}
+
+/** Departments in tree order: each one followed by its sub-departments, siblings by name (the API's order). */
+export function departmentTree(all: readonly DepartmentItem[]): DepartmentNode[] {
+  const out: DepartmentNode[] = [];
+  const visit = (parentId: string | null, depth: number, prefix: string) => {
+    for (const d of all.filter((x) => x.parentId === parentId)) {
+      const path = prefix ? `${prefix} › ${d.name}` : d.name;
+      out.push({ ...d, depth, path });
+      visit(d.id, depth + 1, path);
+    }
+  };
+  visit(null, 0, '');
+  return out;
+}
+
+/** A department and every department under it, at any depth: its totals include them all. */
+export function withSubDepartments(all: readonly DepartmentItem[], id: string): Set<string> {
+  const ids = new Set([id]);
+  for (let added = true; added; ) {
+    added = false;
+    for (const d of all) {
+      if (d.parentId && ids.has(d.parentId) && !ids.has(d.id)) {
+        ids.add(d.id);
+        added = true;
+      }
+    }
+  }
+  return ids;
+}
+
 export const workerShiftsKey = (workerId: string) => [...WORKERS_KEY, workerId, 'shifts'] as const;
 
 export function useWorkerShifts(workerId: string) {
@@ -138,6 +195,7 @@ export function useRefreshOrganisation() {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: SITES_KEY }),
       queryClient.invalidateQueries({ queryKey: WORKERS_KEY }),
+      queryClient.invalidateQueries({ queryKey: DEPARTMENTS_KEY }),
     ]);
 }
 

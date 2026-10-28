@@ -31,7 +31,8 @@
     "timesheet": "Tabel",
     "timesheetSettings": "Tabel kiritish",
     "codes": "Kodlar",
-    "shifts": "Smenalar"
+    "shifts": "Smenalar",
+    "departments": "Boʻlimlar"
   },
   "settings": {
     "language": "Til",
@@ -306,7 +307,9 @@
     "gridCodeOne": "Bu holatning tabelda koʻrinadigan bitta kodini belgilang",
     "gridCodeNotForStatus": "Tabelda faqat kelmaslik holatlari koʻrinadi",
     "tooMany": "Juda koʻp yozuv",
-    "chooseWorkers": "Kamida bitta ishchini tanlang"
+    "chooseWorkers": "Kamida bitta ishchini tanlang",
+    "departmentCycle": "Boʻlimni oʻzi yoki oʻzining ichki boʻlimi ichiga qoʻyib boʻlmaydi.",
+    "departmentNotTeams": "Brigadadagi ishchi brigadaning boʻlimida boʻladi."
   },
   "errors": {
     "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
@@ -377,7 +380,9 @@
       "notFound": "Bu brigada mavjud emas yoki siz u bilan ishlamaysiz.",
       "nameTaken": "Bu obyektda shu nomli brigada allaqachon bor.",
       "hasWorkers": "Bu brigadaga hozir yoki keyingi sanadan ishchilar biriktirilgan. Avval ularni oʻtkazing.",
-      "inactive": "Bu brigada yopilgan."
+      "inactive": "Bu brigada yopilgan.",
+      "departmentInUse": "Bu brigadaga ishchilar joylashtirilgan, shuning uchun uning boʻlimini oʻzgartirib boʻlmaydi. Oʻrniga yangi brigada qoʻshing.",
+      "noDepartment": "Bu brigadaning hali boʻlimi yoʻq. Avval uni obyekt sahifasida belgilang."
     },
     "staff": {
       "wrongRole": "Bu odamning roli bu yerga biriktirilmaydi."
@@ -410,7 +415,9 @@
       "unchanged": "Bu oy uchun aynan shu maosh allaqachon amal qilmoqda."
     },
     "placement": {
-      "notFound": "Joylashuv topilmadi."
+      "notFound": "Joylashuv topilmadi.",
+      "hasDepartment": "Bu joylashuvning boʻlimi allaqachon bor. Boshqasiga oʻtish — biror kundan boshlab koʻchirish.",
+      "departmentFromTeam": "Bu ishchi brigadada: oʻrniga brigadaning boʻlimini belgilang."
     },
     "monthlyHours": {
       "notInMonth": "Ishchi bu oyda ushbu obyektda ishlamagan.",
@@ -446,6 +453,16 @@
       "notFound": "Bunday smena yozuvi yoʻq.",
       "dayTaken": "Bu kundan smena allaqachon boshlangan. Egasi yoki administrator tuzatishi mumkin.",
       "unchanged": "Hech narsa oʻzgarmadi."
+    },
+    "department": {
+      "notFound": "Bunday boʻlim yoʻq.",
+      "nameTaken": "Bu yerda shu nomdagi boʻlim allaqachon bor.",
+      "inactive": "Bu boʻlim yopilgan.",
+      "parentInactive": "Yuqoridagi boʻlim yopilgan. Avval uni qayta oching.",
+      "hasActiveChildren": "Bu boʻlimda ochiq ichki boʻlimlar bor. Avval ularni yoping.",
+      "hasTeams": "Bu boʻlimda ochiq brigadalar bor. Avval ularni yoping yoki ishchilarini koʻchiring.",
+      "hasWorkers": "Bu boʻlimga hozir yoki keyingi kundan ishchilar joylashtirilgan. Avval ularni koʻchiring.",
+      "noneActive": "Boʻlimlarni yoqishdan oldin boʻlim qoʻshing."
     }
   },
   "payRules": {
@@ -645,7 +662,7 @@
     "edit": "Brigadani tahrirlash",
     "name": "Brigada nomi",
     "department": "Boʻlim",
-    "departmentHint": "Ixtiyoriy, masalan Elektr yoki Mexanika",
+    "departmentHint": "Brigada ishchilari shu boʻlimga tegishli.",
     "foremen": "Brigadirlar",
     "manageForemen": "Brigadirlar",
     "foremenDialogHint": "{{team}} brigadasini boshqaradigan brigadirlar. Ular faqat oʻz brigadalarini koʻradi.",
@@ -661,7 +678,8 @@
     "confirmReopen": {
       "title": "Brigada qayta ochilsinmi?",
       "description": "{{name}} ishchilar uchun yana ochiladi."
-    }
+    },
+    "departmentFixed": "Bu brigadaga ishchilar joylashtirilgan, shuning uchun uning boʻlimini oʻzgartirib boʻlmaydi. Boshqa boʻlim uchun yangi brigada qoʻshing."
   },
   "workers": {
     "title": "Ishchilar",
@@ -757,7 +775,12 @@
     "shiftsSet": "Smena belgilangan ishchilar: {{count}}",
     "shiftsSetSome": "Smena belgilangan ishchilar: {{added}}. Allaqachon shu smenada: {{unchanged}}.",
     "chooseWorkers": "Tanlangan ishchilar: {{count}}",
-    "allShown": "Koʻrsatilgan barcha ishchilar"
+    "allShown": "Koʻrsatilgan barcha ishchilar",
+    "setDepartment": "Boʻlimni belgilash",
+    "setDepartmentHint": "Bu joylashuvda hali boʻlim yoʻq. Keyinchalik boshqa boʻlimga oʻtish — biror kundan boshlab koʻchirish.",
+    "departmentFromTeam": "Bu ishchi {{team}} brigadasida: uning boʻlimi brigadaning boʻlimi. Uni obyekt sahifasida belgilang.",
+    "openSite": "{{site}} sahifasini ochish",
+    "departmentOfTeam": "Brigadaning boʻlimi"
   },
   "impersonation": {
     "banner": "Siz {{name}} nomidan kirgansiz.",
@@ -1033,7 +1056,9 @@
     "owesHint": "Avans va ushlanmalar shu oydagi ish haqidan koʻp. Hech narsa keyingi oyga oʻzi oʻtmaydi.",
     "earned": "Hisoblangan",
     "payOutTotal": "Toʻlanadi",
-    "goToAdjustments": "Qoʻshimcha va ushlanmalarga oʻtish"
+    "goToAdjustments": "Qoʻshimcha va ushlanmalarga oʻtish",
+    "byDepartment": "Boʻlimlar boʻyicha",
+    "byDepartmentHint": "Har bir ishchi oy oxiridagi boʻlimida hisoblanadi. Boʻlim ichki boʻlimlarini ham oʻz ichiga oladi."
   },
   "timesheet": {
     "title": "Tabel",
@@ -1135,5 +1160,46 @@
         "button": "Qaytarish"
       }
     }
+  },
+  "departments": {
+    "title": "Boʻlimlar",
+    "description": "Kompaniyangiz boʻlimlari, masalan HSE yoki QA/QC, ichki boʻlimlari bilan. Brigadalar va ishchilar bitta boʻlimga tegishli.",
+    "create": "Boʻlim qoʻshish",
+    "edit": "Boʻlimni tahrirlash",
+    "addSub": "Ichki boʻlim qoʻshish",
+    "close": "Boʻlimni yopish",
+    "reopen": "Boʻlimni qayta ochish",
+    "name": "Nomi",
+    "code": "Qisqa kod",
+    "codeHint": "Ixtiyoriy, masalan QA",
+    "parent": "Qaysi boʻlim ichida",
+    "parentHint": "Yuqori darajada qoldiring yoki boshqa boʻlim ichiga qoʻying.",
+    "topLevel": "Yuqori daraja",
+    "under": "{{name}} ichida",
+    "teams": "Brigadalar",
+    "workers": "Ishchilar",
+    "status": "Holati",
+    "active": "Faol",
+    "closed": "Yopilgan",
+    "empty": "Hali boʻlimlar yoʻq",
+    "emptyDescription": "Kompaniyangizdagi boʻlimlarni qoʻshing, soʻng ularni yoqing.",
+    "dialogDescription": "Boʻlimlar barcha obyektlar uchun umumiy.",
+    "use": "Boʻlimlardan foydalanish",
+    "useHint": "Yoqilganda har bir yangi joylashuvga boʻlim kerak boʻladi, boʻlimlar ishchilar, brigadalar va ish haqida koʻrinadi.",
+    "useNeedsOne": "Avval boʻlim qoʻshing, soʻng yoqing.",
+    "missing": "Boʻlimsiz ishchilar: {{count}}",
+    "missingLink": "Ishchilar sahifasida belgilang",
+    "confirmClose": {
+      "title": "Boʻlim yopilsinmi?",
+      "description": "{{name}} yopiladi: unga brigada yoki ishchi qoʻyib boʻlmaydi. Tarixi saqlanadi."
+    },
+    "confirmReopen": {
+      "title": "Boʻlim qayta ochilsinmi?",
+      "description": "{{name}} brigadalar va ishchilar uchun yana ochiladi."
+    },
+    "choose": "Boʻlimni tanlang",
+    "department": "Boʻlim",
+    "all": "Barcha boʻlimlar",
+    "none": "Boʻlimsiz"
   }
 }
