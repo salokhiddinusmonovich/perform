@@ -30,6 +30,9 @@ export interface WorkerShiftView {
 
 type Tx = Prisma.TransactionClient;
 
+/** Giving a shift to up to 1000 workers at once takes longer than Prisma's default 5 seconds. */
+const LONG_TRANSACTION = { timeout: 120_000, maxWait: 30_000 };
+
 /**
  * Shifts (AGENTS.md: Shifts). Owners and admins define the company's shifts. A worker
  * has a shift from a day until a newer one: owners, admins and accountants give shifts
@@ -134,7 +137,7 @@ export class ShiftsService {
         added++;
       }
       return { added, unchanged: input.workerIds.length - added };
-    });
+    }, LONG_TRANSACTION);
   }
 
   /** Corrects a row (owners and admins), audited with old and new values. */
