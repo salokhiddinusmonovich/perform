@@ -32,7 +32,8 @@
     "timesheetSettings": "Timesheet entry",
     "codes": "Codes",
     "shifts": "Shifts",
-    "departments": "Departments"
+    "departments": "Departments",
+    "import": "Excel import"
   },
   "settings": {
     "language": "Language",
@@ -390,7 +391,8 @@
     "worker": {
       "notFound": "This worker doesn't exist or you don't see them.",
       "pinflTaken": "A worker with this PINFL already exists.",
-      "hasLaterEntries": "There are timesheet days after this date. Change or remove them first."
+      "hasLaterEntries": "There are timesheet days after this date. Change or remove them first.",
+      "employeeNumberTaken": "Another worker already has this employee number."
     },
     "impersonation": {
       "inactiveUser": "This account is deactivated, so you can’t log in as this person.",
@@ -441,7 +443,8 @@
       "entryExists": "This day already has hours here. The timesheet now shows what is saved.",
       "moduleOff": "This month’s plan doesn’t include the Timesheet module, so hours can’t be entered for it.",
       "wholeDay": "An absence is the worker’s whole day: it can’t share the day with other entries.",
-      "dayTooManyHours": "The worker’s hours on this day add up to more than 24."
+      "dayTooManyHours": "The worker’s hours on this day add up to more than 24.",
+      "imported": "This worker’s hours for the month come from an Excel import. Import the month again to change them."
     },
     "shift": {
       "notFound": "This shift doesn’t exist.",
@@ -463,6 +466,34 @@
       "hasTeams": "This department has open brigades. Close them or move their workers first.",
       "hasWorkers": "Workers are placed in this department, now or from a later day. Move them first.",
       "noneActive": "Add a department before switching departments on."
+    },
+    "import": {
+      "noFile": "Choose an Excel file.",
+      "unreadableFile": "This file can’t be read. Save it as an Excel workbook (.xlsx) and try again.",
+      "sheetNotFound": "The file has no sheet with this name.",
+      "noDaySheet": "No sheet has a header row with the days 1, 2, 3… of the month.",
+      "columnMissing": "Choose the column for “{{field}}”.",
+      "columnTwice": "The same column is chosen for “{{field}}” and another field.",
+      "dayColumnsMissing": "The sheet has no column for some days of the month.",
+      "noEmployeeNumber": "No employee number.",
+      "duplicateEmployeeNumber": "This employee number is in the file more than once.",
+      "invalidDate": "Not a date.",
+      "valueNotMapped": "Choose what “{{value}}” means below.",
+      "siteNotFound": "There is no site “{{value}}” in the app. Add it first.",
+      "departmentNotFound": "There is no department “{{value}}” in the app. Add it first.",
+      "departmentAmbiguous": "More than one department is called “{{value}}”.",
+      "duplicatePinfl": "This PINFL is in the file more than once.",
+      "workerNotFound": "No worker in the app has this employee number. Add the workers first.",
+      "blankWhileEmployed": "Empty cell while the worker is employed.",
+      "notEmployedCodeWhileEmployed": "Marked “not employed”, but the worker is employed that day.",
+      "valueWhileNotEmployed": "Filled in, but the worker isn’t employed that day.",
+      "unknownCode": "Not hours and not one of the company’s codes.",
+      "shiftMismatch": "The shift differs from the worker’s shift in the app.",
+      "monthlyTotalsEntered": "This worker’s hours for the month are already entered as monthly totals.",
+      "dailyEntriesEntered": "This worker’s hours for the month are already entered in the daily timesheet.",
+      "hasProblems": "The file still has problems ({{problems}}). Fix them and try again.",
+      "hireAfterExit": "The exit date is before the hire date “{{value}}”: the worker is placed from their first day in the month until the exit date.",
+      "exitFromCode": "No exit date: the last working day is the day before “{{value}}”."
     }
   },
   "payRules": {
@@ -780,7 +811,10 @@
     "setDepartmentHint": "This placement has no department yet. Moving to another department later is a move from a day.",
     "departmentFromTeam": "This worker is in the brigade {{team}}: their department is the brigade’s. Set it on the site page.",
     "openSite": "Open {{site}}",
-    "departmentOfTeam": "The brigade’s department"
+    "departmentOfTeam": "The brigade’s department",
+    "employeeNumber": "Employee number",
+    "employeeNumberHint": "The company’s own number, e.g. from the timesheet. Excel imports find the worker by it.",
+    "employeeNumberShort": "No. {{number}}"
   },
   "impersonation": {
     "banner": "You are logged in as {{name}}.",
@@ -977,7 +1011,8 @@
     "source": "Hours from",
     "sources": {
       "TOTALS": "Monthly hours",
-      "DAILY": "Daily timesheet"
+      "DAILY": "Daily timesheet",
+      "IMPORT": "Excel import"
     },
     "pay": "Pay",
     "problemCount": "Problems: {{count}}",
@@ -1099,7 +1134,8 @@
     "codesMissingTitle": "Some absences have no code yet",
     "codesMissingManager": "Hours can be entered already. To enter absences, add your company’s codes for them.",
     "codesMissingMember": "Hours can be entered already. Absences without a code can be entered once an owner or administrator adds the company’s codes.",
-    "goToCodes": "Go to codes"
+    "goToCodes": "Go to codes",
+    "importedHint": "Some workers’ hours for this month come from an Excel import, so their days can’t be changed here. Import the month again to correct them."
   },
   "timesheetSettings": {
     "title": "Timesheet entry",
@@ -1185,8 +1221,26 @@
     "emptyDescription": "Add the departments your company has, then switch them on.",
     "dialogDescription": "Departments are shared by all sites.",
     "use": "Use departments",
-    "useHint": "When on, every new placement needs a department, and departments show on workers, brigades and payroll.",
+    "useHint": "When on, every new placement needs a department, and departments show on workers, brigades and payroll. Workers already placed keep working; those without a department are marked until one is set.",
     "useNeedsOne": "Add a department first, then switch them on.",
+    "listLink": "Open the department list",
+    "on": "Switched on",
+    "off": "Switched off",
+    "onHint": "Every new placement needs a department.",
+    "offHint": "Workers, brigades and payroll don’t show departments yet.",
+    "settingLink": "Change in Company settings",
+    "yourSitesOnly": "Brigade and worker counts cover only your sites.",
+    "switchOn": "Switch on",
+    "switchOff": "Switch off",
+    "confirmOn": {
+      "title": "Switch departments on?",
+      "description": "From now on every new placement needs a department, and departments show on workers, brigades and payroll.",
+      "missing": "Workers placed now without a department: {{count}}. They keep working and are marked until one is set."
+    },
+    "confirmOff": {
+      "title": "Switch departments off?",
+      "description": "Departments will be hidden on workers, brigades and payroll, and new placements won’t need one. The departments, and those set on workers and brigades, are kept and show again when switched back on."
+    },
     "missing": "Workers without a department: {{count}}",
     "missingLink": "Set them on the Workers page",
     "confirmClose": {
@@ -1201,5 +1255,82 @@
     "department": "Department",
     "all": "All departments",
     "none": "No department"
+  },
+  "import": {
+    "title": "Excel import",
+    "description": "Import a month’s timesheet from Excel: first the workers who are new, then the hours.",
+    "file": "Excel file",
+    "fileHint": "An .xlsx workbook with a header row and a column for each day.",
+    "chooseFile": "Choose the month and the Excel file. Nothing is saved until you confirm a step.",
+    "sheet": "Sheet",
+    "chooseSheet": "Choose a sheet",
+    "lockedTitle": "This month is locked",
+    "lockedDescription": "Hours can’t be imported into a locked month.",
+    "columnsTitle": "Columns",
+    "columnsDescription": "Header row {{row}}, {{days}} day columns. Check which column holds each field.",
+    "mappingSaved": "These columns are the ones chosen at the last import.",
+    "requiredField": "{{field}} (required)",
+    "notInFile": "Not in the file",
+    "valuesTitle": "Employment types in the file",
+    "valuesDescription": "Choose what each value in the file means.",
+    "checkAgain": "Check the file again",
+    "checkAgainHint": "Check the file again to see the result of your changes.",
+    "workersTitle": "Step 1: workers",
+    "workersDescription": "Workers whose employee number isn’t in the app yet are added with their site, dates and salary. Workers already in the app aren’t changed.",
+    "rows": "Rows: {{count}}",
+    "newWorkers": "New: {{count}}",
+    "existingWorkers": "Already in the app: {{count}}",
+    "addWorkers": "Add workers ({{count}})",
+    "addWorkersTitle": "Add the workers?",
+    "addWorkersConfirm": "{{count}} new workers from “{{file}}” will be added, with their placements and salaries.",
+    "workersAdded": "Workers added: {{count}}",
+    "workersByAdmin": "New workers are added by an owner or admin.",
+    "changesTitle": "Differences from the app",
+    "changesDescription": "The file says something else for these workers. The import doesn’t change them: make the change on the worker’s page if it is right.",
+    "field": "Field",
+    "inApp": "In the app",
+    "inFile": "In the file",
+    "hoursTitle": "Step 2: hours",
+    "hoursDescription": "Each day’s hours or code is read for the month. Importing the month again replaces the hours imported before.",
+    "workerMonths": "Workers: {{count}}",
+    "replaces": "Replaces an earlier import: {{count}}",
+    "importHours": "Import hours ({{count}})",
+    "importHoursTitle": "Import the hours?",
+    "importHoursConfirm": "The hours of {{count}} workers from “{{file}}” will be saved for the month.",
+    "importHoursReplaceConfirm": "The hours of {{count}} workers from “{{file}}” will be saved for the month. For {{replaces}} of them they replace hours imported before.",
+    "hoursImported": "Hours imported. Workers changed: {{count}}",
+    "earlierTitle": "Earlier imports of this month",
+    "earlierLine": "{{file}}: {{when}}, {{who}}, workers changed: {{count}}",
+    "noProblems": "No problems",
+    "problemCount": "Problems: {{count}}",
+    "row": "Row",
+    "wholeFile": "File",
+    "worker": "Worker",
+    "problem": "Problem",
+    "fileValue": "In the file: “{{value}}”",
+    "days": "Days: {{days}}",
+    "fields": {
+      "employeeNumber": "Employee number",
+      "lastName": "Last name",
+      "firstName": "First name",
+      "patronymic": "Patronymic",
+      "position": "Position",
+      "employmentType": "Employment type",
+      "pinfl": "PINFL",
+      "birthDate": "Date of birth",
+      "nationality": "Nationality",
+      "passportSeries": "Passport series",
+      "passportNumber": "Passport number",
+      "phone": "Phone",
+      "site": "Site",
+      "department": "Department",
+      "hiredOn": "Hire date",
+      "leftOn": "Last working day",
+      "salary": "Monthly salary",
+      "shift": "Shift"
+    },
+    "note": "Note",
+    "noteCount": "Notes: {{count}}",
+    "notesDescription": "The import reads these rows this way. Check them; they don’t stop the import."
   }
 }

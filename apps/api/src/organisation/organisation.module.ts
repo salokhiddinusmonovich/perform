@@ -23,5 +23,6 @@ import { WorkersService } from './workers.service';
     DepartmentsController,
   ],
   providers: [SitesService, WorkersService, ShiftsService, DepartmentsService],
+  exports: [WorkersService],
 })
 export class OrganisationModule {}

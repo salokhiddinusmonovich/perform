@@ -15,6 +15,8 @@ export interface TimesheetEntryItem {
   note: string | null;
   /** Sent back with a change or removal: a stale version is refused. */
   version: number;
+  /** Written by an Excel import: changed only by importing the month again */
+  imported: boolean;
   updatedBy: { fullName: string };
   updatedAt: string;
 }
@@ -28,6 +30,8 @@ export interface TimesheetRow {
   employed: { from: string; until: string | null }[];
   /** Hours for this worker-month come from monthly totals */
   hasMonthlyTotals: boolean;
+  /** Hours for this worker-month come from an Excel import */
+  hasImportedHours: boolean;
   canEnter: boolean;
   entries: TimesheetEntryItem[];
 }

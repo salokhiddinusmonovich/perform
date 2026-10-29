@@ -172,7 +172,16 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         cell: ({ row }) => (
           <div className="min-w-44">
             <div className="font-medium">{workerName(row.original)}</div>
-            {row.original.position && <div className="text-sm text-muted-foreground">{row.original.position}</div>}
+            {(row.original.employeeNumber || row.original.position) && (
+              <div className="text-sm text-muted-foreground">
+                {[
+                  row.original.employeeNumber && t('workers.employeeNumberShort', { number: row.original.employeeNumber }),
+                  row.original.position,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </div>
+            )}
           </div>
         ),
       },
@@ -336,6 +345,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         searchText={(w) =>
           [
             workerName(w),
+            w.employeeNumber,
             w.position,
             w.personal?.pinfl,
             w.placement?.siteName,
@@ -440,6 +450,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
 
 /** Empty worker form. Employment type has no default: the person adding chooses. */
 const EMPTY_WORKER = {
+  employeeNumber: '',
   lastName: '',
   firstName: '',
   patronymic: '',
@@ -455,6 +466,7 @@ const EMPTY_WORKER = {
 
 function toWorkerInput(w: WorkerItem): WorkerInput {
   return {
+    employeeNumber: w.employeeNumber ?? '',
     lastName: w.lastName,
     firstName: w.firstName,
     patronymic: w.patronymic ?? '',
@@ -966,7 +978,8 @@ function WorkerFields<T extends FieldValues>({
         {text('firstName', t('workers.firstName'))}
         {text('patronymic', t('workers.patronymic'))}
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
+        {text('employeeNumber', t('workers.employeeNumber'), { hint: t('workers.employeeNumberHint') })}
         {text('position', t('workers.position'))}
         <Controller
           control={control}

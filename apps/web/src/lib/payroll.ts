@@ -99,7 +99,7 @@ export interface PayrollWorker {
   /** The worker's department of the month (of their last placement in it); absent in months locked before departments */
   department?: { id: string; name: string } | null;
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
-  source: 'DAILY' | 'TOTALS' | null;
+  source: 'DAILY' | 'IMPORT' | 'TOTALS' | null;
   parts: PayrollPart[];
   payOut: PayrollPayOut | null;
   /** The amount to pay out; null while there are problems. Below zero: the worker owes it. */

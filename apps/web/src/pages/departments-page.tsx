@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { departmentSchema, type Department, type DepartmentInput } from '@puantaj/schemas';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
+import type { TFunction } from 'i18next';
 import { CornerDownRight, MoreHorizontal, Pencil, Plus, Power } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -16,8 +17,6 @@ import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,22 +25,25 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
-import { canManageCompany, ME_KEY, usesDepartments, useMe, type Me } from '@/lib/auth';
+import { canManageCompany, seesDepartments, usesDepartments, useMe, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
 import { today } from '@/lib/format';
 import {
   departmentTree,
   useDepartments,
   useRefreshOrganisation,
+  stillPlaced,
   useSites,
   useWorkers,
   withSubDepartments,
   type DepartmentNode,
 } from '@/lib/organisation';
 
-/** The company's departments (AGENTS.md: Departments): a tree, and whether the company uses them. */
+/**
+ * The company's departments (AGENTS.md: Departments) as a tree. Owners and admins manage them;
+ * accountants and project managers only look. Switching them on is in Company settings.
+ */
 export function DepartmentsPage() {
   const { t } = useTranslation();
   const me = useMe().data;
@@ -60,7 +62,7 @@ export function DepartmentsPage() {
           )
         }
       />
-      <RequireAccess allowed={canManageCompany}>
+      <RequireAccess allowed={seesDepartments}>
         {(verified) => <DepartmentsView me={verified} creating={creating} onCreatingChange={setCreating} />}
       </RequireAccess>
     </>
@@ -90,9 +92,9 @@ function DepartmentsView({
   const tree = useMemo(() => departmentTree(departments.data ?? []), [departments.data]);
   // Counted here from the lists the page has: active brigades, and workers placed in the department
   // today, each including its sub-departments (like every department total).
+  // Project managers see only their sites' brigades and workers, so the counts cover those.
+  const working = useMemo(() => stillPlaced(workers.data ?? [], today()), [workers.data]);
   const counts = useMemo(() => {
-    const day = today();
-    const working = (workers.data ?? []).filter((w) => w.placement && (w.placement.until === null || w.placement.until >= day));
     const teams = (sites.data ?? []).flatMap((s) => s.teams).filter((x) => x.isActive);
     return new Map(
       tree.map((d) => {
@@ -101,15 +103,14 @@ function DepartmentsView({
           d.id,
           {
             teams: teams.filter((x) => x.departmentId && ids.has(x.departmentId)).length,
-            workers: working.filter((w) => w.placement!.departmentId && ids.has(w.placement!.departmentId)).length,
+            workers: working.filter((w) => w.placement.departmentId && ids.has(w.placement.departmentId)).length,
           },
         ];
       }),
     );
-  }, [tree, sites.data, workers.data]);
-  const missing = (workers.data ?? []).filter(
-    (w) => w.placement && !w.placement.departmentId && (w.placement.until === null || w.placement.until >= today()),
-  ).length;
+  }, [tree, sites.data, working]);
+  const missing = working.filter((w) => !w.placement.departmentId).length;
+  const manages = canManageCompany(me);
 
   const columns = useMemo<ColumnDef<DepartmentNode, unknown>[]>(
     () => [
@@ -156,38 +157,10 @@ function DepartmentsView({
             <StatusBadge tone="neutral">{t('departments.closed')}</StatusBadge>
           ),
       },
-      {
-        id: 'actions',
-        header: () => <span className="sr-only">{t('common.actions')}</span>,
-        enableSorting: false,
-        cell: ({ row }) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label={t('common.actionsFor', { name: row.original.path })}>
-                <MoreHorizontal aria-hidden />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setEditing({ kind: 'edit', department: row.original })}>
-                <Pencil aria-hidden />
-                {t('departments.edit')}
-              </DropdownMenuItem>
-              {row.original.isActive && (
-                <DropdownMenuItem onSelect={() => setEditing({ kind: 'create', parentId: row.original.id })}>
-                  <CornerDownRight aria-hidden />
-                  {t('departments.addSub')}
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onSelect={() => setToggling(row.original)}>
-                <Power aria-hidden />
-                {row.original.isActive ? t('departments.close') : t('departments.reopen')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
-      },
+      // Only owners and admins change departments; everyone else only looks.
+      ...(manages ? [actionsColumn(t, setEditing, setToggling)] : []),
     ],
-    [t, tree, counts],
+    [t, tree, counts, manages],
   );
 
   const dialog: Editing | null = creating ? { kind: 'create', parentId: null } : editing;
@@ -198,7 +171,7 @@ function DepartmentsView({
 
   return (
     <div className="space-y-6">
-      <UseDepartmentsCard me={me} missing={missing} hasActive={tree.some((d) => d.isActive)} />
+      <DepartmentsStatus me={me} missing={missing} />
       <DataTable
         columns={columns}
         data={tree}
@@ -247,47 +220,78 @@ function DepartmentsView({
   );
 }
 
-/** Whether the company uses departments, and the workers still without one while it does. */
-function UseDepartmentsCard({ me, missing, hasActive }: { me: Me; missing: number; hasActive: boolean }) {
-  const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const enabled = usesDepartments(me);
-  const save = useMutation({
-    mutationFn: (next: boolean) => api.put('/departments/settings', { enabled: next }),
-    onSuccess: async () => {
-      toast.success(t('common.saved'));
-      // Forms and lists show departments by "me".
-      await queryClient.invalidateQueries({ queryKey: ME_KEY });
-    },
-    onError: (error) => toast.error(errorMessage(t, error)),
-  });
+/** The row menu: edit, add a sub-department, close or reopen (owners and admins). */
+function actionsColumn(
+  t: TFunction,
+  setEditing: (editing: Editing) => void,
+  setToggling: (department: DepartmentNode) => void,
+): ColumnDef<DepartmentNode, unknown> {
+  return {
+    id: 'actions',
+    header: () => <span className="sr-only">{t('common.actions')}</span>,
+    enableSorting: false,
+    cell: ({ row }) => (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label={t('common.actionsFor', { name: row.original.path })}>
+            <MoreHorizontal aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setEditing({ kind: 'edit', department: row.original })}>
+            <Pencil aria-hidden />
+            {t('departments.edit')}
+          </DropdownMenuItem>
+          {row.original.isActive && (
+            <DropdownMenuItem onSelect={() => setEditing({ kind: 'create', parentId: row.original.id })}>
+              <CornerDownRight aria-hidden />
+              {t('departments.addSub')}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={() => setToggling(row.original)}>
+            <Power aria-hidden />
+            {row.original.isActive ? t('departments.close') : t('departments.reopen')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ),
+  };
+}
 
+/**
+ * Whether the company uses departments (switched in Company settings), and the workers still
+ * without one while it does. Only owners and admins see this page while departments are off.
+ */
+function DepartmentsStatus({ me, missing }: { me: Me; missing: number }) {
+  const { t } = useTranslation();
+  const enabled = usesDepartments(me);
   return (
-    <Card className="max-w-2xl">
-      <CardContent className="space-y-3">
-        <Label className="flex min-h-10 cursor-pointer items-center gap-2 font-normal">
-          <Checkbox
-            checked={enabled}
-            disabled={save.isPending || (!enabled && !hasActive)}
-            onCheckedChange={(checked) => save.mutate(checked === true)}
-          />
-          <span>
-            <span className="font-medium">{t('departments.use')}</span>
-            <span className="block text-sm text-muted-foreground">
-              {!enabled && !hasActive ? t('departments.useNeedsOne') : t('departments.useHint')}
-            </span>
-          </span>
-        </Label>
-        {enabled && missing > 0 && (
-          <p className="flex flex-wrap items-center gap-2 text-sm">
-            <StatusBadge tone="warning">{t('departments.missing', { count: missing })}</StatusBadge>
-            <Link to="/workers" className="underline underline-offset-4">
-              {t('departments.missingLink')}
-            </Link>
-          </p>
+    <div className="space-y-2 text-sm">
+      <p className="flex flex-wrap items-center gap-2">
+        {enabled ? (
+          <StatusBadge tone="success">{t('departments.on')}</StatusBadge>
+        ) : (
+          <StatusBadge tone="neutral">{t('departments.off')}</StatusBadge>
         )}
-      </CardContent>
-    </Card>
+        <span className="text-muted-foreground">{enabled ? t('departments.onHint') : t('departments.offHint')}</span>
+        {canManageCompany(me) && (
+          <Link to="/settings/company" className="underline underline-offset-4">
+            {t('departments.settingLink')}
+          </Link>
+        )}
+      </p>
+      {me.activeCompany?.role === 'PROJECT_MANAGER' && (
+        <p className="text-muted-foreground">{t('departments.yourSitesOnly')}</p>
+      )}
+      {enabled && missing > 0 && (
+        <p className="flex flex-wrap items-center gap-2">
+          <StatusBadge tone="warning">{t('departments.missing', { count: missing })}</StatusBadge>
+          <Link to="/workers" className="underline underline-offset-4">
+            {t('departments.missingLink')}
+          </Link>
+        </p>
+      )}
+    </div>
   );
 }
 

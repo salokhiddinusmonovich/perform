@@ -52,6 +52,8 @@ export interface SalaryView {
 
 export interface WorkerView {
   id: string;
+  /** The company's own number for the worker; null: none given */
+  employeeNumber: string | null;
   lastName: string;
   firstName: string;
   patronymic: string | null;
@@ -130,25 +132,29 @@ export class WorkersService {
   }
 
   async create(auth: CompanyAuthContext, input: CreateWorker): Promise<{ id: string }> {
+    return this.prisma.$transaction((tx) => this.createIn(tx, auth, input));
+  }
+
+  /** create() inside the caller's transaction (an Excel import adds many workers in one). */
+  async createIn(tx: Tx, auth: CompanyAuthContext, input: CreateWorker): Promise<{ id: string }> {
     const companyId = auth.company.id;
     const { worker: details, placement } = input;
     assertManagesSite(auth, placement.siteId);
-    return this.prisma.$transaction(async (tx) => {
-      const departmentId = await this.checkPlace(tx, auth, placement, 'placement.');
-      await this.assertPinflFree(tx, companyId, details.pinfl, null);
-      await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
-      const { worker, assignment } = await withinWorkerLimit(tx, companyId, null, placement.from, async () => {
-        const worker = await tx.worker.create({ data: { companyId, ...toColumns(details) } });
-        const assignment = await tx.assignment.create({ data: placementColumns(companyId, worker.id, placement, departmentId) });
-        return { worker, assignment };
-      });
-      await this.record(tx, auth, 'worker.create', worker.id, {
-        name: fullName(details),
-        placement: { assignmentId: assignment.id, ...placement, departmentId },
-        personalData: PERSONAL_FIELDS.filter((f) => details[f] !== null),
-      });
-      return { id: worker.id };
+    const departmentId = await this.checkPlace(tx, auth, placement, 'placement.');
+    await this.assertUniqueFree(tx, companyId, details, null);
+    await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
+    const { worker, assignment } = await withinWorkerLimit(tx, companyId, null, placement.from, async () => {
+      const worker = await tx.worker.create({ data: { companyId, ...toColumns(details) } });
+      const assignment = await tx.assignment.create({ data: placementColumns(companyId, worker.id, placement, departmentId) });
+      return { worker, assignment };
     });
+    await this.record(tx, auth, 'worker.create', worker.id, {
+      name: fullName(details),
+      employeeNumber: details.employeeNumber,
+      placement: { assignmentId: assignment.id, ...placement, departmentId },
+      personalData: PERSONAL_FIELDS.filter((f) => details[f] !== null),
+    });
+    return { id: worker.id };
   }
 
   async update(auth: CompanyAuthContext, id: string, details: Worker): Promise<void> {
@@ -156,7 +162,7 @@ export class WorkersService {
     await this.prisma.$transaction(async (tx) => {
       const before = await this.find(tx, auth, id);
       assertManagesSite(auth, before.assignments[0].siteId);
-      await this.assertPinflFree(tx, companyId, details.pinfl, id);
+      await this.assertUniqueFree(tx, companyId, details, id);
       await tx.worker.update({ where: { id }, data: toColumns(details) });
       const old = toInput(before);
       const changed = (Object.keys(details) as (keyof Worker)[]).filter((k) => details[k] !== old[k]);
@@ -230,23 +236,26 @@ export class WorkersService {
 
   /** Sets the worker's last working day (or corrects it). */
   async leave(auth: CompanyAuthContext, id: string, date: string): Promise<void> {
+    await this.prisma.$transaction((tx) => this.leaveIn(tx, auth, id, date));
+  }
+
+  /** leave() inside the caller's transaction. */
+  async leaveIn(tx: Tx, auth: CompanyAuthContext, id: string, date: string): Promise<void> {
     const companyId = auth.company.id;
-    await this.prisma.$transaction(async (tx) => {
-      const worker = await this.find(tx, auth, id);
-      const current = worker.assignments[0];
-      assertManagesSite(auth, current.siteId);
-      if (date < isoDay(current.hiredOn)) {
-        throw badRequest('validation', { issues: [{ path: 'date', message: 'validation.leaveBeforeStart' }] });
-      }
-      // Moving the last day earlier or later changes the months from the earlier of the two.
-      const from = current.leftOn && isoDay(current.leftOn) < date ? isoDay(current.leftOn) : date;
-      await assertMonthsOpen(tx, companyId, monthOfDay(from), null);
-      await this.endPlacement(tx, companyId, current.id, date);
-      await this.record(tx, auth, 'worker.leave', id, {
-        assignmentId: current.id,
-        from: current.leftOn ? isoDay(current.leftOn) : null,
-        to: date,
-      });
+    const worker = await this.find(tx, auth, id);
+    const current = worker.assignments[0];
+    assertManagesSite(auth, current.siteId);
+    if (date < isoDay(current.hiredOn)) {
+      throw badRequest('validation', { issues: [{ path: 'date', message: 'validation.leaveBeforeStart' }] });
+    }
+    // Moving the last day earlier or later changes the months from the earlier of the two.
+    const from = current.leftOn && isoDay(current.leftOn) < date ? isoDay(current.leftOn) : date;
+    await assertMonthsOpen(tx, companyId, monthOfDay(from), null);
+    await this.endPlacement(tx, companyId, current.id, date);
+    await this.record(tx, auth, 'worker.leave', id, {
+      assignmentId: current.id,
+      from: current.leftOn ? isoDay(current.leftOn) : null,
+      to: date,
     });
   }
 
@@ -275,34 +284,37 @@ export class WorkersService {
    * none of those may be locked. A salary from a month that already has one corrects it.
    */
   async addSalary(auth: CompanyAuthContext, id: string, input: Salary): Promise<{ id: string }> {
-    const companyId = auth.company.id;
-    return this.prisma.$transaction(async (tx) => {
-      await this.find(tx, auth, id);
-      const start = monthIndex(input.fromYear, input.fromMonth);
-      const rows = await tx.salary.findMany({ where: { workerId: id, companyId }, orderBy: SALARY_ORDER });
-      const inForce = rows.find((r) => monthIndex(r.fromYear, r.fromMonth) <= start) ?? null;
-      const next = rows.filter((r) => monthIndex(r.fromYear, r.fromMonth) > start).at(-1) ?? null;
-      await assertMonthsOpen(
-        tx,
-        companyId,
-        { year: input.fromYear, month: input.fromMonth },
-        next && { year: next.fromYear, month: next.fromMonth },
-      );
-      if (inForce && inForce.monthlySalary.toString() === input.monthlySalary) throw conflict('salary.unchanged');
+    return this.prisma.$transaction((tx) => this.addSalaryIn(tx, auth, id, input));
+  }
 
-      const row = await tx.salary.create({
-        data: { companyId, workerId: id, ...input, setById: auth.user.id },
-      });
-      await this.record(tx, auth, 'salary.add', id, {
-        salaryId: row.id,
-        fromYear: input.fromYear,
-        fromMonth: input.fromMonth,
-        from: inForce ? inForce.monthlySalary.toString() : null,
-        to: input.monthlySalary,
-        reason: input.reason,
-      });
-      return { id: row.id };
+  /** addSalary() inside the caller's transaction. */
+  async addSalaryIn(tx: Tx, auth: CompanyAuthContext, id: string, input: Salary): Promise<{ id: string }> {
+    const companyId = auth.company.id;
+    await this.find(tx, auth, id);
+    const start = monthIndex(input.fromYear, input.fromMonth);
+    const rows = await tx.salary.findMany({ where: { workerId: id, companyId }, orderBy: SALARY_ORDER });
+    const inForce = rows.find((r) => monthIndex(r.fromYear, r.fromMonth) <= start) ?? null;
+    const next = rows.filter((r) => monthIndex(r.fromYear, r.fromMonth) > start).at(-1) ?? null;
+    await assertMonthsOpen(
+      tx,
+      companyId,
+      { year: input.fromYear, month: input.fromMonth },
+      next && { year: next.fromYear, month: next.fromMonth },
+    );
+    if (inForce && inForce.monthlySalary.toString() === input.monthlySalary) throw conflict('salary.unchanged');
+
+    const row = await tx.salary.create({
+      data: { companyId, workerId: id, ...input, setById: auth.user.id },
     });
+    await this.record(tx, auth, 'salary.add', id, {
+      salaryId: row.id,
+      fromYear: input.fromYear,
+      fromMonth: input.fromMonth,
+      from: inForce ? inForce.monthlySalary.toString() : null,
+      to: input.monthlySalary,
+      reason: input.reason,
+    });
+    return { id: row.id };
   }
 
   /** Ends a placement on `lastDay`, unless timesheet days already exist after it. */
@@ -348,10 +360,16 @@ export class WorkersService {
     return null;
   }
 
-  private async assertPinflFree(tx: Tx, companyId: string, pinfl: string | null, exceptId: string | null) {
-    if (!pinfl) return;
-    const other = await tx.worker.findFirst({ where: { companyId, pinfl, NOT: exceptId ? { id: exceptId } : undefined } });
-    if (other) throw conflict('worker.pinflTaken');
+  /** The PINFL and the employee number must not be another worker's in the company. */
+  private async assertUniqueFree(tx: Tx, companyId: string, details: Worker, exceptId: string | null) {
+    const not = exceptId ? { id: exceptId } : undefined;
+    if (details.pinfl && (await tx.worker.findFirst({ where: { companyId, pinfl: details.pinfl, NOT: not } }))) {
+      throw conflict('worker.pinflTaken');
+    }
+    const employeeNumber = details.employeeNumber;
+    if (employeeNumber && (await tx.worker.findFirst({ where: { companyId, employeeNumber, NOT: not } }))) {
+      throw conflict('worker.employeeNumberTaken');
+    }
   }
 
   /** A worker the caller sees, or 404 (another company's or out of scope look the same). */
@@ -378,6 +396,7 @@ export class WorkersService {
     const p = w.assignments[0];
     return {
       id: w.id,
+      employeeNumber: w.employeeNumber,
       lastName: w.lastName,
       firstName: w.firstName,
       patronymic: w.patronymic,
@@ -435,6 +454,7 @@ function toColumns(w: Worker) {
 
 function toInput(w: WorkerRow): Worker {
   return {
+    employeeNumber: w.employeeNumber,
     lastName: w.lastName,
     firstName: w.firstName,
     patronymic: w.patronymic,

@@ -22,6 +22,8 @@ export interface TimesheetEntryView {
   note: string | null;
   /** Send it back to change or remove the entry: a stale version is refused. */
   version: number;
+  /** Written by an Excel import: changed only by importing the month again */
+  imported: boolean;
   updatedBy: { fullName: string };
   updatedAt: Date;
 }
@@ -35,6 +37,8 @@ export interface TimesheetRowView {
   employed: { from: string; until: string | null }[];
   /** Hours for this worker-month come from monthly totals, so no daily entries can be added. */
   hasMonthlyTotals: boolean;
+  /** Hours for this worker-month come from an Excel import, so they aren't entered here. */
+  hasImportedHours: boolean;
   /** The caller may enter hours on this row (Settings and their sites or teams). */
   canEnter: boolean;
   entries: TimesheetEntryView[];
@@ -71,6 +75,7 @@ function entryView(e: EntryRow): TimesheetEntryView {
     hours: e.hours.toString(),
     note: e.note,
     version: e.version,
+    imported: e.importId !== null,
     updatedBy: e.updatedBy,
     updatedAt: e.updatedAt,
   };
@@ -140,6 +145,7 @@ export class TimesheetService {
           teamName,
           employed: [],
           hasMonthlyTotals: false,
+          hasImportedHours: false,
           canEnter: timesheetModule && locked === 0 && entersHoursAt(auth, entryRoles, siteId, teamId),
           entries: [],
         };
@@ -156,7 +162,7 @@ export class TimesheetService {
     }
 
     const workerIds = [...new Set([...rows.values()].map((r) => r.worker.id))];
-    const [spans, totals] = await Promise.all([
+    const [spans, totals, imported] = await Promise.all([
       this.prisma.assignment.findMany({
         where: { AND: [{ companyId, workerId: { in: workerIds } }, inMonth(year, month)] },
         select: { workerId: true, hiredOn: true, leftOn: true },
@@ -167,13 +173,21 @@ export class TimesheetService {
         distinct: ['assignmentId'],
         select: { assignment: { select: { workerId: true } } },
       }),
+      this.prisma.timesheetEntry.findMany({
+        where: { companyId, importId: { not: null }, date: { gte: first, lte: last }, assignment: { workerId: { in: workerIds } } },
+        distinct: ['assignmentId'],
+        select: { assignment: { select: { workerId: true } } },
+      }),
     ]);
     const withTotals = new Set(totals.map((t) => t.assignment.workerId));
+    const withImport = new Set(imported.map((t) => t.assignment.workerId));
     for (const row of rows.values()) {
       row.employed = spans
         .filter((s) => s.workerId === row.worker.id)
         .map((s) => ({ from: isoDay(s.hiredOn), until: s.leftOn ? isoDay(s.leftOn) : null }));
       row.hasMonthlyTotals = withTotals.has(row.worker.id);
+      row.hasImportedHours = withImport.has(row.worker.id);
+      if (row.hasImportedHours) row.canEnter = false;
     }
 
     const collator = new Intl.Collator('en');
@@ -217,6 +231,7 @@ export class TimesheetService {
           existing.siteId === input.siteId &&
           existing.teamId === input.teamId;
         if (!sameCell) throw conflict('timesheet.entryMismatch');
+        if (existing.importId) throw conflict('timesheet.imported');
         const before = content(existing);
         if (before.status === input.status && before.hours === input.hours && before.note === input.note) {
           return entryView(existing);
@@ -251,6 +266,11 @@ export class TimesheetService {
       if (!placement) throw conflict('timesheet.notEmployed');
       const totals = await tx.monthlyHours.count({ where: { companyId, year, month, assignment: { workerId: input.workerId } } });
       if (totals > 0) throw conflict('hours.monthlyTotalsEntered');
+      const { first, last } = monthSpan(year, month);
+      const imported = await tx.timesheetEntry.count({
+        where: { companyId, importId: { not: null }, date: { gte: first, lte: last }, assignment: { workerId: input.workerId } },
+      });
+      if (imported > 0) throw conflict('timesheet.imported');
       const taken = await tx.timesheetEntry.findFirst({
         where: { assignmentId: placement.id, date: dayToDate(input.date), siteId: input.siteId, teamId: input.teamId },
         include: ENTRY_INCLUDE,
@@ -262,7 +282,7 @@ export class TimesheetService {
         data: {
           id,
           companyId,
-          periodId: await this.openPeriod(tx, companyId, year, month),
+          periodId: await openPeriod(tx, companyId, year, month),
           assignmentId: placement.id,
           siteId: input.siteId,
           teamId: input.teamId,
@@ -296,6 +316,7 @@ export class TimesheetService {
       const existing = await tx.timesheetEntry.findFirst({ where: { id, companyId }, include: ENTRY_INCLUDE });
       if (!existing) return;
       if (existing.version !== version) throw conflict('timesheet.staleVersion', { current: entryView(existing) });
+      if (existing.importId) throw conflict('timesheet.imported');
       await tx.timesheetEntry.delete({ where: { id } });
       await this.record(tx, auth, 'timesheetEntry.delete', existing, { from: content(existing) });
     });
@@ -334,13 +355,6 @@ export class TimesheetService {
     if (total.greaterThan(MAX_HOURS_PER_DAY)) throw conflict('timesheet.dayTooManyHours');
   }
 
-  /** The month's period, created open on its first entry. */
-  private async openPeriod(tx: Tx, companyId: string, year: number, month: number): Promise<string> {
-    await tx.payrollPeriod.createMany({ data: [{ companyId, year, month }], skipDuplicates: true });
-    const period = await tx.payrollPeriod.findUniqueOrThrow({ where: { companyId_year_month: { companyId, year, month } } });
-    return period.id;
-  }
-
   private async calendar(companyId: string, siteId: string, year: number, month: number) {
     const set = await this.rules.ruleSetForSite(companyId, siteId);
     const m = set && (await this.rules.month(companyId, set.id, year, month));
@@ -372,6 +386,13 @@ export class TimesheetService {
       tx,
     );
   }
+}
+
+/** The month's period, created open on its first entry (daily or imported). */
+export async function openPeriod(tx: Tx, companyId: string, year: number, month: number): Promise<string> {
+  await tx.payrollPeriod.createMany({ data: [{ companyId, year, month }], skipDuplicates: true });
+  const period = await tx.payrollPeriod.findUniqueOrThrow({ where: { companyId_year_month: { companyId, year, month } } });
+  return period.id;
 }
 
 /** Hours of a month are entered only if that month's plan has the Timesheet module (AGENTS.md: Modules). */

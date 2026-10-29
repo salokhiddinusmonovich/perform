@@ -32,7 +32,8 @@
     "timesheetSettings": "Tabel kiritish",
     "codes": "Kodlar",
     "shifts": "Smenalar",
-    "departments": "Boʻlimlar"
+    "departments": "Boʻlimlar",
+    "import": "Excel’dan import"
   },
   "settings": {
     "language": "Til",
@@ -390,7 +391,8 @@
     "worker": {
       "notFound": "Bu ishchi mavjud emas yoki siz uni koʻrmaysiz.",
       "pinflTaken": "Bu JShShIRli ishchi allaqachon bor.",
-      "hasLaterEntries": "Bu sanadan keyin tabel kunlari bor. Avval ularni oʻzgartiring yoki oʻchiring."
+      "hasLaterEntries": "Bu sanadan keyin tabel kunlari bor. Avval ularni oʻzgartiring yoki oʻchiring.",
+      "employeeNumberTaken": "Bu tabel raqami boshqa ishchida bor."
     },
     "impersonation": {
       "inactiveUser": "Bu hisob oʻchirilgan, shu odam nomidan kirib boʻlmaydi.",
@@ -441,7 +443,8 @@
       "entryExists": "Bu kunda bu yerda soat allaqachon bor. Tabel endi saqlanganini koʻrsatadi.",
       "moduleOff": "Bu oyning tarifida Tabel moduli yoʻq, shuning uchun unga soat kiritib boʻlmaydi.",
       "wholeDay": "Ishga kelmaslik ishchining butun kuni: u boshqa yozuvlar bilan bir kunda boʻlolmaydi.",
-      "dayTooManyHours": "Ishchining bu kundagi soatlari jami 24 dan oshadi."
+      "dayTooManyHours": "Ishchining bu kundagi soatlari jami 24 dan oshadi.",
+      "imported": "Bu ishchining oy uchun soatlari Excel’dan yuklangan. Oʻzgartirish uchun oyni qayta yuklang."
     },
     "shift": {
       "notFound": "Bunday smena yoʻq.",
@@ -463,6 +466,34 @@
       "hasTeams": "Bu boʻlimda ochiq brigadalar bor. Avval ularni yoping yoki ishchilarini koʻchiring.",
       "hasWorkers": "Bu boʻlimga hozir yoki keyingi kundan ishchilar joylashtirilgan. Avval ularni koʻchiring.",
       "noneActive": "Boʻlimlarni yoqishdan oldin boʻlim qoʻshing."
+    },
+    "import": {
+      "noFile": "Excel faylini tanlang.",
+      "unreadableFile": "Faylni oʻqib boʻlmadi. Uni Excel kitobi (.xlsx) sifatida saqlab, qayta urinib koʻring.",
+      "sheetNotFound": "Faylda bunday nomli varaq yoʻq.",
+      "noDaySheet": "Hech bir varaqda oyning 1, 2, 3… kunlari yozilgan sarlavha qatori yoʻq.",
+      "columnMissing": "“{{field}}” uchun ustunni tanlang.",
+      "columnTwice": "Bitta ustun “{{field}}” va boshqa maydon uchun tanlangan.",
+      "dayColumnsMissing": "Varaqda oyning ayrim kunlari uchun ustun yoʻq.",
+      "noEmployeeNumber": "Tabel raqami yoʻq.",
+      "duplicateEmployeeNumber": "Bu tabel raqami faylda bir necha marta uchraydi.",
+      "invalidDate": "Sana emas.",
+      "valueNotMapped": "“{{value}}” nimani bildirishini quyida tanlang.",
+      "siteNotFound": "Ilovada “{{value}}” obyekti yoʻq. Avval uni qoʻshing.",
+      "departmentNotFound": "Ilovada “{{value}}” boʻlimi yoʻq. Avval uni qoʻshing.",
+      "departmentAmbiguous": "“{{value}}” nomli boʻlim bir nechta.",
+      "duplicatePinfl": "Bu JSHSHIR faylda bir necha marta uchraydi.",
+      "workerNotFound": "Ilovada bu tabel raqamli ishchi yoʻq. Avval ishchilarni qoʻshing.",
+      "blankWhileEmployed": "Ishchi ishlayotgan kunda katak boʻsh.",
+      "notEmployedCodeWhileEmployed": "“Ishlamaydi” deb belgilangan, lekin ishchi bu kuni ishlaydi.",
+      "valueWhileNotEmployed": "Katak toʻldirilgan, lekin ishchi bu kuni ishlamaydi.",
+      "unknownCode": "Bu soat ham, kompaniya kodlaridan biri ham emas.",
+      "shiftMismatch": "Smena ishchining ilovadagi smenasidan farq qiladi.",
+      "monthlyTotalsEntered": "Bu ishchining oy uchun soatlari allaqachon oylik jami sifatida kiritilgan.",
+      "dailyEntriesEntered": "Bu ishchining oy uchun soatlari allaqachon kunlik tabelga kiritilgan.",
+      "hasProblems": "Faylda hali muammolar bor ({{problems}}). Tuzatib, qayta urinib koʻring.",
+      "hireAfterExit": "Ishdan boʻshash sanasi ishga kirish sanasi “{{value}}”dan oldin: ishchi oydagi birinchi kunidan boʻshash sanasigacha joylashtiriladi.",
+      "exitFromCode": "Ishdan boʻshash sanasi yoʻq: oxirgi ish kuni “{{value}}” yozilgan kundan oldingi kun."
     }
   },
   "payRules": {
@@ -780,7 +811,10 @@
     "setDepartmentHint": "Bu joylashuvda hali boʻlim yoʻq. Keyinchalik boshqa boʻlimga oʻtish — biror kundan boshlab koʻchirish.",
     "departmentFromTeam": "Bu ishchi {{team}} brigadasida: uning boʻlimi brigadaning boʻlimi. Uni obyekt sahifasida belgilang.",
     "openSite": "{{site}} sahifasini ochish",
-    "departmentOfTeam": "Brigadaning boʻlimi"
+    "departmentOfTeam": "Brigadaning boʻlimi",
+    "employeeNumber": "Tabel raqami",
+    "employeeNumberHint": "Kompaniyaning oʻz raqami, masalan tabeldagi. Excel importi ishchini shu raqam boʻyicha topadi.",
+    "employeeNumberShort": "№ {{number}}"
   },
   "impersonation": {
     "banner": "Siz {{name}} nomidan kirgansiz.",
@@ -977,7 +1011,8 @@
     "source": "Soatlar manbasi",
     "sources": {
       "TOTALS": "Oylik soatlar",
-      "DAILY": "Kunlik tabel"
+      "DAILY": "Kunlik tabel",
+      "IMPORT": "Excel importi"
     },
     "pay": "Toʻlanadi",
     "problemCount": "Muammolar: {{count}}",
@@ -1099,7 +1134,8 @@
     "codesMissingTitle": "Baʼzi holatlar uchun hali kod yoʻq",
     "codesMissingManager": "Soatlarni hozir ham kiritish mumkin. Kelmaslik holatlarini kiritish uchun ularga kompaniya kodlarini qoʻshing.",
     "codesMissingMember": "Soatlarni hozir ham kiritish mumkin. Kodi yoʻq holatlarni ega yoki administrator kompaniya kodlarini qoʻshgandan keyin kiritish mumkin.",
-    "goToCodes": "Kodlarga oʻtish"
+    "goToCodes": "Kodlarga oʻtish",
+    "importedHint": "Ayrim ishchilarning bu oydagi soatlari Excel’dan yuklangan, shuning uchun ularning kunlari bu yerda oʻzgartirilmaydi. Tuzatish uchun oyni qayta yuklang."
   },
   "timesheetSettings": {
     "title": "Tabel kiritish",
@@ -1185,8 +1221,26 @@
     "emptyDescription": "Kompaniyangizdagi boʻlimlarni qoʻshing, soʻng ularni yoqing.",
     "dialogDescription": "Boʻlimlar barcha obyektlar uchun umumiy.",
     "use": "Boʻlimlardan foydalanish",
-    "useHint": "Yoqilganda har bir yangi joylashuvga boʻlim kerak boʻladi, boʻlimlar ishchilar, brigadalar va ish haqida koʻrinadi.",
+    "useHint": "Yoqilganda har bir yangi joylashuvga boʻlim kerak boʻladi, boʻlimlar esa ishchilar, brigadalar va ish haqi hisob-kitobida koʻrinadi. Hozir joylashgan ishchilar ishlashda davom etadi; boʻlimi yoʻqlari boʻlim belgilanguncha belgilab koʻrsatiladi.",
     "useNeedsOne": "Avval boʻlim qoʻshing, soʻng yoqing.",
+    "listLink": "Boʻlimlar roʻyxatini ochish",
+    "on": "Yoqilgan",
+    "off": "Oʻchirilgan",
+    "onHint": "Har bir yangi joylashuvga boʻlim kerak.",
+    "offHint": "Ishchilar, brigadalar va ish haqi hisob-kitobida boʻlimlar hali koʻrinmaydi.",
+    "settingLink": "Kompaniya sozlamalarida oʻzgartirish",
+    "yourSitesOnly": "Brigadalar va ishchilar soni faqat sizning obyektlaringiz boʻyicha.",
+    "switchOn": "Yoqish",
+    "switchOff": "Oʻchirish",
+    "confirmOn": {
+      "title": "Boʻlimlar yoqilsinmi?",
+      "description": "Bundan buyon har bir yangi joylashuvga boʻlim kerak boʻladi, boʻlimlar ishchilar, brigadalar va ish haqi hisob-kitobida koʻrinadi.",
+      "missing": "Hozir boʻlimsiz ishchilar: {{count}}. Ular ishlashda davom etadi va boʻlim belgilanguncha belgilab koʻrsatiladi."
+    },
+    "confirmOff": {
+      "title": "Boʻlimlar oʻchirilsinmi?",
+      "description": "Boʻlimlar ishchilar, brigadalar va ish haqi hisob-kitobida koʻrinmaydi, yangi joylashuvlarga boʻlim kerak boʻlmaydi. Boʻlimlar hamda ishchi va brigadalarga belgilanganlari saqlanadi va qayta yoqilganda yana koʻrinadi."
+    },
     "missing": "Boʻlimsiz ishchilar: {{count}}",
     "missingLink": "Ishchilar sahifasida belgilang",
     "confirmClose": {
@@ -1201,5 +1255,82 @@
     "department": "Boʻlim",
     "all": "Barcha boʻlimlar",
     "none": "Boʻlimsiz"
+  },
+  "import": {
+    "title": "Excel’dan import",
+    "description": "Oylik tabelni Excel’dan yuklash: avval yangi ishchilar, keyin soatlar.",
+    "file": "Excel fayli",
+    "fileHint": "Sarlavha qatori va har bir kun uchun ustuni bor .xlsx kitobi.",
+    "chooseFile": "Oyni va Excel faylini tanlang. Qadamni tasdiqlamaguningizcha hech narsa saqlanmaydi.",
+    "sheet": "Varaq",
+    "chooseSheet": "Varaqni tanlang",
+    "lockedTitle": "Bu oy yopilgan",
+    "lockedDescription": "Yopilgan oyga soatlar yuklanmaydi.",
+    "columnsTitle": "Ustunlar",
+    "columnsDescription": "Sarlavha qatori {{row}}, kun ustunlari: {{days}}. Har bir maydon qaysi ustunda ekanini tekshiring.",
+    "mappingSaved": "Bular oxirgi importda tanlangan ustunlar.",
+    "requiredField": "{{field}} (majburiy)",
+    "notInFile": "Faylda yoʻq",
+    "valuesTitle": "Fayldagi bandlik turlari",
+    "valuesDescription": "Fayldagi har bir qiymat nimani bildirishini tanlang.",
+    "checkAgain": "Faylni qayta tekshirish",
+    "checkAgainHint": "Oʻzgarishlar natijasini koʻrish uchun faylni qayta tekshiring.",
+    "workersTitle": "1-qadam: ishchilar",
+    "workersDescription": "Tabel raqami ilovada hali yoʻq ishchilar obyekti, sanalari va maoshi bilan qoʻshiladi. Ilovada bor ishchilar oʻzgarmaydi.",
+    "rows": "Qatorlar: {{count}}",
+    "newWorkers": "Yangi: {{count}}",
+    "existingWorkers": "Ilovada bor: {{count}}",
+    "addWorkers": "Ishchilarni qoʻshish ({{count}})",
+    "addWorkersTitle": "Ishchilar qoʻshilsinmi?",
+    "addWorkersConfirm": "“{{file}}” faylidan {{count}} ta yangi ishchi ish joyi va maoshi bilan qoʻshiladi.",
+    "workersAdded": "Qoʻshilgan ishchilar: {{count}}",
+    "workersByAdmin": "Yangi ishchilarni egasi yoki administrator qoʻshadi.",
+    "changesTitle": "Ilovadan farqlar",
+    "changesDescription": "Faylda bu ishchilar uchun boshqacha yozilgan. Import ularni oʻzgartirmaydi: fayl toʻgʻri boʻlsa, oʻzgarishni ishchi sahifasida kiriting.",
+    "field": "Maydon",
+    "inApp": "Ilovada",
+    "inFile": "Faylda",
+    "hoursTitle": "2-qadam: soatlar",
+    "hoursDescription": "Oy uchun har bir kunning soati yoki kodi oʻqiladi. Oyni qayta yuklash avval yuklangan soatlar oʻrniga yoziladi.",
+    "workerMonths": "Ishchilar: {{count}}",
+    "replaces": "Oldingi import oʻrniga: {{count}}",
+    "importHours": "Soatlarni yuklash ({{count}})",
+    "importHoursTitle": "Soatlar yuklansinmi?",
+    "importHoursConfirm": "“{{file}}” faylidan {{count}} ta ishchining soatlari oy uchun saqlanadi.",
+    "importHoursReplaceConfirm": "“{{file}}” faylidan {{count}} ta ishchining soatlari oy uchun saqlanadi. Ulardan {{replaces}} tasida avval yuklangan soatlar oʻrniga yoziladi.",
+    "hoursImported": "Soatlar yuklandi. Oʻzgargan ishchilar: {{count}}",
+    "earlierTitle": "Bu oyning oldingi importlari",
+    "earlierLine": "{{file}}: {{when}}, {{who}}, oʻzgargan ishchilar: {{count}}",
+    "noProblems": "Muammo yoʻq",
+    "problemCount": "Muammolar: {{count}}",
+    "row": "Qator",
+    "wholeFile": "Fayl",
+    "worker": "Ishchi",
+    "problem": "Muammo",
+    "fileValue": "Faylda: “{{value}}”",
+    "days": "Kunlar: {{days}}",
+    "fields": {
+      "employeeNumber": "Tabel raqami",
+      "lastName": "Familiya",
+      "firstName": "Ism",
+      "patronymic": "Otasining ismi",
+      "position": "Lavozim",
+      "employmentType": "Bandlik turi",
+      "pinfl": "JSHSHIR",
+      "birthDate": "Tugʻilgan sana",
+      "nationality": "Fuqaroligi",
+      "passportSeries": "Pasport seriyasi",
+      "passportNumber": "Pasport raqami",
+      "phone": "Telefon",
+      "site": "Obyekt",
+      "department": "Boʻlim",
+      "hiredOn": "Ishga kirgan sana",
+      "leftOn": "Oxirgi ish kuni",
+      "salary": "Oylik maosh",
+      "shift": "Smena"
+    },
+    "note": "Izoh",
+    "noteCount": "Izohlar: {{count}}",
+    "notesDescription": "Import bu qatorlarni shunday oʻqiydi. Tekshirib chiqing; ular importni toʻxtatmaydi."
   }
 }

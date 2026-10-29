@@ -1,23 +1,28 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { companySettingsSchema, type CompanySettingsInput } from '@puantaj/schemas';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { ErrorState } from '@/components/error-state';
 import { Field, fieldControlProps, FormActions } from '@/components/form';
 import { LoadingState } from '@/components/loading-state';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { isLanguage } from '@/i18n';
 import { api } from '@/lib/api';
-import { canManageCompany, ME_KEY } from '@/lib/auth';
+import { canManageCompany, ME_KEY, usesDepartments, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { localeOf } from '@/lib/format';
+import { localeOf, today } from '@/lib/format';
+import { stillPlaced, useDepartments, useWorkers } from '@/lib/organisation';
 
 const COMPANY_KEY = ['company', 'settings'] as const;
 const CURRENCIES = ['UZS', 'USD', 'EUR', 'TRY', 'RUB', 'KZT'];
@@ -28,7 +33,14 @@ export function CompanySettingsPage() {
   return (
     <>
       <PageHeader title={t('company.title')} description={t('company.description')} />
-      <RequireAccess allowed={canManageCompany}>{() => <CompanySettingsForm />}</RequireAccess>
+      <RequireAccess allowed={canManageCompany}>
+        {(me) => (
+          <div className="space-y-6">
+            <CompanySettingsForm />
+            <DepartmentsSetting me={me} />
+          </div>
+        )}
+      </RequireAccess>
     </>
   );
 }
@@ -129,6 +141,66 @@ function CompanySettingsForm() {
           />
         </form>
       </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Whether the company uses departments (AGENTS.md: Departments). It changes what every new placement
+ * needs, so both ways are confirmed first. It needs an active department to switch on.
+ */
+function DepartmentsSetting({ me }: { me: Me }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const departments = useDepartments();
+  const workers = useWorkers();
+  const [confirming, setConfirming] = useState(false);
+  const enabled = usesDepartments(me);
+  const hasActive = (departments.data ?? []).some((d) => d.isActive);
+  const missing = stillPlaced(workers.data ?? [], today()).filter((w) => !w.placement.departmentId).length;
+
+  return (
+    <Card className="max-w-2xl">
+      <CardContent className="space-y-3">
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="use-departments"
+            className="mt-0.5"
+            checked={enabled}
+            disabled={departments.isPending || (!enabled && !hasActive)}
+            onCheckedChange={() => setConfirming(true)}
+          />
+          <div className="space-y-1">
+            <Label htmlFor="use-departments" className="cursor-pointer">
+              {t('departments.use')}
+            </Label>
+            <p className="text-sm text-muted-foreground">{t('departments.useHint')}</p>
+            {!enabled && !departments.isPending && !hasActive && (
+              <p className="text-sm text-muted-foreground">{t('departments.useNeedsOne')}</p>
+            )}
+            <Link to="/departments" className="inline-flex min-h-10 items-center text-sm underline underline-offset-4">
+              {t('departments.listLink')}
+            </Link>
+          </div>
+        </div>
+      </CardContent>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={enabled ? t('departments.confirmOff.title') : t('departments.confirmOn.title')}
+        description={
+          enabled
+            ? t('departments.confirmOff.description')
+            : `${t('departments.confirmOn.description')}${missing > 0 ? ` ${t('departments.confirmOn.missing', { count: missing })}` : ''}`
+        }
+        confirmLabel={enabled ? t('departments.switchOff') : t('departments.switchOn')}
+        onConfirm={async () => {
+          await api.put('/departments/settings', { enabled: !enabled });
+          toast.success(t('common.saved'));
+          // Forms, lists and the menu show departments by "me".
+          await queryClient.invalidateQueries({ queryKey: ME_KEY });
+        }}
+      />
     </Card>
   );
 }

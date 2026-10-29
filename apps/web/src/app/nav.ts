@@ -8,6 +8,7 @@ import {
   Clock,
   Coins,
   CreditCard,
+  FileSpreadsheet,
   HardHat,
   LayoutDashboard,
   MapPin,
@@ -28,6 +29,7 @@ import {
   hasTimesheet,
   inCompany,
   isPlatformAdmin,
+  seesDepartments,
   seesPay,
   type Me,
 } from '@/lib/auth';
@@ -56,6 +58,7 @@ export const NAV_SECTIONS: NavSection[] = [
     titleKey: 'nav.organisation',
     items: [
       { path: '/sites', labelKey: 'nav.sites', icon: MapPin, visible: inCompany },
+      { path: '/departments', labelKey: 'nav.departments', icon: Network, visible: seesDepartments },
       { path: '/workers', labelKey: 'nav.workers', icon: HardHat, visible: inCompany },
       { path: '/timesheet', labelKey: 'nav.timesheet', icon: ClipboardList, visible: hasTimesheet },
     ],
@@ -63,6 +66,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     titleKey: 'nav.payroll',
     items: [
+      { path: '/import', labelKey: 'nav.import', icon: FileSpreadsheet, visible: canEnterMonthlyHours },
       { path: '/monthly-hours', labelKey: 'nav.monthlyHours', icon: Clock, visible: canEnterMonthlyHours },
       { path: '/adjustments', labelKey: 'nav.adjustments', icon: Coins, visible: seesPay },
       { path: '/payroll', labelKey: 'nav.payrollRun', icon: Wallet, visible: seesPay },
@@ -79,7 +83,6 @@ export const NAV_SECTIONS: NavSection[] = [
       { path: '/settings/timesheet', labelKey: 'nav.timesheetSettings', icon: ClipboardPen, visible: canManageTimesheet },
       { path: '/settings/codes', labelKey: 'nav.codes', icon: Tags, visible: canManageCompany },
       { path: '/settings/shifts', labelKey: 'nav.shifts', icon: SunMoon, visible: canManageCompany },
-      { path: '/settings/departments', labelKey: 'nav.departments', icon: Network, visible: canManageCompany },
     ],
   },
   {
