@@ -62,6 +62,12 @@ describe('keys used in code exist in the translations', () => {
     ].filter((c) => c !== 'validation');
     expect(codes.filter((c) => !enKeys.has(`errors.${c}`))).toEqual([]);
   });
+
+  it('API: every Excel import problem code (shown as errors.<code>)', () => {
+    const used = matches(read('apps/api/src/imports'), /'((?:import|worker|site|department)\.[a-zA-Z]+)'/g);
+    expect(used.length).toBeGreaterThan(15);
+    expect(used.filter((c) => !enKeys.has(`errors.${c}`))).toEqual([]);
+  });
 });
 
 describe('translations', () => {

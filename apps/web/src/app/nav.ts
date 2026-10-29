@@ -8,6 +8,7 @@ import {
   Clock,
   Coins,
   CreditCard,
+  FileSpreadsheet,
   HardHat,
   LayoutDashboard,
   MapPin,
@@ -65,6 +66,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     titleKey: 'nav.payroll',
     items: [
+      { path: '/import', labelKey: 'nav.import', icon: FileSpreadsheet, visible: canEnterMonthlyHours },
       { path: '/monthly-hours', labelKey: 'nav.monthlyHours', icon: Clock, visible: canEnterMonthlyHours },
       { path: '/adjustments', labelKey: 'nav.adjustments', icon: Coins, visible: seesPay },
       { path: '/payroll', labelKey: 'nav.payrollRun', icon: Wallet, visible: seesPay },

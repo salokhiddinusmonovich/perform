@@ -36,6 +36,8 @@ export interface SiteItem {
 
 export interface WorkerItem {
   id: string;
+  /** The company's own number for the worker; null: none given */
+  employeeNumber: string | null;
   lastName: string;
   firstName: string;
   patronymic: string | null;

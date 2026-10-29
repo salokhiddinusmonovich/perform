@@ -78,6 +78,8 @@ const pinflSchema = z
 
 /** A worker's own details. Personal data (PINFL, passport, birth date, phone) is never sent to timekeepers or foremen. */
 export const workerSchema = z.object({
+  /** The company's own number for the worker (e.g. SICIL); Excel imports recognise workers by it. */
+  employeeNumber: optionalText(30),
   lastName: requiredName(80),
   firstName: requiredName(80),
   patronymic: optionalText(80),

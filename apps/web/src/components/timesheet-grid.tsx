@@ -260,6 +260,7 @@ export function TimesheetGrid({ data, codes: companyCodes, myName }: TimesheetGr
                   hours: input.hours,
                   note: existing?.note ?? null,
                   version: existing?.version ?? 0,
+                  imported: false,
                   updatedBy: { fullName: myName },
                   updatedAt: new Date().toISOString(),
                 };

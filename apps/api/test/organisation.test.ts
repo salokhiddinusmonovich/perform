@@ -189,11 +189,12 @@ describe('workers', () => {
     const { company: c, agent, siteA, teamA } = await company();
     const res = await agent
       .post('/api/workers')
-      .send({ worker: WORKER, placement: { siteId: siteA, teamId: teamA, from: '2026-09-01' } })
+      .send({ worker: { ...WORKER, employeeNumber: ' 10001 ' }, placement: { siteId: siteA, teamId: teamA, from: '2026-09-01' } })
       .expect(201);
     const full = (await agent.get(`/api/workers/${res.body.id}`).expect(200)).body;
     expect(full).toEqual({
       id: res.body.id,
+      employeeNumber: '10001',
       lastName: 'Testov',
       firstName: 'Test',
       patronymic: null,
@@ -237,9 +238,19 @@ describe('workers', () => {
     expect(JSON.stringify(log.data)).not.toContain('12345678901234');
   });
 
-  it('refuses a PINFL already used in the company, and a team from another site', async () => {
+  it('refuses a PINFL or employee number already used in the company, and a team from another site', async () => {
     const { agent, siteA, siteB, teamA } = await company();
-    await hire(agent, siteA, teamA, { pinfl: '12345678901234' });
+    const first = await hire(agent, siteA, teamA, { pinfl: '12345678901234', employeeNumber: '7' });
+    const numberTaken = await agent
+      .post('/api/workers')
+      .send({ worker: { ...WORKER, pinfl: '', employeeNumber: '7' }, placement: { siteId: siteA, teamId: null, from: '2026-09-01' } })
+      .expect(409);
+    expect(numberTaken.body.code).toBe('worker.employeeNumberTaken');
+    // Saving the worker with their own number again is fine.
+    await agent.patch(`/api/workers/${first}`).send({ ...WORKER, employeeNumber: '7' }).expect(204);
+    // Another company may use the same number.
+    const other = await company();
+    await hire(other.agent, other.siteA, other.teamA, { pinfl: '', employeeNumber: '7' });
     const dup = await agent
       .post('/api/workers')
       .send({ worker: WORKER, placement: { siteId: siteA, teamId: null, from: '2026-09-01' } })

@@ -4,6 +4,7 @@ import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { CompanyModule } from './company/company.module';
 import { HealthModule } from './health/health.module';
+import { ImportsModule } from './imports/imports.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { OrganisationModule } from './organisation/organisation.module';
 import { PayRulesModule } from './pay-rules/pay-rules.module';
@@ -26,6 +27,7 @@ import { TimesheetModule } from './timesheet/timesheet.module';
     OrganisationModule,
     PayrollModule,
     TimesheetModule,
+    ImportsModule,
   ],
 })
 export class AppModule {}

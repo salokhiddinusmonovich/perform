@@ -32,7 +32,7 @@ import { toTotals } from './monthly-hours.service';
 export type PayrollProblem =
   | { code: 'noSalary' }
   | { code: 'noHours' }
-  /** Daily entries and monthly totals both exist: one source per worker-month */
+  /** Hours come from more than one of daily entries, an Excel import and monthly totals: one source per worker-month */
   | { code: 'twoSources' }
   /**
    * Hours come from totals, but these days of a placement have none: the placement in the
@@ -101,8 +101,8 @@ export interface PayrollWorkerView {
    */
   department?: { id: string; name: string } | null;
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
-  /** Where the hours came from, or null when there are none */
-  source: 'DAILY' | 'TOTALS' | null;
+  /** Where the hours came from (IMPORT: an Excel import, AGENTS.md: Excel import), or null when there are none */
+  source: 'DAILY' | 'IMPORT' | 'TOTALS' | null;
   /** Empty while there are problems */
   parts: PayrollPartView[];
   /** Earned pay of the parts, adjustments and rounding; null while there are problems */
@@ -459,10 +459,13 @@ export class PayrollService {
       workers.push(view);
 
       const parts = shiftParts.get(workerId)!;
-      const hasTotals = own.some((p) => p.monthlyHours.length > 0);
-      if (hasTotals && ownEntries.length > 0) view.problems.push({ code: 'twoSources' });
-      else if (hasTotals) view.source = 'TOTALS';
-      else if (ownEntries.length > 0) view.source = 'DAILY';
+      const sources = [
+        own.some((p) => p.monthlyHours.length > 0) && ('TOTALS' as const),
+        ownEntries.some((e) => e.importId === null) && ('DAILY' as const),
+        ownEntries.some((e) => e.importId !== null) && ('IMPORT' as const),
+      ].filter((s) => s !== false);
+      if (sources.length > 1) view.problems.push({ code: 'twoSources' });
+      else if (sources.length === 1) view.source = sources[0];
       else view.problems.push({ code: 'noHours' });
       if (!salary) view.problems.push({ code: 'noSalary' });
       if (view.source === 'TOTALS') {

@@ -49,6 +49,8 @@ model Company {
   timesheetSettings TimesheetSettings?
   shifts            Shift[]
   departments       Department[]
+  timesheetImports  TimesheetImport[]
+  importMapping     ImportMapping?
 }
 
 /// What a company pays for: a limit of active workers (workers with a placement
@@ -150,6 +152,8 @@ model User {
   updatedEntries       TimesheetEntry[]      @relation("EntryUpdatedBy")
   timesheetSettings    TimesheetSettings[]
   workerShifts         WorkerShift[]
+  timesheetImports     TimesheetImport[]
+  importMappings       ImportMapping[]
 }
 
 /// How a session's token is sent: the browser's httpOnly cookie, or the mobile app's
@@ -368,6 +372,9 @@ enum EmploymentType {
 model Worker {
   id             String         @id @default(uuid()) @db.Uuid
   companyId      String         @db.Uuid
+  /// The company's own number for the worker (e.g. SICIL), unique in the company. Excel
+  /// imports recognise workers by it (AGENTS.md: Excel import); null: none given.
+  employeeNumber String?
   /// Uzbek personal ID (14 digits); null for some expats
   pinfl          String?
   lastName       String
@@ -391,6 +398,7 @@ model Worker {
   shifts           WorkerShift[]
 
   @@unique([companyId, pinfl])
+  @@unique([companyId, employeeNumber])
   @@unique([id, companyId])
   @@index([companyId, lastName])
 }
@@ -767,6 +775,9 @@ model TimesheetEntry {
   status       DayStatus
   hours        Decimal   @default(0) @db.Decimal(4, 2)
   note         String?
+  /// The Excel import that wrote this entry (AGENTS.md: Excel import); null: entered in the
+  /// daily grid. Imported entries are changed only by importing the month again.
+  importId     String?   @db.Uuid
   /// Creation order, never changed by edits: of one worker's entries for a day, the
   /// higher seq was entered later, and gets the day's overtime and travel pay
   /// (DayEntry.seq in @puantaj/payroll). Unlike createdAt it never ties.
@@ -779,15 +790,56 @@ model TimesheetEntry {
   updatedById  String    @db.Uuid
   updatedAt    DateTime  @updatedAt
 
-  period     PayrollPeriod @relation(fields: [periodId, companyId], references: [id, companyId], onDelete: NoAction)
-  assignment Assignment    @relation(fields: [assignmentId, companyId], references: [id, companyId], onDelete: NoAction)
-  site       Site          @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
-  team       Team?         @relation(fields: [teamId, siteId, companyId], references: [id, siteId, companyId], onDelete: NoAction)
-  createdBy  User          @relation("EntryCreatedBy", fields: [createdById], references: [id], onDelete: NoAction)
-  updatedBy  User          @relation("EntryUpdatedBy", fields: [updatedById], references: [id], onDelete: NoAction)
+  period     PayrollPeriod    @relation(fields: [periodId, companyId], references: [id, companyId], onDelete: NoAction)
+  assignment Assignment       @relation(fields: [assignmentId, companyId], references: [id, companyId], onDelete: NoAction)
+  site       Site             @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  team       Team?            @relation(fields: [teamId, siteId, companyId], references: [id, siteId, companyId], onDelete: NoAction)
+  createdBy  User             @relation("EntryCreatedBy", fields: [createdById], references: [id], onDelete: NoAction)
+  updatedBy  User             @relation("EntryUpdatedBy", fields: [updatedById], references: [id], onDelete: NoAction)
+  import     TimesheetImport? @relation(fields: [importId, companyId], references: [id, companyId], onDelete: NoAction)
 
   @@index([assignmentId, date])
   @@index([periodId])
+  @@index([importId])
+}
+
+/// One Excel import of a month's daily hours (AGENTS.md: Excel import). Its entries are
+/// TimesheetEntry rows pointing to it; a later import of the month replaces the entries of
+/// the worker-months in its file. Never changed or deleted.
+model TimesheetImport {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @db.Uuid
+  year        Int
+  /// 1-based
+  month       Int
+  fileName    String
+  /// SHA-256 of the file, hex
+  fileSha256  String
+  /// Worker-months the import wrote
+  workers     Int
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now())
+
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  createdBy User             @relation(fields: [createdById], references: [id], onDelete: NoAction)
+  entries   TimesheetEntry[]
+
+  @@unique([id, companyId])
+  @@index([companyId, year, month])
+}
+
+/// How a company's Excel sheet is read (AGENTS.md: Excel import): which header text each
+/// field's column has, and what file values stand for fixed choices. Saved by the last
+/// import and offered as the guess for the next one. Shape: importMappingSchema in
+/// @puantaj/schemas.
+model ImportMapping {
+  companyId String   @id @db.Uuid
+  mapping   Json
+  setById   String   @db.Uuid
+  setAt     DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  setBy   User    @relation(fields: [setById], references: [id], onDelete: NoAction)
 }
 
 /// Who enters daily hours (AGENTS.md: Hour entry). A company without a row has the

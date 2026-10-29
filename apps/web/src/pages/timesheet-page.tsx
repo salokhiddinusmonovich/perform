@@ -84,6 +84,7 @@ function MonthView({ data, codes, me }: { data: TimesheetMonth; codes: Timesheet
   }
   const canEnter = data.rows.some((r) => r.canEnter);
   const withTotals = data.rows.some((r) => r.hasMonthlyTotals);
+  const withImport = data.rows.some((r) => r.hasImportedHours);
   return (
     <>
       {data.calendar === null && (
@@ -93,7 +94,7 @@ function MonthView({ data, codes, me }: { data: TimesheetMonth; codes: Timesheet
           <AlertDescription>{t('timesheet.noRulesDescription')}</AlertDescription>
         </Alert>
       )}
-      {(data.locked || !canEnter || withTotals) && (
+      {(data.locked || !canEnter || withTotals || withImport) && (
         <Alert>
           <Info aria-hidden />
           <AlertDescription>
@@ -101,9 +102,11 @@ function MonthView({ data, codes, me }: { data: TimesheetMonth; codes: Timesheet
               ? t('timesheet.lockedHint')
               : !data.timesheetModule
                 ? t('timesheet.moduleOffHint')
-                : !canEnter
-                  ? t('timesheet.readOnlyHint')
-                  : t('timesheet.monthlyTotalsHint')}
+                : withImport
+                  ? t('timesheet.importedHint')
+                  : !canEnter
+                    ? t('timesheet.readOnlyHint')
+                    : t('timesheet.monthlyTotalsHint')}
           </AlertDescription>
         </Alert>
       )}

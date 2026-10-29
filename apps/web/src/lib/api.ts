@@ -36,15 +36,17 @@ export class ApiError extends Error {
   }
 }
 
+/** A JSON body, or a form with files (the browser sets its multipart Content-Type). */
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const form = body instanceof FormData;
   const response = await fetch(`/api${path}`, {
     method,
     credentials: 'same-origin',
     headers: {
       Accept: 'application/json',
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(body !== undefined && !form ? { 'Content-Type': 'application/json' } : {}),
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: form ? body : body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (response.status === 204) return undefined as T;
   const text = await response.text();
@@ -58,6 +60,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T = void>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
+  /** Uploads a form with files (multipart). */
+  upload: <T = void>(path: string, form: FormData) => request<T>('POST', path, form),
   patch: <T = void>(path: string, body: unknown) => request<T>('PATCH', path, body),
   put: <T = void>(path: string, body: unknown) => request<T>('PUT', path, body),
   delete: <T = void>(path: string) => request<T>('DELETE', path),

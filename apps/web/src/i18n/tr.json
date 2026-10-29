@@ -32,7 +32,8 @@
     "timesheetSettings": "Puantaj girişi",
     "codes": "Kodlar",
     "shifts": "Vardiyalar",
-    "departments": "Bölümler"
+    "departments": "Bölümler",
+    "import": "Excel’den aktar"
   },
   "settings": {
     "language": "Dil",
@@ -390,7 +391,8 @@
     "worker": {
       "notFound": "Bu işçi yok ya da onu göremiyorsunuz.",
       "pinflTaken": "Bu PINFL ile bir işçi zaten var.",
-      "hasLaterEntries": "Bu tarihten sonra puantaj günleri var. Önce onları değiştirin veya silin."
+      "hasLaterEntries": "Bu tarihten sonra puantaj günleri var. Önce onları değiştirin veya silin.",
+      "employeeNumberTaken": "Bu sicil no başka bir işçide var."
     },
     "impersonation": {
       "inactiveUser": "Bu hesap pasif, bu kişi olarak giriş yapılamaz.",
@@ -441,7 +443,8 @@
       "entryExists": "Bu günün burada zaten saati var. Puantaj artık kaydedileni gösteriyor.",
       "moduleOff": "Bu ayın paketinde Puantaj modülü yok, bu yüzden bu aya saat girilemez.",
       "wholeDay": "Devamsızlık işçinin bütün günüdür: o gün başka kayıt olamaz.",
-      "dayTooManyHours": "İşçinin bu günkü saatleri toplamda 24’ü geçiyor."
+      "dayTooManyHours": "İşçinin bu günkü saatleri toplamda 24’ü geçiyor.",
+      "imported": "Bu işçinin bu ayki saatleri Excel’den aktarıldı. Değiştirmek için ayı yeniden aktarın."
     },
     "shift": {
       "notFound": "Bu vardiya yok.",
@@ -463,6 +466,34 @@
       "hasTeams": "Bu bölümün açık ekipleri var. Önce onları kapatın veya çalışanlarını nakledin.",
       "hasWorkers": "Bu bölüme şimdi veya ileri bir günden itibaren çalışan görevlendirilmiş. Önce onları nakledin.",
       "noneActive": "Bölümleri açmadan önce bir bölüm ekleyin."
+    },
+    "import": {
+      "noFile": "Bir Excel dosyası seçin.",
+      "unreadableFile": "Dosya okunamıyor. Excel çalışma kitabı (.xlsx) olarak kaydedip tekrar deneyin.",
+      "sheetNotFound": "Dosyada bu adda bir sayfa yok.",
+      "noDaySheet": "Hiçbir sayfada ayın 1, 2, 3… günlerini içeren bir başlık satırı yok.",
+      "columnMissing": "“{{field}}” için sütunu seçin.",
+      "columnTwice": "Aynı sütun “{{field}}” ve başka bir alan için seçilmiş.",
+      "dayColumnsMissing": "Sayfada ayın bazı günleri için sütun yok.",
+      "noEmployeeNumber": "Sicil no yok.",
+      "duplicateEmployeeNumber": "Bu sicil no dosyada birden fazla kez geçiyor.",
+      "invalidDate": "Tarih değil.",
+      "valueNotMapped": "“{{value}}” değerinin ne anlama geldiğini aşağıda seçin.",
+      "siteNotFound": "Uygulamada “{{value}}” şantiyesi yok. Önce onu ekleyin.",
+      "departmentNotFound": "Uygulamada “{{value}}” bölümü yok. Önce onu ekleyin.",
+      "departmentAmbiguous": "“{{value}}” adında birden fazla bölüm var.",
+      "duplicatePinfl": "Bu PINFL dosyada birden fazla kez geçiyor.",
+      "workerNotFound": "Uygulamada bu sicil no ile bir işçi yok. Önce işçileri ekleyin.",
+      "blankWhileEmployed": "İşçi çalışırken hücre boş.",
+      "notEmployedCodeWhileEmployed": "“Çalışmıyor” işaretli, ama işçi o gün çalışıyor.",
+      "valueWhileNotEmployed": "Hücre dolu, ama işçi o gün çalışmıyor.",
+      "unknownCode": "Ne saat ne de şirketin kodlarından biri.",
+      "shiftMismatch": "Vardiya, işçinin uygulamadaki vardiyasından farklı.",
+      "monthlyTotalsEntered": "Bu işçinin bu ayki saatleri zaten aylık toplam olarak girilmiş.",
+      "dailyEntriesEntered": "Bu işçinin bu ayki saatleri zaten günlük puantaja girilmiş.",
+      "hasProblems": "Dosyada hâlâ sorun var ({{problems}}). Düzeltip tekrar deneyin.",
+      "hireAfterExit": "Çıkış tarihi, giriş tarihinden “{{value}}” önce: işçi aydaki ilk gününden çıkış tarihine kadar yerleştirilir.",
+      "exitFromCode": "Çıkış tarihi yok: son çalışma günü “{{value}}” yazan günden önceki gündür."
     }
   },
   "payRules": {
@@ -780,7 +811,10 @@
     "setDepartmentHint": "Bu görevlendirmenin henüz bölümü yok. Sonradan başka bir bölüme geçmek, bir günden itibaren nakildir.",
     "departmentFromTeam": "Bu çalışan {{team}} ekibinde: bölümü ekibin bölümüdür. Bunu şantiye sayfasında belirleyin.",
     "openSite": "{{site}} sayfasını aç",
-    "departmentOfTeam": "Ekibin bölümü"
+    "departmentOfTeam": "Ekibin bölümü",
+    "employeeNumber": "Sicil no",
+    "employeeNumberHint": "Şirketin kendi numarası, örneğin puantajdaki. Excel aktarımı işçiyi bununla bulur.",
+    "employeeNumberShort": "Sicil {{number}}"
   },
   "impersonation": {
     "banner": "{{name}} olarak giriş yaptınız.",
@@ -977,7 +1011,8 @@
     "source": "Saat kaynağı",
     "sources": {
       "TOTALS": "Aylık saatler",
-      "DAILY": "Günlük puantaj"
+      "DAILY": "Günlük puantaj",
+      "IMPORT": "Excel aktarımı"
     },
     "pay": "Ödenecek",
     "problemCount": "Sorun: {{count}}",
@@ -1099,7 +1134,8 @@
     "codesMissingTitle": "Bazı devamsızlıkların henüz kodu yok",
     "codesMissingManager": "Saatler şimdiden girilebilir. Devamsızlıkları girmek için şirketin kodlarını ekleyin.",
     "codesMissingMember": "Saatler şimdiden girilebilir. Kodu olmayan devamsızlıklar, bir sahip veya yönetici şirketin kodlarını ekledikten sonra girilebilir.",
-    "goToCodes": "Kodlara git"
+    "goToCodes": "Kodlara git",
+    "importedHint": "Bazı işçilerin bu ayki saatleri Excel’den aktarıldı, bu yüzden günleri burada değiştirilemez. Düzeltmek için ayı yeniden aktarın."
   },
   "timesheetSettings": {
     "title": "Puantaj girişi",
@@ -1219,5 +1255,82 @@
     "department": "Bölüm",
     "all": "Tüm bölümler",
     "none": "Bölümsüz"
+  },
+  "import": {
+    "title": "Excel’den aktar",
+    "description": "Bir ayın puantajını Excel’den aktarın: önce yeni işçiler, sonra saatler.",
+    "file": "Excel dosyası",
+    "fileHint": "Başlık satırı ve her gün için bir sütunu olan bir .xlsx çalışma kitabı.",
+    "chooseFile": "Ayı ve Excel dosyasını seçin. Bir adımı onaylayana kadar hiçbir şey kaydedilmez.",
+    "sheet": "Sayfa",
+    "chooseSheet": "Bir sayfa seçin",
+    "lockedTitle": "Bu ay kilitli",
+    "lockedDescription": "Kilitli bir aya saat aktarılamaz.",
+    "columnsTitle": "Sütunlar",
+    "columnsDescription": "Başlık satırı {{row}}, gün sütunu: {{days}}. Her alanın hangi sütunda olduğunu kontrol edin.",
+    "mappingSaved": "Bunlar son aktarımda seçilen sütunlar.",
+    "requiredField": "{{field}} (zorunlu)",
+    "notInFile": "Dosyada yok",
+    "valuesTitle": "Dosyadaki istihdam türleri",
+    "valuesDescription": "Dosyadaki her değerin ne anlama geldiğini seçin.",
+    "checkAgain": "Dosyayı yeniden kontrol et",
+    "checkAgainHint": "Değişikliklerin sonucunu görmek için dosyayı yeniden kontrol edin.",
+    "workersTitle": "1. adım: işçiler",
+    "workersDescription": "Sicil no’su uygulamada henüz olmayan işçiler şantiyesi, tarihleri ve ücretiyle eklenir. Uygulamada olan işçiler değişmez.",
+    "rows": "Satır: {{count}}",
+    "newWorkers": "Yeni: {{count}}",
+    "existingWorkers": "Uygulamada var: {{count}}",
+    "addWorkers": "İşçileri ekle ({{count}})",
+    "addWorkersTitle": "İşçiler eklensin mi?",
+    "addWorkersConfirm": "“{{file}}” dosyasından {{count}} yeni işçi, yerleşimleri ve ücretleriyle eklenecek.",
+    "workersAdded": "Eklenen işçi: {{count}}",
+    "workersByAdmin": "Yeni işçileri bir sahip veya yönetici ekler.",
+    "changesTitle": "Uygulamadan farklar",
+    "changesDescription": "Dosyada bu işçiler için başka bir bilgi var. Aktarım onları değiştirmez: dosya doğruysa değişikliği işçinin sayfasında yapın.",
+    "field": "Alan",
+    "inApp": "Uygulamada",
+    "inFile": "Dosyada",
+    "hoursTitle": "2. adım: saatler",
+    "hoursDescription": "Ay için her günün saati veya kodu okunur. Ayı yeniden aktarmak, daha önce aktarılan saatlerin yerine geçer.",
+    "workerMonths": "İşçi: {{count}}",
+    "replaces": "Önceki aktarımın yerine geçer: {{count}}",
+    "importHours": "Saatleri aktar ({{count}})",
+    "importHoursTitle": "Saatler aktarılsın mı?",
+    "importHoursConfirm": "“{{file}}” dosyasından {{count}} işçinin saatleri bu ay için kaydedilecek.",
+    "importHoursReplaceConfirm": "“{{file}}” dosyasından {{count}} işçinin saatleri bu ay için kaydedilecek. Bunların {{replaces}} tanesinde önceden aktarılan saatlerin yerine geçer.",
+    "hoursImported": "Saatler aktarıldı. Değişen işçi: {{count}}",
+    "earlierTitle": "Bu ayın önceki aktarımları",
+    "earlierLine": "{{file}}: {{when}}, {{who}}, değişen işçi: {{count}}",
+    "noProblems": "Sorun yok",
+    "problemCount": "Sorun: {{count}}",
+    "row": "Satır",
+    "wholeFile": "Dosya",
+    "worker": "İşçi",
+    "problem": "Sorun",
+    "fileValue": "Dosyada: “{{value}}”",
+    "days": "Günler: {{days}}",
+    "fields": {
+      "employeeNumber": "Sicil no",
+      "lastName": "Soyadı",
+      "firstName": "Adı",
+      "patronymic": "Baba adı",
+      "position": "Görevi",
+      "employmentType": "İstihdam türü",
+      "pinfl": "PINFL",
+      "birthDate": "Doğum tarihi",
+      "nationality": "Uyruğu",
+      "passportSeries": "Pasaport serisi",
+      "passportNumber": "Pasaport no",
+      "phone": "Telefon",
+      "site": "Şantiye",
+      "department": "Bölüm",
+      "hiredOn": "Giriş tarihi",
+      "leftOn": "Son çalışma günü",
+      "salary": "Aylık ücret",
+      "shift": "Vardiya"
+    },
+    "note": "Not",
+    "noteCount": "Not: {{count}}",
+    "notesDescription": "Aktarım bu satırları böyle okur. Kontrol edin; aktarımı durdurmazlar."
   }
 }
