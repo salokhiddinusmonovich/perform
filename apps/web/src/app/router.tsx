@@ -32,6 +32,10 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/site-page')).SitePage }),
       },
       {
+        path: 'departments',
+        lazy: async () => ({ Component: (await import('@/pages/departments-page')).DepartmentsPage }),
+      },
+      {
         path: 'workers',
         lazy: async () => ({ Component: (await import('@/pages/workers-page')).WorkersPage }),
       },
@@ -82,10 +86,6 @@ export const router = createBrowserRouter([
       {
         path: 'settings/shifts',
         lazy: async () => ({ Component: (await import('@/pages/shifts-page')).ShiftsPage }),
-      },
-      {
-        path: 'settings/departments',
-        lazy: async () => ({ Component: (await import('@/pages/departments-page')).DepartmentsPage }),
       },
       {
         path: 'platform/companies',

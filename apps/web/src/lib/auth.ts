@@ -152,6 +152,15 @@ export function usesDepartments(me: Me | null | undefined): boolean {
   return me?.activeCompany?.departments === true;
 }
 
+/**
+ * Sees the department list: owners and admins always (they set it up and switch it on), accountants
+ * and project managers while the company uses departments.
+ */
+export function seesDepartments(me: Me | null | undefined): boolean {
+  const role = me?.activeCompany?.role;
+  return canManageCompany(me) || (usesDepartments(me) && (role === 'ACCOUNTANT' || role === 'PROJECT_MANAGER'));
+}
+
 /** Can change who enters daily hours (Timesheet module, owners and admins). */
 export function canManageTimesheet(me: Me | null | undefined): boolean {
   return hasTimesheet(me) && canManageCompany(me);

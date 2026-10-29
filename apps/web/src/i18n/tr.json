@@ -1185,8 +1185,26 @@
     "emptyDescription": "Şirketinizdeki bölümleri ekleyin, sonra açın.",
     "dialogDescription": "Bölümler tüm şantiyeler için ortaktır.",
     "use": "Bölümleri kullan",
-    "useHint": "Açıkken her yeni görevlendirme bir bölüm ister ve bölümler çalışanlarda, ekiplerde ve bordroda görünür.",
+    "useHint": "Açıkken her yeni görevlendirme bir bölüm ister ve bölümler çalışanlarda, ekiplerde ve bordroda görünür. Zaten görevlendirilmiş çalışanlar çalışmaya devam eder; bölümü olmayanlar bölüm atanana kadar işaretlenir.",
     "useNeedsOne": "Önce bir bölüm ekleyin, sonra açın.",
+    "listLink": "Bölüm listesini aç",
+    "on": "Açık",
+    "off": "Kapalı",
+    "onHint": "Her yeni görevlendirme bir bölüm ister.",
+    "offHint": "Çalışanlarda, ekiplerde ve bordroda bölümler henüz görünmüyor.",
+    "settingLink": "Şirket ayarlarından değiştir",
+    "yourSitesOnly": "Ekip ve çalışan sayıları yalnızca sizin şantiyelerinizi kapsar.",
+    "switchOn": "Aç",
+    "switchOff": "Kapat",
+    "confirmOn": {
+      "title": "Bölümler açılsın mı?",
+      "description": "Bundan sonra her yeni görevlendirme bir bölüm ister ve bölümler çalışanlarda, ekiplerde ve bordroda görünür.",
+      "missing": "Şu anda bölümü olmayan çalışanlar: {{count}}. Çalışmaya devam ederler ve bölüm atanana kadar işaretlenirler."
+    },
+    "confirmOff": {
+      "title": "Bölümler kapatılsın mı?",
+      "description": "Bölümler çalışanlarda, ekiplerde ve bordroda gizlenir ve yeni görevlendirmeler bölüm istemez. Bölümler ile çalışanlara ve ekiplere atananlar saklanır, yeniden açılınca tekrar görünür."
+    },
     "missing": "Bölümü olmayan çalışanlar: {{count}}",
     "missingLink": "Çalışanlar sayfasında belirleyin",
     "confirmClose": {

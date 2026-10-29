@@ -1185,8 +1185,26 @@
     "emptyDescription": "Add the departments your company has, then switch them on.",
     "dialogDescription": "Departments are shared by all sites.",
     "use": "Use departments",
-    "useHint": "When on, every new placement needs a department, and departments show on workers, brigades and payroll.",
+    "useHint": "When on, every new placement needs a department, and departments show on workers, brigades and payroll. Workers already placed keep working; those without a department are marked until one is set.",
     "useNeedsOne": "Add a department first, then switch them on.",
+    "listLink": "Open the department list",
+    "on": "Switched on",
+    "off": "Switched off",
+    "onHint": "Every new placement needs a department.",
+    "offHint": "Workers, brigades and payroll don’t show departments yet.",
+    "settingLink": "Change in Company settings",
+    "yourSitesOnly": "Brigade and worker counts cover only your sites.",
+    "switchOn": "Switch on",
+    "switchOff": "Switch off",
+    "confirmOn": {
+      "title": "Switch departments on?",
+      "description": "From now on every new placement needs a department, and departments show on workers, brigades and payroll.",
+      "missing": "Workers placed now without a department: {{count}}. They keep working and are marked until one is set."
+    },
+    "confirmOff": {
+      "title": "Switch departments off?",
+      "description": "Departments will be hidden on workers, brigades and payroll, and new placements won’t need one. The departments, and those set on workers and brigades, are kept and show again when switched back on."
+    },
     "missing": "Workers without a department: {{count}}",
     "missingLink": "Set them on the Workers page",
     "confirmClose": {

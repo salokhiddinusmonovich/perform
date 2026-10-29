@@ -182,6 +182,14 @@ export function withSubDepartments(all: readonly DepartmentItem[], id: string): 
   return ids;
 }
 
+/** Workers whose placement hasn't ended by the day ("YYYY-MM-DD"): department counts and warnings are about them. */
+export function stillPlaced(workers: readonly WorkerItem[], day: string) {
+  return workers.filter(
+    (w): w is WorkerItem & { placement: NonNullable<WorkerItem['placement']> } =>
+      w.placement !== null && (w.placement.until === null || w.placement.until >= day),
+  );
+}
+
 export const workerShiftsKey = (workerId: string) => [...WORKERS_KEY, workerId, 'shifts'] as const;
 
 export function useWorkerShifts(workerId: string) {

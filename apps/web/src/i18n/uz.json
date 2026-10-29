@@ -1185,8 +1185,26 @@
     "emptyDescription": "Kompaniyangizdagi boʻlimlarni qoʻshing, soʻng ularni yoqing.",
     "dialogDescription": "Boʻlimlar barcha obyektlar uchun umumiy.",
     "use": "Boʻlimlardan foydalanish",
-    "useHint": "Yoqilganda har bir yangi joylashuvga boʻlim kerak boʻladi, boʻlimlar ishchilar, brigadalar va ish haqida koʻrinadi.",
+    "useHint": "Yoqilganda har bir yangi joylashuvga boʻlim kerak boʻladi, boʻlimlar esa ishchilar, brigadalar va ish haqi hisob-kitobida koʻrinadi. Hozir joylashgan ishchilar ishlashda davom etadi; boʻlimi yoʻqlari boʻlim belgilanguncha belgilab koʻrsatiladi.",
     "useNeedsOne": "Avval boʻlim qoʻshing, soʻng yoqing.",
+    "listLink": "Boʻlimlar roʻyxatini ochish",
+    "on": "Yoqilgan",
+    "off": "Oʻchirilgan",
+    "onHint": "Har bir yangi joylashuvga boʻlim kerak.",
+    "offHint": "Ishchilar, brigadalar va ish haqi hisob-kitobida boʻlimlar hali koʻrinmaydi.",
+    "settingLink": "Kompaniya sozlamalarida oʻzgartirish",
+    "yourSitesOnly": "Brigadalar va ishchilar soni faqat sizning obyektlaringiz boʻyicha.",
+    "switchOn": "Yoqish",
+    "switchOff": "Oʻchirish",
+    "confirmOn": {
+      "title": "Boʻlimlar yoqilsinmi?",
+      "description": "Bundan buyon har bir yangi joylashuvga boʻlim kerak boʻladi, boʻlimlar ishchilar, brigadalar va ish haqi hisob-kitobida koʻrinadi.",
+      "missing": "Hozir boʻlimsiz ishchilar: {{count}}. Ular ishlashda davom etadi va boʻlim belgilanguncha belgilab koʻrsatiladi."
+    },
+    "confirmOff": {
+      "title": "Boʻlimlar oʻchirilsinmi?",
+      "description": "Boʻlimlar ishchilar, brigadalar va ish haqi hisob-kitobida koʻrinmaydi, yangi joylashuvlarga boʻlim kerak boʻlmaydi. Boʻlimlar hamda ishchi va brigadalarga belgilanganlari saqlanadi va qayta yoqilganda yana koʻrinadi."
+    },
     "missing": "Boʻlimsiz ishchilar: {{count}}",
     "missingLink": "Ishchilar sahifasida belgilang",
     "confirmClose": {
