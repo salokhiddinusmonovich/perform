@@ -1,8 +1,10 @@
 import {
+  BLANK_CELL_READINGS,
   EMPLOYMENT_TYPES,
   HOURS_IMPORT_REQUIRED,
   IMPORT_FIELDS,
   WORKER_IMPORT_REQUIRED,
+  type BlankCellReading,
   type EmploymentType,
   type ImportField,
   type ImportMapping,
@@ -240,6 +242,7 @@ function ImportView({ me }: { me: Me }) {
                 )}
               </div>
               <Problems problems={preview.hours.problems} />
+              {preview.hours.notes.length > 0 && <Problems problems={preview.hours.notes} notes />}
               <div className="flex justify-end">
                 <Button
                   disabled={!ready || preview.locked || preview.hours.problems.length > 0 || preview.hours.workers === 0}
@@ -391,6 +394,25 @@ function MappingCard({
             </div>
           </section>
         )}
+        <section className="space-y-3 border-t pt-4">
+          <Field id="import-blank-cells" label={t('import.blankCells')} hint={t('import.blankCellsHint')}>
+            <Select
+              value={mapping.blankCells}
+              onValueChange={(v) => onChange({ ...mapping, blankCells: v as BlankCellReading })}
+            >
+              <SelectTrigger id="import-blank-cells" className="w-full sm:w-96">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BLANK_CELL_READINGS.map((reading) => (
+                  <SelectItem key={reading} value={reading}>
+                    {t(`import.blankCellReadings.${reading}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </section>
         <div className="flex flex-wrap items-center justify-end gap-3">
           {changed && <p className="text-sm text-muted-foreground">{t('import.checkAgainHint')}</p>}
           <Button variant={changed ? 'default' : 'outline'} onClick={onCheck} disabled={pending}>

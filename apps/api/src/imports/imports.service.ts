@@ -93,7 +93,13 @@ export interface ImportPreview {
     notes: ImportProblem[];
     changes: ImportWorkerChange[];
   };
-  hours: { workers: number; replaces: number; problems: ImportProblem[] };
+  hours: {
+    workers: number;
+    replaces: number;
+    problems: ImportProblem[];
+    /** Blank cells read as unexcused absences (when the company chose so); never blocks it */
+    notes: ImportProblem[];
+  };
   /** Earlier imports of the month, newest first */
   earlier: { id: string; fileName: string; workers: number; createdAt: Date; createdBy: { fullName: string } }[];
 }
@@ -185,7 +191,7 @@ export class ImportsService {
         days: [],
         values: { employmentType: [] },
         workers: { rows: 0, new: 0, existing: 0, problems, notes: [], changes: [] },
-        hours: { workers: 0, replaces: 0, problems },
+        hours: { workers: 0, replaces: 0, problems, notes: [] },
       };
     }
     const { sheet } = read;
@@ -215,7 +221,7 @@ export class ImportsService {
         notes: workers.notes,
         changes: workers.changes,
       },
-      hours: { workers: hours.months.length, replaces: hours.replaces, problems: hours.problems },
+      hours: { workers: hours.months.length, replaces: hours.replaces, problems: hours.problems, notes: hours.notes },
     };
   }
 
@@ -380,7 +386,7 @@ export class ImportsService {
       : await this.prisma.importMapping.findUnique({ where: { companyId: auth.company.id } });
     const savedMapping = saved ? importMappingSchema.safeParse(saved.mapping) : null;
     const preferred = request.mapping ?? (savedMapping?.success ? savedMapping.data : null);
-    const mapping = sheet ? mappingFor(sheet, preferred) : (preferred ?? { columns: {}, values: { employmentType: {} } });
+    const mapping = sheet ? mappingFor(sheet, preferred) : (preferred ?? { columns: {}, values: { employmentType: {} }, blankCells: 'PROBLEM' });
     return {
       // Multer reads the name's UTF-8 bytes as Latin-1.
       fileName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
@@ -652,6 +658,7 @@ export class ImportsService {
     ]);
 
     const months: WorkerMonth[] = [];
+    const notes: ImportProblem[] = [];
     let replaces = 0;
     for (const r of rows) {
       const worker = workers.find((w) => w.employeeNumber === r.employeeNumber);
@@ -672,6 +679,7 @@ export class ImportsService {
         else cellProblems.set(key, rowProblem(r, code, { value, days: [day] }));
       };
       const month: WorkerMonth = { workerId: worker.id, cells: {}, entries: [] };
+      const absentDays: number[] = [];
       for (let day = 1; day <= daysInMonth; day++) {
         if (!sheet.dayColumns.has(day)) continue;
         const date = isoDay(new Date(Date.UTC(ym.year, ym.month - 1, day)));
@@ -693,12 +701,18 @@ export class ImportsService {
               teamId: placement.teamId,
             });
           }
+        } else if (value === undefined && placement && mapping.blankCells === 'ABSENT') {
+          // The company reads blank days of an employed worker as unexcused absences.
+          month.cells[date] = 'ABSENT';
+          month.entries.push({ date, status: 'ABSENT', hours: '0', assignmentId: placement.id, siteId: placement.siteId, teamId: placement.teamId });
+          absentDays.push(day);
         } else if (value === undefined) addCell('import.blankWhileEmployed', day, undefined);
         else if (parseCell(input, codes, placement === null)) {
           addCell(placement ? 'import.notEmployedCodeWhileEmployed' : 'import.valueWhileNotEmployed', day, value);
         } else addCell('import.unknownCode', day, value);
       }
       const rowProblems = [...cellProblems.values()];
+      if (absentDays.length > 0) notes.push(rowProblem(r, 'import.blankAsAbsent', { days: absentDays }));
 
       if (shiftParts) {
         const fileShift = cellText(r.field('shift'));
@@ -725,7 +739,7 @@ export class ImportsService {
         if (own.length > 0) replaces++;
       }
     }
-    return { months, replaces, problems };
+    return { months, replaces, problems, notes };
   }
 
   /** Saves the mapping as the company's, for the next import (audited when it changes). */

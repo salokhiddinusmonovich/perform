@@ -50,15 +50,24 @@ export const HOURS_IMPORT_REQUIRED = ['employeeNumber'] as const satisfies reado
 const headerText = z.string().trim().min(1, { error: 'validation.required' }).max(200, { error: 'validation.tooLong' });
 
 /**
- * How a company's sheet is read: the header text of each field's column, and what the
- * file's values of a fixed choice stand for (keyed by the value folded with foldText()).
- * Saved per company by each import and offered for the next one.
+ * What a blank day cell means while the worker is employed: a problem row (the file is
+ * corrected), or an unexcused absence (AGENTS.md: Excel import).
+ */
+export const BLANK_CELL_READINGS = ['PROBLEM', 'ABSENT'] as const;
+export type BlankCellReading = (typeof BLANK_CELL_READINGS)[number];
+
+/**
+ * How a company's sheet is read: the header text of each field's column, what the file's
+ * values of a fixed choice stand for (keyed by the value folded with foldText()), and what
+ * a blank day cell means. Saved per company by each import and offered for the next one.
+ * Mappings saved before blank cells could be read as absences read them as problems.
  */
 export const importMappingSchema = z.object({
   columns: z.partialRecord(z.enum(IMPORT_FIELDS), headerText),
   values: z.object({
     employmentType: z.record(z.string().max(200), z.enum(EMPLOYMENT_TYPES)),
   }),
+  blankCells: z.enum(BLANK_CELL_READINGS, { error: 'validation.invalid' }).default('PROBLEM'),
 });
 export type ImportMappingInput = z.input<typeof importMappingSchema>;
 export type ImportMapping = z.output<typeof importMappingSchema>;

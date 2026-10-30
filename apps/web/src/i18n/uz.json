@@ -493,7 +493,8 @@
       "dailyEntriesEntered": "Bu ishchining oy uchun soatlari allaqachon kunlik tabelga kiritilgan.",
       "hasProblems": "Faylda hali muammolar bor ({{problems}}). Tuzatib, qayta urinib koʻring.",
       "hireAfterExit": "Ishdan boʻshash sanasi ishga kirish sanasi “{{value}}”dan oldin: ishchi oydagi birinchi kunidan boʻshash sanasigacha joylashtiriladi.",
-      "exitFromCode": "Ishdan boʻshash sanasi yoʻq: oxirgi ish kuni “{{value}}” yozilgan kundan oldingi kun."
+      "exitFromCode": "Ishdan boʻshash sanasi yoʻq: oxirgi ish kuni “{{value}}” yozilgan kundan oldingi kun.",
+      "blankAsAbsent": "Boʻsh kataklar sababsiz kelmaslik deb oʻqildi."
     }
   },
   "payRules": {
@@ -1331,6 +1332,12 @@
     },
     "note": "Izoh",
     "noteCount": "Izohlar: {{count}}",
-    "notesDescription": "Import bu qatorlarni shunday oʻqiydi. Tekshirib chiqing; ular importni toʻxtatmaydi."
+    "notesDescription": "Import bu qatorlarni shunday oʻqiydi. Tekshirib chiqing; ular importni toʻxtatmaydi.",
+    "blankCells": "Ishchi ishlayotgan kunlardagi boʻsh kataklar",
+    "blankCellsHint": "Ustunlar bilan birga kompaniya uchun saqlanadi. Keyinroq toʻliq faylni yuklash kelmasliklar oʻrniga yoziladi.",
+    "blankCellReadings": {
+      "PROBLEM": "Muammo: faylda toʻldirilsin",
+      "ABSENT": "Sababsiz kelmaslik (toʻlanmaydi)"
+    }
   }
 }
