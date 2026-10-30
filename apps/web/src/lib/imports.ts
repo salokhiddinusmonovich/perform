@@ -48,7 +48,13 @@ export interface ImportPreview {
     notes: ImportProblem[];
     changes: ImportWorkerChange[];
   };
-  hours: { workers: number; replaces: number; problems: ImportProblem[] };
+  hours: {
+    workers: number;
+    replaces: number;
+    problems: ImportProblem[];
+    /** Blank cells read as unexcused absences (when the company chose so); never blocks it */
+    notes: ImportProblem[];
+  };
   earlier: { id: string; fileName: string; workers: number; createdAt: string; createdBy: { fullName: string } }[];
 }
 

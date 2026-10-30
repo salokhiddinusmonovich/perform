@@ -493,7 +493,8 @@
       "dailyEntriesEntered": "This worker’s hours for the month are already entered in the daily timesheet.",
       "hasProblems": "The file still has problems ({{problems}}). Fix them and try again.",
       "hireAfterExit": "The exit date is before the hire date “{{value}}”: the worker is placed from their first day in the month until the exit date.",
-      "exitFromCode": "No exit date: the last working day is the day before “{{value}}”."
+      "exitFromCode": "No exit date: the last working day is the day before “{{value}}”.",
+      "blankAsAbsent": "Empty cells read as unexcused absence."
     }
   },
   "payRules": {
@@ -1331,6 +1332,12 @@
     },
     "note": "Note",
     "noteCount": "Notes: {{count}}",
-    "notesDescription": "The import reads these rows this way. Check them; they don’t stop the import."
+    "notesDescription": "The import reads these rows this way. Check them; they don’t stop the import.",
+    "blankCells": "Empty cells while the worker is employed",
+    "blankCellsHint": "Saved for the company with the columns. Importing the complete file later replaces the absences.",
+    "blankCellReadings": {
+      "PROBLEM": "Problem: fill them in the file",
+      "ABSENT": "Unexcused absence (unpaid)"
+    }
   }
 }

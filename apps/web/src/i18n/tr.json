@@ -493,7 +493,8 @@
       "dailyEntriesEntered": "Bu işçinin bu ayki saatleri zaten günlük puantaja girilmiş.",
       "hasProblems": "Dosyada hâlâ sorun var ({{problems}}). Düzeltip tekrar deneyin.",
       "hireAfterExit": "Çıkış tarihi, giriş tarihinden “{{value}}” önce: işçi aydaki ilk gününden çıkış tarihine kadar yerleştirilir.",
-      "exitFromCode": "Çıkış tarihi yok: son çalışma günü “{{value}}” yazan günden önceki gündür."
+      "exitFromCode": "Çıkış tarihi yok: son çalışma günü “{{value}}” yazan günden önceki gündür.",
+      "blankAsAbsent": "Boş hücreler mazeretsiz devamsızlık olarak okundu."
     }
   },
   "payRules": {
@@ -1331,6 +1332,12 @@
     },
     "note": "Not",
     "noteCount": "Not: {{count}}",
-    "notesDescription": "Aktarım bu satırları böyle okur. Kontrol edin; aktarımı durdurmazlar."
+    "notesDescription": "Aktarım bu satırları böyle okur. Kontrol edin; aktarımı durdurmazlar.",
+    "blankCells": "İşçi çalışırken boş hücreler",
+    "blankCellsHint": "Sütunlarla birlikte şirket için kaydedilir. Tam dosyayı sonra aktarmak devamsızlıkların yerine geçer.",
+    "blankCellReadings": {
+      "PROBLEM": "Sorun: dosyada doldurulsun",
+      "ABSENT": "Mazeretsiz devamsızlık (ücretsiz)"
+    }
   }
 }

@@ -189,7 +189,11 @@ export function mappingFor(sheet: Sheet, preferred: ImportMapping | null): Impor
       }
     }
   }
-  return { columns, values: { employmentType: { ...(preferred?.values.employmentType ?? {}) } } };
+  return {
+    columns,
+    values: { employmentType: { ...(preferred?.values.employmentType ?? {}) } },
+    blankCells: preferred?.blankCells ?? 'PROBLEM',
+  };
 }
 
 /** A guess of what an employment type value stands for, or null. */

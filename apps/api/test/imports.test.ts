@@ -227,6 +227,41 @@ describe('Excel import', () => {
     ]);
   });
 
+  it('reads blank cells while employed as unexcused absences when the company chooses so', async () => {
+    const owner = await company();
+    // The month isn't finished: nothing from the 27th on.
+    const partial = await workbook([{ number: '1', lastName: 'Aliyev', days: FULL.map((v, i) => (i + 1 >= 27 ? null : v)) }]);
+    await send(owner.agent, 'workers', partial).expect(201);
+
+    const strict = (await send(owner.agent, 'preview', partial).expect(200)).body;
+    expect(strict.mapping.blankCells).toBe('PROBLEM');
+    expect(strict.hours.problems.map((p: { code: string; days: number[] }) => [p.code, p.days])).toEqual([
+      ['import.blankWhileEmployed', [27, 28, 29, 30]],
+    ]);
+
+    const mapping = JSON.stringify({ ...strict.mapping, blankCells: 'ABSENT' });
+    const preview = (await send(owner.agent, 'preview', partial, { mapping }).expect(200)).body;
+    expect(preview.hours).toMatchObject({ workers: 1, problems: [] });
+    expect(preview.hours.notes).toEqual([
+      { row: 3, employeeNumber: '1', name: 'Aliyev Test', code: 'import.blankAsAbsent', days: [27, 28, 29, 30] },
+    ]);
+    await send(owner.agent, 'hours', partial, { mapping }).expect(201);
+    const absent = await ctx.prisma.timesheetEntry.findMany({ where: { status: 'ABSENT' }, orderBy: { date: 'asc' } });
+    expect(absent.map((e) => e.date.toISOString().slice(0, 10))).toEqual(['2026-09-27', '2026-09-28', '2026-09-29', '2026-09-30']);
+    // 22 of the 25 working days worked: 7 500 000 × 22 / 25.
+    const payroll = (await owner.agent.get('/api/payroll/2026/9').expect(200)).body;
+    expect(payroll.workers[0]).toMatchObject({ source: 'IMPORT', total: '6600000.00' });
+
+    // The choice is saved with the mapping for the next import.
+    expect((await send(owner.agent, 'preview', partial).expect(200)).body).toMatchObject({
+      mappingSaved: true,
+      mapping: { blankCells: 'ABSENT' },
+    });
+    // The complete file replaces the absences.
+    expect((await send(owner.agent, 'hours', await workbook([{ number: '1', lastName: 'Aliyev' }])).expect(201)).body.workers).toBe(1);
+    expect(await ctx.prisma.timesheetEntry.count({ where: { status: 'ABSENT' } })).toBe(0);
+  });
+
   it('writes nothing while any row has a problem', async () => {
     const owner = await company();
     const file = await workbook([
