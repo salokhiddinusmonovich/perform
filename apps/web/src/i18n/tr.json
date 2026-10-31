@@ -444,7 +444,7 @@
       "moduleOff": "Bu ayın paketinde Puantaj modülü yok, bu yüzden bu aya saat girilemez.",
       "wholeDay": "Devamsızlık işçinin bütün günüdür: o gün başka kayıt olamaz.",
       "dayTooManyHours": "İşçinin bu günkü saatleri toplamda 24’ü geçiyor.",
-      "imported": "Bu işçinin bu ayki saatleri Excel’den aktarıldı. Değiştirmek için ayı yeniden aktarın."
+      "imported": "Bu işçinin bu ayki saatleri Excel’den aktarıldı. Burada yalnızca şirket sahibi veya yönetici değiştirebilir; aksi halde ayı yeniden aktarın."
     },
     "shift": {
       "notFound": "Bu vardiya yok.",
@@ -494,6 +494,7 @@
       "hasProblems": "Dosyada hâlâ sorun var ({{problems}}). Düzeltip tekrar deneyin.",
       "hireAfterExit": "Çıkış tarihi, giriş tarihinden “{{value}}” önce: işçi aydaki ilk gününden çıkış tarihine kadar yerleştirilir.",
       "exitFromCode": "Çıkış tarihi yok: son çalışma günü “{{value}}” yazan günden önceki gündür.",
+      "overwritesEdits": "Uygulamada elle değiştirilen günlerin üzerine dosyadaki değerler yazılacak.",
       "blankAsAbsent": "Boş hücreler mazeretsiz devamsızlık olarak okundu."
     }
   },
@@ -1010,6 +1011,7 @@
     "title": "Maaş hesabı",
     "description": "Her işçinin aylık maaşı ve her tutarın nereden geldiği",
     "source": "Saat kaynağı",
+    "editedDays": "elle değiştirilen gün: {{count}}",
     "sources": {
       "TOTALS": "Aylık saatler",
       "DAILY": "Günlük puantaj",
@@ -1136,7 +1138,9 @@
     "codesMissingManager": "Saatler şimdiden girilebilir. Devamsızlıkları girmek için şirketin kodlarını ekleyin.",
     "codesMissingMember": "Saatler şimdiden girilebilir. Kodu olmayan devamsızlıklar, bir sahip veya yönetici şirketin kodlarını ekledikten sonra girilebilir.",
     "goToCodes": "Kodlara git",
-    "importedHint": "Bazı işçilerin bu ayki saatleri Excel’den aktarıldı, bu yüzden günleri burada değiştirilemez. Düzeltmek için ayı yeniden aktarın."
+    "importedHint": "Bazı işçilerin bu ayki saatleri Excel’den aktarıldı. Günlerini burada yalnızca şirket sahibi veya yönetici değiştirebilir; aksi halde ayı yeniden aktarın.",
+    "importedEditHint": "Bazı işçilerin bu ayki saatleri Excel’den aktarıldı. Günlerini burada değiştirebilirsiniz, ancak ayı yeniden aktarmak bu değişikliklerin üzerine yazar; aktarım önce sizi uyarır.",
+    "editedByHand": "Aktarımdan sonra elle değiştirildi"
   },
   "timesheetSettings": {
     "title": "Puantaj girişi",
@@ -1295,6 +1299,8 @@
     "hoursDescription": "Ay için her günün saati veya kodu okunur. Ayı yeniden aktarmak, daha önce aktarılan saatlerin yerine geçer.",
     "workerMonths": "İşçi: {{count}}",
     "replaces": "Önceki aktarımın yerine geçer: {{count}}",
+    "overwritesEdits": "Üzerine yazılacak, elle değiştirilen günler: {{count}}",
+    "overwritesEditsConfirm": "Dosyanın üzerine yazacağı, elle değiştirilen gün sayısı: {{count}}.",
     "importHours": "Saatleri aktar ({{count}})",
     "importHoursTitle": "Saatler aktarılsın mı?",
     "importHoursConfirm": "“{{file}}” dosyasından {{count}} işçinin saatleri bu ay için kaydedilecek.",

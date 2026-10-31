@@ -444,7 +444,7 @@
       "moduleOff": "Bu oyning tarifida Tabel moduli yoʻq, shuning uchun unga soat kiritib boʻlmaydi.",
       "wholeDay": "Ishga kelmaslik ishchining butun kuni: u boshqa yozuvlar bilan bir kunda boʻlolmaydi.",
       "dayTooManyHours": "Ishchining bu kundagi soatlari jami 24 dan oshadi.",
-      "imported": "Bu ishchining oy uchun soatlari Excel’dan yuklangan. Oʻzgartirish uchun oyni qayta yuklang."
+      "imported": "Bu ishchining oy uchun soatlari Excel’dan yuklangan. Bu yerda ularni faqat egasi yoki administrator oʻzgartira oladi; aks holda oyni qayta yuklang."
     },
     "shift": {
       "notFound": "Bunday smena yoʻq.",
@@ -494,6 +494,7 @@
       "hasProblems": "Faylda hali muammolar bor ({{problems}}). Tuzatib, qayta urinib koʻring.",
       "hireAfterExit": "Ishdan boʻshash sanasi ishga kirish sanasi “{{value}}”dan oldin: ishchi oydagi birinchi kunidan boʻshash sanasigacha joylashtiriladi.",
       "exitFromCode": "Ishdan boʻshash sanasi yoʻq: oxirgi ish kuni “{{value}}” yozilgan kundan oldingi kun.",
+      "overwritesEdits": "Ilovada qoʻlda oʻzgartirilgan kunlar ustidan fayldagi qiymatlar yoziladi.",
       "blankAsAbsent": "Boʻsh kataklar sababsiz kelmaslik deb oʻqildi."
     }
   },
@@ -1010,6 +1011,7 @@
     "title": "Ish haqi hisobi",
     "description": "Oy boʻyicha har bir ishchining ish haqi, har bir summa qayerdan kelgani bilan",
     "source": "Soatlar manbasi",
+    "editedDays": "qoʻlda oʻzgartirilgan kunlar: {{count}}",
     "sources": {
       "TOTALS": "Oylik soatlar",
       "DAILY": "Kunlik tabel",
@@ -1136,7 +1138,9 @@
     "codesMissingManager": "Soatlarni hozir ham kiritish mumkin. Kelmaslik holatlarini kiritish uchun ularga kompaniya kodlarini qoʻshing.",
     "codesMissingMember": "Soatlarni hozir ham kiritish mumkin. Kodi yoʻq holatlarni ega yoki administrator kompaniya kodlarini qoʻshgandan keyin kiritish mumkin.",
     "goToCodes": "Kodlarga oʻtish",
-    "importedHint": "Ayrim ishchilarning bu oydagi soatlari Excel’dan yuklangan, shuning uchun ularning kunlari bu yerda oʻzgartirilmaydi. Tuzatish uchun oyni qayta yuklang."
+    "importedHint": "Ayrim ishchilarning bu oydagi soatlari Excel’dan yuklangan. Ularning kunlarini bu yerda faqat egasi yoki administrator oʻzgartira oladi; aks holda oyni qayta yuklang.",
+    "importedEditHint": "Ayrim ishchilarning bu oydagi soatlari Excel’dan yuklangan. Ularning kunlarini bu yerda oʻzgartirishingiz mumkin, lekin oyni qayta yuklash bu oʻzgarishlar ustidan yozadi; yuklashdan oldin ogohlantiriladi.",
+    "editedByHand": "Yuklangandan keyin qoʻlda oʻzgartirilgan"
   },
   "timesheetSettings": {
     "title": "Tabel kiritish",
@@ -1295,6 +1299,8 @@
     "hoursDescription": "Oy uchun har bir kunning soati yoki kodi oʻqiladi. Oyni qayta yuklash avval yuklangan soatlar oʻrniga yoziladi.",
     "workerMonths": "Ishchilar: {{count}}",
     "replaces": "Oldingi import oʻrniga: {{count}}",
+    "overwritesEdits": "Ustidan yoziladigan, qoʻlda oʻzgartirilgan kunlar: {{count}}",
+    "overwritesEditsConfirm": "Fayl ustidan yozadigan, qoʻlda oʻzgartirilgan kunlar soni: {{count}}.",
     "importHours": "Soatlarni yuklash ({{count}})",
     "importHoursTitle": "Soatlar yuklansinmi?",
     "importHoursConfirm": "“{{file}}” faylidan {{count}} ta ishchining soatlari oy uchun saqlanadi.",

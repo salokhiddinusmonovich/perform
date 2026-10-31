@@ -240,6 +240,9 @@ function ImportView({ me }: { me: Me }) {
                 {preview.hours.replaces > 0 && (
                   <StatusBadge tone="warning">{t('import.replaces', { count: preview.hours.replaces })}</StatusBadge>
                 )}
+                {preview.hours.overwritesEdits > 0 && (
+                  <StatusBadge tone="warning">{t('import.overwritesEdits', { count: preview.hours.overwritesEdits })}</StatusBadge>
+                )}
               </div>
               <Problems problems={preview.hours.problems} />
               {preview.hours.notes.length > 0 && <Problems problems={preview.hours.notes} notes />}
@@ -271,15 +274,18 @@ function ImportView({ me }: { me: Me }) {
             open={confirm === 'hours'}
             onOpenChange={(open) => !open && setConfirm(null)}
             title={t('import.importHoursTitle')}
-            description={
+            description={[
               preview.hours.replaces > 0
                 ? t('import.importHoursReplaceConfirm', {
                     count: preview.hours.workers,
                     replaces: preview.hours.replaces,
                     file: preview.fileName,
                   })
-                : t('import.importHoursConfirm', { count: preview.hours.workers, file: preview.fileName })
-            }
+                : t('import.importHoursConfirm', { count: preview.hours.workers, file: preview.fileName }),
+              ...(preview.hours.overwritesEdits > 0
+                ? [t('import.overwritesEditsConfirm', { count: preview.hours.overwritesEdits })]
+                : []),
+            ].join(' ')}
             confirmLabel={t('import.importHours', { count: preview.hours.workers })}
             onConfirm={async () => {
               const done = await importHours(request()!);

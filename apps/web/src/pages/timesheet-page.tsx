@@ -85,6 +85,8 @@ function MonthView({ data, codes, me }: { data: TimesheetMonth; codes: Timesheet
   const canEnter = data.rows.some((r) => r.canEnter);
   const withTotals = data.rows.some((r) => r.hasMonthlyTotals);
   const withImport = data.rows.some((r) => r.hasImportedHours);
+  const importEditable = data.rows.some((r) => r.hasImportedHours && r.canEnter);
+  const withEdits = data.rows.some((r) => r.editedDays.length > 0);
   return (
     <>
       {data.calendar === null && (
@@ -103,7 +105,7 @@ function MonthView({ data, codes, me }: { data: TimesheetMonth; codes: Timesheet
               : !data.timesheetModule
                 ? t('timesheet.moduleOffHint')
                 : withImport
-                  ? t('timesheet.importedHint')
+                  ? t(importEditable ? 'timesheet.importedEditHint' : 'timesheet.importedHint')
                   : !canEnter
                     ? t('timesheet.readOnlyHint')
                     : t('timesheet.monthlyTotalsHint')}
@@ -139,6 +141,12 @@ function MonthView({ data, codes, me }: { data: TimesheetMonth; codes: Timesheet
           <li>
             <span className="font-semibold text-foreground">–</span> — {t('timesheet.notEmployed')}
           </li>
+          {withEdits && (
+            <li>
+              <span className="font-semibold text-foreground underline decoration-dotted underline-offset-4">9</span> —{' '}
+              {t('timesheet.editedByHand')}
+            </li>
+          )}
         </ul>
       </section>
     </>

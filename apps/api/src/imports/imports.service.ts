@@ -96,8 +96,10 @@ export interface ImportPreview {
   hours: {
     workers: number;
     replaces: number;
+    /** Days changed by hand since the last import that this file would overwrite */
+    overwritesEdits: number;
     problems: ImportProblem[];
-    /** Blank cells read as unexcused absences (when the company chose so); never blocks it */
+    /** Blank cells read as unexcused absences (when the company chose so) and days changed by hand it overwrites; never blocks it */
     notes: ImportProblem[];
   };
   /** Earlier imports of the month, newest first */
@@ -191,7 +193,7 @@ export class ImportsService {
         days: [],
         values: { employmentType: [] },
         workers: { rows: 0, new: 0, existing: 0, problems, notes: [], changes: [] },
-        hours: { workers: 0, replaces: 0, problems, notes: [] },
+        hours: { workers: 0, replaces: 0, overwritesEdits: 0, problems, notes: [] },
       };
     }
     const { sheet } = read;
@@ -221,7 +223,13 @@ export class ImportsService {
         notes: workers.notes,
         changes: workers.changes,
       },
-      hours: { workers: hours.months.length, replaces: hours.replaces, problems: hours.problems, notes: hours.notes },
+      hours: {
+        workers: hours.months.length,
+        replaces: hours.replaces,
+        overwritesEdits: hours.overwritesEdits,
+        problems: hours.problems,
+        notes: hours.notes,
+      },
     };
   }
 
@@ -326,6 +334,10 @@ export class ImportsService {
         },
       });
       const periodId = await openPeriod(tx, companyId, ym.year, ym.month);
+      // The file is now the last word on these worker-months, also where it matches an edit.
+      await tx.importedDayEdit.deleteMany({
+        where: { companyId, workerId: { in: checked.months.map((m) => m.workerId) }, date: { gte: first, lte: last } },
+      });
       for (const { month: m, old } of changed) {
         if (old.length > 0) await tx.timesheetEntry.deleteMany({ where: { id: { in: old.map((o) => o.id) } } });
         await tx.timesheetEntry.createMany({
@@ -644,7 +656,7 @@ export class ImportsService {
     ]);
     const codes: CodeMap = new Map(codeRows.map((c) => [normalizeCode(c.code), c.status]));
     const workerIds = workers.map((w) => w.id);
-    const [totals, entries, shiftParts] = await Promise.all([
+    const [totals, entries, edits, shiftParts] = await Promise.all([
       db.monthlyHours.findMany({
         where: { companyId, ...ym, assignment: { workerId: { in: workerIds } } },
         distinct: ['assignmentId'],
@@ -652,7 +664,11 @@ export class ImportsService {
       }),
       db.timesheetEntry.findMany({
         where: { companyId, date: { gte: first, lte: last }, assignment: { workerId: { in: workerIds } } },
-        select: { importId: true, assignment: { select: { workerId: true } } },
+        select: { importId: true, date: true, status: true, hours: true, assignment: { select: { workerId: true } } },
+      }),
+      db.importedDayEdit.findMany({
+        where: { companyId, workerId: { in: workerIds }, date: { gte: first, lte: last } },
+        orderBy: { date: 'asc' },
       }),
       mapping.columns.shift === undefined ? null : shiftPartsOf(db, companyId, workerIds, ym.year, ym.month),
     ]);
@@ -660,6 +676,7 @@ export class ImportsService {
     const months: WorkerMonth[] = [];
     const notes: ImportProblem[] = [];
     let replaces = 0;
+    let overwritesEdits = 0;
     for (const r of rows) {
       const worker = workers.find((w) => w.employeeNumber === r.employeeNumber);
       if (!worker) {
@@ -737,9 +754,24 @@ export class ImportsService {
       if (rowProblems.length === 0) {
         months.push(month);
         if (own.length > 0) replaces++;
+        // Days changed by hand that the file says differently: the import would undo them.
+        const overwritten = edits.flatMap((edit) => {
+          if (edit.workerId !== worker.id) return [];
+          const date = isoDay(edit.date);
+          const inFile = month.entries.filter((e) => e.date === date);
+          const inApp = own.filter((e) => isoDay(e.date) === date);
+          const same =
+            inFile.length === inApp.length &&
+            inFile.every((n) => inApp.some((o) => o.status === n.status && o.hours.equals(n.hours)));
+          return same ? [] : [edit.date.getUTCDate()];
+        });
+        if (overwritten.length > 0) {
+          notes.push(rowProblem(r, 'import.overwritesEdits', { days: overwritten }));
+          overwritesEdits += overwritten.length;
+        }
       }
     }
-    return { months, replaces, problems, notes };
+    return { months, replaces, overwritesEdits, problems, notes };
   }
 
   /** Saves the mapping as the company's, for the next import (audited when it changes). */

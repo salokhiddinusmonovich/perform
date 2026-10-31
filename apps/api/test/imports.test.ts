@@ -2,7 +2,7 @@ import type { Role } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { addMember, createUser, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
+import { addMember, createPlan, createUser, givePlan, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
 
 let ctx: TestContext;
 beforeAll(async () => (ctx = await startApp()));
@@ -344,6 +344,93 @@ describe('Excel import', () => {
     expect((await send(owner.agent, 'preview', await withShift('GECE'), { mapping }).expect(200)).body.hours.problems).toEqual([]);
     const mismatch = (await send(owner.agent, 'preview', await withShift('Gunduz'), { mapping }).expect(200)).body.hours.problems;
     expect(mismatch).toEqual([expect.objectContaining({ code: 'import.shiftMismatch', field: 'shift', value: 'Gunduz' })]);
+  });
+
+  it('lets owners and admins edit imported days, keeps one source, and warns before an import overwrites them', async () => {
+    const owner = await company();
+    const companyId = owner.company.id;
+    await givePlan(ctx.prisma, companyId, (await createPlan(ctx.prisma, { timesheetModule: true })).id, '2000-01-01');
+    const siteId = (await ctx.prisma.site.findFirstOrThrow()).id;
+    await send(owner.agent, 'workers', await workbook([{ number: '1', lastName: 'Aliyev' }])).expect(201);
+    const file = await workbook([{ number: '1', lastName: 'Aliyev' }]);
+    const { importId } = (await send(owner.agent, 'hours', file).expect(201)).body;
+    const worker = await ctx.prisma.worker.findFirstOrThrow();
+    const entryOn = (day: string) =>
+      ctx.prisma.timesheetEntry.findFirstOrThrow({ where: { date: new Date(`${day}T00:00:00Z`) } });
+    const body = (date: string, hours: string, version?: number) => ({
+      workerId: worker.id,
+      siteId,
+      teamId: null,
+      date,
+      status: 'WORKED',
+      hours,
+      note: null,
+      version,
+    });
+    const third = await entryOn('2026-09-03');
+    const fourth = await entryOn('2026-09-04');
+
+    // Everyone else corrects by importing again, and their grid is closed.
+    const accountant = await member(companyId, 'ACCOUNTANT');
+    await accountant.agent.put(`/api/timesheet/entries/${third.id}`).send(body('2026-09-03', '7', 1)).expect(403);
+    const timekeeper = await member(companyId, 'TIMEKEEPER');
+    await ctx.prisma.memberSite.create({ data: { userId: timekeeper.user.id, companyId, siteId } });
+    const refused = await timekeeper.agent.put(`/api/timesheet/entries/${third.id}`).send(body('2026-09-03', '7', 1)).expect(409);
+    expect(refused.body.code).toBe('timesheet.imported');
+    await timekeeper.agent.delete(`/api/timesheet/entries/${third.id}?version=1`).expect(409);
+    const seenByTimekeeper = (await timekeeper.agent.get(`/api/timesheet/2026/9?siteId=${siteId}`).expect(200)).body.rows[0];
+    expect(seenByTimekeeper).toMatchObject({ hasImportedHours: true, canEnter: false });
+
+    // The owner changes one day, clears another, and adds hours on a rest day.
+    const changed = await owner.agent.put(`/api/timesheet/entries/${third.id}`).send(body('2026-09-03', '7', 1)).expect(200);
+    expect(changed.body).toMatchObject({ hours: '7', imported: true });
+    await owner.agent.delete(`/api/timesheet/entries/${fourth.id}?version=1`).expect(204);
+    const added = crypto.randomUUID();
+    await owner.agent.put(`/api/timesheet/entries/${added}`).send(body('2026-09-06', '5')).expect(200);
+    expect((await ctx.prisma.timesheetEntry.findUniqueOrThrow({ where: { id: added } })).importId).toBe(importId);
+    const audit = await ctx.prisma.auditLog.findFirstOrThrow({ where: { action: 'timesheetEntry.update', entityId: third.id } });
+    expect(audit.data).toMatchObject({ from: { hours: '9' }, to: { hours: '7' } });
+
+    const row = (await owner.agent.get(`/api/timesheet/2026/9?siteId=${siteId}`).expect(200)).body.rows[0];
+    expect(row).toMatchObject({ hasImportedHours: true, canEnter: true, editedDays: ['2026-09-03', '2026-09-04', '2026-09-06'] });
+    // Still one source on the payslip, with the edits shown.
+    const pay = (await owner.agent.get('/api/payroll/2026/9').expect(200)).body.workers[0];
+    expect(pay).toMatchObject({ source: 'IMPORT', editedDays: 3 });
+    expect(pay.problems).toEqual([]);
+
+    // The preview names the days the file would undo; one the file agrees with isn't listed.
+    const agrees = await workbook([{ number: '1', lastName: 'Aliyev', days: FULL.map((v, i) => (i === 2 ? 7 : v)) }]);
+    const preview = (await send(owner.agent, 'preview', agrees).expect(200)).body.hours;
+    expect(preview).toMatchObject({ overwritesEdits: 2, problems: [] });
+    expect(preview.notes).toEqual([expect.objectContaining({ code: 'import.overwritesEdits', days: [4, 6] })]);
+
+    // The import has the last word and starts clean.
+    await send(owner.agent, 'hours', file).expect(201);
+    expect((await entryOn('2026-09-03')).hours.toString()).toBe('9');
+    expect((await entryOn('2026-09-04')).hours.toString()).toBe('9');
+    expect(await ctx.prisma.timesheetEntry.count({ where: { date: new Date('2026-09-06T00:00:00Z') } })).toBe(0);
+    expect(await ctx.prisma.importedDayEdit.count()).toBe(0);
+    expect((await send(owner.agent, 'preview', file).expect(200)).body.hours.overwritesEdits).toBe(0);
+  });
+
+  it('keeps edits of imported days apart between companies', async () => {
+    const owner = await company();
+    const companyId = owner.company.id;
+    const siteId = (await ctx.prisma.site.findFirstOrThrow()).id;
+    await send(owner.agent, 'workers', await workbook([{ number: '1', lastName: 'Aliyev' }])).expect(201);
+    await send(owner.agent, 'hours', await workbook([{ number: '1', lastName: 'Aliyev' }])).expect(201);
+    const worker = await ctx.prisma.worker.findFirstOrThrow();
+    const entry = await ctx.prisma.timesheetEntry.findFirstOrThrow();
+
+    const other = await memberOfNewCompany(ctx, 'OWNER');
+    await givePlan(ctx.prisma, other.company.id, (await createPlan(ctx.prisma, { timesheetModule: true })).id, '2000-01-01');
+    await other.agent.delete(`/api/timesheet/entries/${entry.id}?version=1`).expect(204);
+    await other.agent
+      .put(`/api/timesheet/entries/${entry.id}`)
+      .send({ workerId: worker.id, siteId, teamId: null, date: '2026-09-02', status: 'WORKED', hours: '1', note: null, version: 1 })
+      .expect(404);
+    expect(await ctx.prisma.importedDayEdit.count({ where: { companyId } })).toBe(0);
+    expect(await ctx.prisma.timesheetEntry.count({ where: { id: entry.id } })).toBe(1);
   });
 
   it('keeps one source per worker-month and refuses a locked month', async () => {

@@ -466,6 +466,7 @@ function PayslipDialog({
           <DialogDescription>
             {format.month(month.year, month.month)}
             {worker.source && ` · ${t(`payroll.sources.${worker.source}`)}`}
+            {worker.editedDays && ` · ${t('payroll.editedDays', { count: worker.editedDays })}`}
           </DialogDescription>
         </DialogHeader>
         {worker.problems.length > 0 ? (

@@ -51,8 +51,10 @@ export interface ImportPreview {
   hours: {
     workers: number;
     replaces: number;
+    /** Days changed by hand since the last import that this file would overwrite */
+    overwritesEdits: number;
     problems: ImportProblem[];
-    /** Blank cells read as unexcused absences (when the company chose so); never blocks it */
+    /** Blank cells read as unexcused absences (when the company chose so) and days changed by hand it overwrites; never blocks it */
     notes: ImportProblem[];
   };
   earlier: { id: string; fileName: string; workers: number; createdAt: string; createdBy: { fullName: string } }[];

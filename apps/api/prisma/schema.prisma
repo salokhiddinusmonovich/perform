@@ -50,6 +50,7 @@ model Company {
   shifts            Shift[]
   departments       Department[]
   timesheetImports  TimesheetImport[]
+  importedDayEdits  ImportedDayEdit[]
   importMapping     ImportMapping?
 }
 
@@ -396,6 +397,7 @@ model Worker {
   payrollSnapshots PayrollSnapshotWorker[]
   adjustments      Adjustment[]
   shifts           WorkerShift[]
+  importedDayEdits ImportedDayEdit[]
 
   @@unique([companyId, pinfl])
   @@unique([companyId, employeeNumber])
@@ -775,8 +777,9 @@ model TimesheetEntry {
   status       DayStatus
   hours        Decimal   @default(0) @db.Decimal(4, 2)
   note         String?
-  /// The Excel import that wrote this entry (AGENTS.md: Excel import); null: entered in the
-  /// daily grid. Imported entries are changed only by importing the month again.
+  /// The Excel import this entry belongs to (AGENTS.md: Excel import); null: entered in the
+  /// daily grid. Stays set when an owner or admin edits the day (ImportedDayEdit), so the
+  /// worker-month keeps one source.
   importId     String?   @db.Uuid
   /// Creation order, never changed by edits: of one worker's entries for a day, the
   /// higher seq was entered later, and gets the day's overtime and travel pay
@@ -826,6 +829,22 @@ model TimesheetImport {
 
   @@unique([id, companyId])
   @@index([companyId, year, month])
+}
+
+/// A day of a worker's imported month changed by hand since the last import (AGENTS.md:
+/// Excel import), including a cleared day, which has no entry left to carry a mark. An
+/// import of the worker-month warns before overwriting these, then clears them. Who
+/// changed what is in the audit log.
+model ImportedDayEdit {
+  workerId  String   @db.Uuid
+  date      DateTime @db.Date
+  companyId String   @db.Uuid
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  worker  Worker  @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+
+  @@id([workerId, date])
+  @@index([companyId, date])
 }
 
 /// How a company's Excel sheet is read (AGENTS.md: Excel import): which header text each

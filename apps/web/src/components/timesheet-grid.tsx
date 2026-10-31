@@ -189,6 +189,8 @@ export function TimesheetGrid({ data, codes: companyCodes, myName }: TimesheetGr
         return next;
       });
       await Promise.all([
+        // The API keeps track of the days changed by hand in an imported month.
+        ...(row.hasImportedHours ? [queryClient.invalidateQueries({ queryKey: key })] : []),
         queryClient.invalidateQueries({ queryKey: PAYROLL_KEY }),
         queryClient.invalidateQueries({ queryKey: MONTHLY_HOURS_KEY }),
       ]);
@@ -260,7 +262,7 @@ export function TimesheetGrid({ data, codes: companyCodes, myName }: TimesheetGr
                   hours: input.hours,
                   note: existing?.note ?? null,
                   version: existing?.version ?? 0,
-                  imported: false,
+                  imported: r.row.hasImportedHours,
                   updatedBy: { fullName: myName },
                   updatedAt: new Date().toISOString(),
                 };
@@ -270,9 +272,11 @@ export function TimesheetGrid({ data, codes: companyCodes, myName }: TimesheetGr
         },
         tooltip: (p: TooltipCallbackParams<GridRow>) => {
           const entry = p.data?.cells[day];
-          if (!entry || p.data?.pending.has(day)) return null;
+          if (p.data?.pending.has(day)) return null;
+          const edited = p.data?.row.editedDays.includes(day) ? t('timesheet.editedByHand') : null;
+          if (!entry) return edited;
           const what = entry.status === 'WORKED' ? t('timesheet.hoursWorked', { hours: format.number(entry.hours) }) : t(`timesheet.status.${entry.status}`);
-          return [what, entry.note, t('timesheet.changedBy', { name: entry.updatedBy.fullName, date: format.date(entry.updatedAt) })]
+          return [what, entry.note, edited, t('timesheet.changedBy', { name: entry.updatedBy.fullName, date: format.date(entry.updatedAt) })]
             .filter(Boolean)
             .join('\n');
         },
@@ -285,6 +289,7 @@ export function TimesheetGrid({ data, codes: companyCodes, myName }: TimesheetGr
             offDay && 'bg-muted',
             !open(r, day) && 'cursor-not-allowed text-muted-foreground',
             r.pending.has(day) && 'opacity-60',
+            r.row.editedDays.includes(day) && 'underline decoration-dotted underline-offset-4',
             entry?.status === 'ABSENT' && 'font-semibold text-destructive',
             entry && entry.status !== 'WORKED' && entry.status !== 'ABSENT' && 'font-semibold text-info',
           );

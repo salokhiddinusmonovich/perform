@@ -6,7 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict, forbidden, notFound } from '../common/api-error';
 import { currentOn, dayToDate, inMonth, isoDay, monthOfDay, monthSpan } from '../common/dates';
-import { entersHoursAt, seesPlacement, visibleSites } from '../organisation/access';
+import { entersHoursAt, isCompanyManager, seesPlacement, visibleSites } from '../organisation/access';
 import { assertMonthsOpen, lockWorkerMonth } from '../pay-rules/months';
 import { PayRulesService } from '../pay-rules/pay-rules.service';
 import { timesheetIn } from '../platform/company-plan';
@@ -22,7 +22,7 @@ export interface TimesheetEntryView {
   note: string | null;
   /** Send it back to change or remove the entry: a stale version is refused. */
   version: number;
-  /** Written by an Excel import: changed only by importing the month again */
+  /** Part of an Excel import: changed by owners and admins, or by importing the month again */
   imported: boolean;
   updatedBy: { fullName: string };
   updatedAt: Date;
@@ -37,8 +37,10 @@ export interface TimesheetRowView {
   employed: { from: string; until: string | null }[];
   /** Hours for this worker-month come from monthly totals, so no daily entries can be added. */
   hasMonthlyTotals: boolean;
-  /** Hours for this worker-month come from an Excel import, so they aren't entered here. */
+  /** Hours for this worker-month come from an Excel import: only owners and admins change them here. */
   hasImportedHours: boolean;
+  /** Days of the imported month changed by hand since the import, cleared days too. */
+  editedDays: string[];
   /** The caller may enter hours on this row (Settings and their sites or teams). */
   canEnter: boolean;
   entries: TimesheetEntryView[];
@@ -146,6 +148,7 @@ export class TimesheetService {
           employed: [],
           hasMonthlyTotals: false,
           hasImportedHours: false,
+          editedDays: [],
           canEnter: timesheetModule && locked === 0 && entersHoursAt(auth, entryRoles, siteId, teamId),
           entries: [],
         };
@@ -162,7 +165,7 @@ export class TimesheetService {
     }
 
     const workerIds = [...new Set([...rows.values()].map((r) => r.worker.id))];
-    const [spans, totals, imported] = await Promise.all([
+    const [spans, totals, imported, edits] = await Promise.all([
       this.prisma.assignment.findMany({
         where: { AND: [{ companyId, workerId: { in: workerIds } }, inMonth(year, month)] },
         select: { workerId: true, hiredOn: true, leftOn: true },
@@ -178,6 +181,10 @@ export class TimesheetService {
         distinct: ['assignmentId'],
         select: { assignment: { select: { workerId: true } } },
       }),
+      this.prisma.importedDayEdit.findMany({
+        where: { companyId, workerId: { in: workerIds }, date: { gte: first, lte: last } },
+        orderBy: { date: 'asc' },
+      }),
     ]);
     const withTotals = new Set(totals.map((t) => t.assignment.workerId));
     const withImport = new Set(imported.map((t) => t.assignment.workerId));
@@ -187,7 +194,8 @@ export class TimesheetService {
         .map((s) => ({ from: isoDay(s.hiredOn), until: s.leftOn ? isoDay(s.leftOn) : null }));
       row.hasMonthlyTotals = withTotals.has(row.worker.id);
       row.hasImportedHours = withImport.has(row.worker.id);
-      if (row.hasImportedHours) row.canEnter = false;
+      row.editedDays = edits.filter((d) => d.workerId === row.worker.id).map((d) => isoDay(d.date));
+      if (row.hasImportedHours && !isCompanyManager(auth)) row.canEnter = false;
     }
 
     const collator = new Intl.Collator('en');
@@ -231,7 +239,7 @@ export class TimesheetService {
           existing.siteId === input.siteId &&
           existing.teamId === input.teamId;
         if (!sameCell) throw conflict('timesheet.entryMismatch');
-        if (existing.importId) throw conflict('timesheet.imported');
+        if (existing.importId && !isCompanyManager(auth)) throw conflict('timesheet.imported');
         const before = content(existing);
         if (before.status === input.status && before.hours === input.hours && before.note === input.note) {
           return entryView(existing);
@@ -249,6 +257,7 @@ export class TimesheetService {
           },
           include: ENTRY_INCLUDE,
         });
+        if (existing.importId) await markEdited(tx, companyId, input.workerId, input.date);
         await this.record(tx, auth, 'timesheetEntry.update', updated, { from: before, to: content(updated) });
         return entryView(updated);
       }
@@ -267,10 +276,12 @@ export class TimesheetService {
       const totals = await tx.monthlyHours.count({ where: { companyId, year, month, assignment: { workerId: input.workerId } } });
       if (totals > 0) throw conflict('hours.monthlyTotalsEntered');
       const { first, last } = monthSpan(year, month);
-      const imported = await tx.timesheetEntry.count({
+      // A day added to an imported month joins the import, so the month keeps one source.
+      const imported = await tx.timesheetEntry.findFirst({
         where: { companyId, importId: { not: null }, date: { gte: first, lte: last }, assignment: { workerId: input.workerId } },
+        select: { importId: true },
       });
-      if (imported > 0) throw conflict('timesheet.imported');
+      if (imported && !isCompanyManager(auth)) throw conflict('timesheet.imported');
       const taken = await tx.timesheetEntry.findFirst({
         where: { assignmentId: placement.id, date: dayToDate(input.date), siteId: input.siteId, teamId: input.teamId },
         include: ENTRY_INCLUDE,
@@ -290,11 +301,13 @@ export class TimesheetService {
           status: input.status,
           hours: input.hours,
           note: input.note,
+          importId: imported?.importId,
           createdById: auth.user.id,
           updatedById: auth.user.id,
         },
         include: ENTRY_INCLUDE,
       });
+      if (imported) await markEdited(tx, companyId, input.workerId, input.date);
       await this.record(tx, auth, 'timesheetEntry.create', created, { to: content(created) });
       return entryView(created);
     });
@@ -316,8 +329,18 @@ export class TimesheetService {
       const existing = await tx.timesheetEntry.findFirst({ where: { id, companyId }, include: ENTRY_INCLUDE });
       if (!existing) return;
       if (existing.version !== version) throw conflict('timesheet.staleVersion', { current: entryView(existing) });
-      if (existing.importId) throw conflict('timesheet.imported');
+      if (existing.importId && !isCompanyManager(auth)) throw conflict('timesheet.imported');
       await tx.timesheetEntry.delete({ where: { id } });
+      if (existing.importId) {
+        const workerId = existing.assignment.workerId;
+        const { first, last } = monthSpan(year, month);
+        const left = await tx.timesheetEntry.count({
+          where: { companyId, importId: { not: null }, date: { gte: first, lte: last }, assignment: { workerId } },
+        });
+        // With its last day cleared the month no longer comes from the import.
+        if (left === 0) await tx.importedDayEdit.deleteMany({ where: { companyId, workerId, date: { gte: first, lte: last } } });
+        else await markEdited(tx, companyId, workerId, isoDay(existing.date));
+      }
       await this.record(tx, auth, 'timesheetEntry.delete', existing, { from: content(existing) });
     });
   }
@@ -393,6 +416,16 @@ export async function openPeriod(tx: Tx, companyId: string, year: number, month:
   await tx.payrollPeriod.createMany({ data: [{ companyId, year, month }], skipDuplicates: true });
   const period = await tx.payrollPeriod.findUniqueOrThrow({ where: { companyId_year_month: { companyId, year, month } } });
   return period.id;
+}
+
+/** Remembers a day of an imported month changed by hand, for the next import to warn about. */
+async function markEdited(tx: Tx, companyId: string, workerId: string, day: string) {
+  const date = dayToDate(day);
+  await tx.importedDayEdit.upsert({
+    where: { workerId_date: { workerId, date } },
+    create: { companyId, workerId, date },
+    update: {},
+  });
 }
 
 /** Hours of a month are entered only if that month's plan has the Timesheet module (AGENTS.md: Modules). */

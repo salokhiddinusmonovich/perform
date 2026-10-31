@@ -100,6 +100,8 @@ export interface PayrollWorker {
   department?: { id: string; name: string } | null;
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
   source: 'DAILY' | 'IMPORT' | 'TOTALS' | null;
+  /** Days of an imported month changed by hand since the import; absent when none */
+  editedDays?: number;
   parts: PayrollPart[];
   payOut: PayrollPayOut | null;
   /** The amount to pay out; null while there are problems. Below zero: the worker owes it. */

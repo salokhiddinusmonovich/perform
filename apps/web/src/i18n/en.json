@@ -444,7 +444,7 @@
       "moduleOff": "This month’s plan doesn’t include the Timesheet module, so hours can’t be entered for it.",
       "wholeDay": "An absence is the worker’s whole day: it can’t share the day with other entries.",
       "dayTooManyHours": "The worker’s hours on this day add up to more than 24.",
-      "imported": "This worker’s hours for the month come from an Excel import. Import the month again to change them."
+      "imported": "This worker’s hours for the month come from an Excel import. Only an owner or admin can change them here; otherwise import the month again."
     },
     "shift": {
       "notFound": "This shift doesn’t exist.",
@@ -494,6 +494,7 @@
       "hasProblems": "The file still has problems ({{problems}}). Fix them and try again.",
       "hireAfterExit": "The exit date is before the hire date “{{value}}”: the worker is placed from their first day in the month until the exit date.",
       "exitFromCode": "No exit date: the last working day is the day before “{{value}}”.",
+      "overwritesEdits": "Days changed by hand in the app will be overwritten by the file.",
       "blankAsAbsent": "Empty cells read as unexcused absence."
     }
   },
@@ -1010,6 +1011,7 @@
     "title": "Pay calculation",
     "description": "Each worker’s pay for the month, and where every amount comes from",
     "source": "Hours from",
+    "editedDays": "days changed by hand: {{count}}",
     "sources": {
       "TOTALS": "Monthly hours",
       "DAILY": "Daily timesheet",
@@ -1136,7 +1138,9 @@
     "codesMissingManager": "Hours can be entered already. To enter absences, add your company’s codes for them.",
     "codesMissingMember": "Hours can be entered already. Absences without a code can be entered once an owner or administrator adds the company’s codes.",
     "goToCodes": "Go to codes",
-    "importedHint": "Some workers’ hours for this month come from an Excel import, so their days can’t be changed here. Import the month again to correct them."
+    "importedHint": "Some workers’ hours for this month come from an Excel import. Only an owner or admin can change their days here; otherwise import the month again.",
+    "importedEditHint": "Some workers’ hours for this month come from an Excel import. You can change their days here, but importing the month again overwrites those changes; the import warns you first.",
+    "editedByHand": "Changed by hand after the import"
   },
   "timesheetSettings": {
     "title": "Timesheet entry",
@@ -1295,6 +1299,8 @@
     "hoursDescription": "Each day’s hours or code is read for the month. Importing the month again replaces the hours imported before.",
     "workerMonths": "Workers: {{count}}",
     "replaces": "Replaces an earlier import: {{count}}",
+    "overwritesEdits": "Days changed by hand to overwrite: {{count}}",
+    "overwritesEditsConfirm": "Days changed by hand that the file will overwrite: {{count}}.",
     "importHours": "Import hours ({{count}})",
     "importHoursTitle": "Import the hours?",
     "importHoursConfirm": "The hours of {{count}} workers from “{{file}}” will be saved for the month.",

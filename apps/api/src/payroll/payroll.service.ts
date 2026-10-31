@@ -103,6 +103,8 @@ export interface PayrollWorkerView {
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
   /** Where the hours came from (IMPORT: an Excel import, AGENTS.md: Excel import), or null when there are none */
   source: 'DAILY' | 'IMPORT' | 'TOTALS' | null;
+  /** Days of an imported month changed by hand since the import; absent when none */
+  editedDays?: number;
   /** Empty while there are problems */
   parts: PayrollPartView[];
   /** Earned pay of the parts, adjustments and rounding; null while there are problems */
@@ -392,7 +394,7 @@ export class PayrollService {
     const assignmentIds = placements.map((p) => p.id);
     const workerIds = [...visible];
 
-    const [salaries, entries, travelAmounts, adjustments, companyRules, shiftParts] = await Promise.all([
+    const [salaries, entries, editedDays, travelAmounts, adjustments, companyRules, shiftParts] = await Promise.all([
       db.salary.findMany({
         where: {
           companyId,
@@ -404,6 +406,10 @@ export class PayrollService {
       db.timesheetEntry.findMany({
         where: { companyId, assignmentId: { in: assignmentIds }, date: { gte: first, lte: last } },
         include: { site: { select: { name: true } }, team: { select: { name: true } } },
+      }),
+      db.importedDayEdit.findMany({
+        where: { companyId, workerId: { in: workerIds }, date: { gte: first, lte: last } },
+        select: { workerId: true },
       }),
       // The newest amount of each placement counts.
       db.travelAmount.findMany({
@@ -467,6 +473,8 @@ export class PayrollService {
       if (sources.length > 1) view.problems.push({ code: 'twoSources' });
       else if (sources.length === 1) view.source = sources[0];
       else view.problems.push({ code: 'noHours' });
+      const edited = editedDays.filter((d) => d.workerId === workerId).length;
+      if (edited > 0) view.editedDays = edited;
       if (!salary) view.problems.push({ code: 'noSalary' });
       if (view.source === 'TOTALS') {
         for (const p of own) {
