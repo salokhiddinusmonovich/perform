@@ -1103,6 +1103,8 @@
     "description": "İşçilerin günlük saatleri. Bir şantiye ve ay seçin, saatleri her güne yazın.",
     "site": "Şantiye",
     "chooseSite": "Şantiye seçin",
+    "team": "Ekip",
+    "allTeams": "Tüm ekipler",
     "locked": "Ay kilitli",
     "worker": "İşçi",
     "noTeam": "Ekipsiz",

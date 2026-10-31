@@ -1103,6 +1103,8 @@
     "description": "Daily hours per worker. Pick a site and a month, then type the hours into each day.",
     "site": "Site",
     "chooseSite": "Choose a site",
+    "team": "Team",
+    "allTeams": "All teams",
     "locked": "Month locked",
     "worker": "Worker",
     "noTeam": "No team",

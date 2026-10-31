@@ -1,6 +1,6 @@
 import { GRID_CODE_STATUSES, type YearMonth } from '@puantaj/schemas';
 import { CalendarX, Info, MapPin, TriangleAlert } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { EmptyState } from '@/components/empty-state';
@@ -16,7 +16,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { canManageCompany, hasTimesheet, type Me } from '@/lib/auth';
 import { useSites } from '@/lib/organisation';
 import { currentMonth } from '@/lib/payroll';
-import { useTimesheet, useTimesheetCodes, type TimesheetCodeItem, type TimesheetMonth } from '@/lib/timesheet';
+import { rowTeamKey, rowTeams, useTimesheet, useTimesheetCodes, type TimesheetCodeItem, type TimesheetMonth } from '@/lib/timesheet';
+
+const ALL_TEAMS = 'all';
 
 export function TimesheetPage() {
   const { t } = useTranslation();
@@ -38,6 +40,20 @@ function TimesheetView({ me }: { me: Me }) {
   const siteId = chosenSite ?? choices[0]?.id ?? null;
   const data = useTimesheet(month, siteId);
   const codes = useTimesheetCodes();
+  const [chosenTeam, setChosenTeam] = useState(ALL_TEAMS);
+  const loaded = data.data;
+  const teams = useMemo(() => rowTeams(loaded?.rows ?? []), [loaded]);
+  // A team without rows in the month on screen falls back to everyone.
+  const teamKey = teams.some((team) => team.key === chosenTeam) ? chosenTeam : ALL_TEAMS;
+  const shown = useMemo(
+    () => loaded && (teamKey === ALL_TEAMS ? loaded : { ...loaded, rows: loaded.rows.filter((r) => rowTeamKey(r) === teamKey) }),
+    [loaded, teamKey],
+  );
+
+  const chooseSite = (id: string) => {
+    setChosenSite(id);
+    setChosenTeam(ALL_TEAMS);
+  };
 
   if (sites.isPending || codes.isPending) return <LoadingState />;
   if (sites.isError) return <ErrorState onRetry={() => sites.refetch()} />;
@@ -50,7 +66,7 @@ function TimesheetView({ me }: { me: Me }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <MonthSwitcher value={month} onChange={setMonth} />
-        <Select value={siteId ?? ''} onValueChange={setChosenSite}>
+        <Select value={siteId ?? ''} onValueChange={chooseSite}>
           <SelectTrigger className="w-full sm:w-64" aria-label={t('timesheet.site')}>
             <SelectValue placeholder={t('timesheet.chooseSite')} />
           </SelectTrigger>
@@ -62,14 +78,29 @@ function TimesheetView({ me }: { me: Me }) {
             ))}
           </SelectContent>
         </Select>
-        {data.data?.locked && <StatusBadge tone="neutral">{t('timesheet.locked')}</StatusBadge>}
+        {teams.length > 1 && (
+          <Select value={teamKey} onValueChange={setChosenTeam}>
+            <SelectTrigger className="w-full sm:w-64" aria-label={t('timesheet.team')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_TEAMS}>{t('timesheet.allTeams')}</SelectItem>
+              {teams.map((team) => (
+                <SelectItem key={team.key} value={team.key}>
+                  {team.name ?? t('timesheet.noTeam')}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {data.data?.locked &&<StatusBadge tone="neutral">{t('timesheet.locked')}</StatusBadge>}
       </div>
-      {data.isPending ? (
-        <LoadingState />
-      ) : data.isError ? (
+      {data.isError ? (
         <ErrorState onRetry={() => data.refetch()} />
+      ) : shown ? (
+        <MonthView data={shown} codes={codes.data} me={me} />
       ) : (
-        <MonthView data={data.data} codes={codes.data} me={me} />
+        <LoadingState />
       )}
     </div>
   );

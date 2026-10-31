@@ -98,6 +98,20 @@ export function monthDays({ year, month }: YearMonth): string[] {
   return Array.from({ length: count }, (_, i) => `${year}-${mm}-${String(i + 1).padStart(2, '0')}`);
 }
 
+/** Stands for "no team" where a team is picked by id. */
+export const NO_TEAM = 'none';
+
+/** The team a row is filtered by: its id, or NO_TEAM. */
+export const rowTeamKey = (row: Pick<TimesheetRow, 'teamId'>) => row.teamId ?? NO_TEAM;
+
+/** The teams the rows belong to, by name, once each. Rows without a team come last, with a null name. */
+export function rowTeams(rows: Pick<TimesheetRow, 'teamId' | 'teamName'>[]): { key: string; name: string | null }[] {
+  const teams = new Map(rows.map((r) => [rowTeamKey(r), r.teamName]));
+  return [...teams]
+    .map(([key, name]) => ({ key, name }))
+    .sort((a, b) => (a.name === null ? 1 : b.name === null ? -1 : a.name.localeCompare(b.name)));
+}
+
 /** The row's worker is employed on this day (at any site). */
 export const employedOn = (row: Pick<TimesheetRow, 'employed'>, day: string) =>
   row.employed.some((s) => s.from <= day && (s.until === null || s.until >= day));

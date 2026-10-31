@@ -1103,6 +1103,8 @@
     "description": "Har bir ishchining kunlik soatlari. Obyekt va oyni tanlang, soatlarni har bir kunga yozing.",
     "site": "Obyekt",
     "chooseSite": "Obyektni tanlang",
+    "team": "Brigada",
+    "allTeams": "Barcha brigadalar",
     "locked": "Oy yopilgan",
     "worker": "Ishchi",
     "noTeam": "Brigadasiz",
