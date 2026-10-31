@@ -13,6 +13,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
 import { DepartmentFilter, inDepartmentFilter, type DepartmentFilterValue } from '@/components/department-select';
 import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
+import { ALL_SITES, SiteFilter } from '@/components/list-filters';
 import { MonthSwitcher } from '@/components/month-switcher';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
@@ -21,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import {
@@ -34,13 +36,15 @@ import {
   type Me,
 } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { departmentTree, useDepartments, workerName, type DepartmentNode } from '@/lib/organisation';
+import { departmentTree, useDepartments, workerName, workerSearchText, type DepartmentNode } from '@/lib/organisation';
 import {
   ADJUSTMENTS_KEY,
   currentMonth,
   isNegative,
   MONTHLY_HOURS_KEY,
   PAYROLL_KEY,
+  payrollSiteNames,
+  siteChoices,
   usePayroll,
   type DepartmentTotal,
   type LockItem,
@@ -76,13 +80,24 @@ function PayrollView({ me }: { me: Me }) {
   const departments = useDepartments();
   const tree = useMemo(() => departmentTree(departments.data ?? []), [departments.data]);
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilterValue>('all');
+  const [chosenSite, setSiteFilter] = useState(ALL_SITES);
+  const [problemFilter, setProblemFilter] = useState<'all' | 'problems' | 'ok'>('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | NonNullable<PayrollWorker['source']>>('all');
+  const sites = useMemo(() => siteChoices(data.data?.workers.flatMap(payrollSiteNames) ?? []), [data.data]);
+  // A site without workers in the month on screen falls back to every site.
+  const siteFilter = sites.some((s) => s.value === chosenSite) ? chosenSite : ALL_SITES;
   const rows = useMemo(
     () =>
-      showDepartments
-        ? data.data?.workers.filter((w) => inDepartmentFilter(departmentFilter, w.department?.id, departments.data ?? []))
-        : data.data?.workers,
-    [data.data, showDepartments, departmentFilter, departments.data],
+      data.data?.workers.filter(
+        (w) =>
+          (!showDepartments || inDepartmentFilter(departmentFilter, w.department?.id, departments.data ?? [])) &&
+          (siteFilter === ALL_SITES || payrollSiteNames(w).includes(siteFilter)) &&
+          (problemFilter === 'all' || (w.problems.length > 0) === (problemFilter === 'problems')) &&
+          (sourceFilter === 'all' || w.source === sourceFilter),
+      ),
+    [data.data, showDepartments, departmentFilter, departments.data, siteFilter, problemFilter, sourceFilter],
   );
+  const departmentPaths = useMemo(() => new Map(tree.map((d) => [d.id, d.path])), [tree]);
 
   const columns = useMemo<ColumnDef<PayrollWorker, unknown>[]>(
     () => [
@@ -203,12 +218,47 @@ function PayrollView({ me }: { me: Me }) {
         isLoading={data.isPending}
         isError={data.isError}
         onRetry={() => data.refetch()}
+        totalCount={data.data?.workers.length}
+        searchable
+        searchText={(w) =>
+          [
+            workerSearchText(w.worker),
+            ...payrollSiteNames(w),
+            showDepartments && w.department ? departmentPaths.get(w.department.id) : null,
+          ]
+            .filter(Boolean)
+            .join(' ')
+        }
         toolbar={
           <>
             <MonthSwitcher value={month} onChange={setMonth} />
+            <SiteFilter sites={sites} value={siteFilter} onChange={setSiteFilter} />
             {showDepartments && (
               <DepartmentFilter departments={departments.data ?? []} value={departmentFilter} onChange={setDepartmentFilter} />
             )}
+            <Select value={problemFilter} onValueChange={(v) => setProblemFilter(v as typeof problemFilter)}>
+              <SelectTrigger className="w-full sm:w-44" aria-label={t('payroll.problemsFilter')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('payroll.filterAllWorkers')}</SelectItem>
+                <SelectItem value="problems">{t('payroll.filterProblems')}</SelectItem>
+                <SelectItem value="ok">{t('payroll.filterNoProblems')}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as typeof sourceFilter)}>
+              <SelectTrigger className="w-full sm:w-44" aria-label={t('payroll.source')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('payroll.filterAllSources')}</SelectItem>
+                {(['DAILY', 'IMPORT', 'TOTALS'] as const).map((source) => (
+                  <SelectItem key={source} value={source}>
+                    {t(`payroll.sources.${source}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </>
         }
         emptyTitle={t('payroll.emptyTitle')}

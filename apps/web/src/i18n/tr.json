@@ -75,7 +75,8 @@
     "nextYear": "Sonraki yıl",
     "previousMonth": "Önceki ay",
     "nextMonth": "Sonraki ay",
-    "corrected": "Düzeltildi"
+    "corrected": "Düzeltildi",
+    "rowsOfTotal": "{{total}} satırdan {{shown}} tanesi"
   },
   "states": {
     "emptyTitle": "Henüz bir şey yok",
@@ -1005,7 +1006,10 @@
     "cancelTitle": "{{name}} için {{amount}} tutarındaki «{{type}}» iptal edilsin mi?",
     "cancelHint": "Kayıt listede «iptal edildi» olarak kalır ve artık ücrete sayılmaz. Neden denetim kaydına yazılır.",
     "cancelReason": "Neden",
-    "cancelSubmit": "Kaydı iptal et"
+    "cancelSubmit": "Kaydı iptal et",
+    "filterAll": "Tüm işçiler",
+    "filterAny": "Düzeltmesi olan",
+    "filterCancelled": "İptal edileni olan"
   },
   "payroll": {
     "title": "Maaş hesabı",
@@ -1096,7 +1100,12 @@
     "payOutTotal": "Ödenecek",
     "goToAdjustments": "Ek ödeme ve kesintilere git",
     "byDepartment": "Bölümlere göre",
-    "byDepartmentHint": "Her çalışan ay sonundaki bölümünde sayılır. Bir bölüm, alt bölümlerini de içerir."
+    "byDepartmentHint": "Her çalışan ay sonundaki bölümünde sayılır. Bir bölüm, alt bölümlerini de içerir.",
+    "filterAllWorkers": "Tüm işçiler",
+    "filterProblems": "Sorunlu",
+    "filterNoProblems": "Sorunsuz",
+    "filterAllSources": "Tüm kaynaklar",
+    "problemsFilter": "Sorunlar"
   },
   "timesheet": {
     "title": "Puantaj",

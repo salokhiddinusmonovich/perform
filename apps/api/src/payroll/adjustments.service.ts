@@ -26,9 +26,11 @@ export interface AdjustmentView {
 
 /** A worker with a placement in the month, and their adjustments. */
 export interface AdjustmentRowView {
-  worker: { id: string; lastName: string; firstName: string; patronymic: string | null; position: string | null };
+  worker: { id: string; employeeNumber: string | null; lastName: string; firstName: string; patronymic: string | null; position: string | null };
   /** Sites of the worker's placements in the month, in placement order */
   siteNames: string[];
+  /** The department of the worker's last placement in the month, as in the payroll run; null: none */
+  departmentId: string | null;
   /** Newest first */
   adjustments: AdjustmentView[];
   /** Signed sum of the adjustments that count */
@@ -66,8 +68,9 @@ export class AdjustmentsService {
           workerId: true,
           siteId: true,
           teamId: true,
+          departmentId: true,
           site: { select: { name: true } },
-          worker: { select: { id: true, lastName: true, firstName: true, patronymic: true, position: true } },
+          worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, position: true } },
         },
         orderBy: { hiredOn: 'asc' },
       }),
@@ -91,6 +94,7 @@ export class AdjustmentsService {
       return {
         worker: own[0].worker,
         siteNames: [...new Set(own.map((p) => p.site.name))],
+        departmentId: own.at(-1)!.departmentId,
         adjustments: list.map((a) => ({
           id: a.id,
           type: a.type,

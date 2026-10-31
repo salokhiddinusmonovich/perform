@@ -17,7 +17,9 @@ import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { DataTable } from '@/components/data-table';
+import { DepartmentFilter, inDepartmentFilter, type DepartmentFilterValue } from '@/components/department-select';
 import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
+import { ALL_SITES, SiteFilter } from '@/components/list-filters';
 import { MonthSwitcher } from '@/components/month-switcher';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
@@ -28,14 +30,17 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
-import { canAddAdjustments, seesPay, type Me } from '@/lib/auth';
+import { canAddAdjustments, seesPay, usesDepartments, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { workerName } from '@/lib/organisation';
+import { useDepartments, workerName, workerSearchText } from '@/lib/organisation';
 import {
   ADJUSTMENTS_KEY,
   currentMonth,
+  matchesAdjustmentFilter,
   PAYROLL_KEY,
+  siteChoices,
   useAdjustments,
+  type AdjustmentFilterValue,
   type AdjustmentItem,
   type AdjustmentsRow,
 } from '@/lib/payroll';
@@ -62,6 +67,24 @@ function AdjustmentsView({ me }: { me: Me }) {
   const locked = data.data?.locked ?? false;
   // The open row follows the data, so the dialog shows an adjustment as soon as it's saved.
   const open = data.data?.rows.find((r) => r.worker.id === openId) ?? null;
+  const showDepartments = usesDepartments(me);
+  const departments = useDepartments({ enabled: showDepartments });
+  const [chosenSite, setSiteFilter] = useState(ALL_SITES);
+  const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilterValue>('all');
+  const [adjustmentFilter, setAdjustmentFilter] = useState<AdjustmentFilterValue>('all');
+  const sites = useMemo(() => siteChoices(data.data?.rows.flatMap((r) => r.siteNames) ?? []), [data.data]);
+  // A site without workers in the month on screen falls back to every site.
+  const siteFilter = sites.some((s) => s.value === chosenSite) ? chosenSite : ALL_SITES;
+  const rows = useMemo(
+    () =>
+      data.data?.rows.filter(
+        (r) =>
+          (siteFilter === ALL_SITES || r.siteNames.includes(siteFilter)) &&
+          (!showDepartments || inDepartmentFilter(departmentFilter, r.departmentId, departments.data ?? [])) &&
+          matchesAdjustmentFilter(adjustmentFilter, r.adjustments),
+      ),
+    [data.data, siteFilter, showDepartments, departmentFilter, departments.data, adjustmentFilter],
+  );
 
   const columns = useMemo<ColumnDef<AdjustmentsRow, unknown>[]>(
     () => [
@@ -134,14 +157,35 @@ function AdjustmentsView({ me }: { me: Me }) {
     <>
       <DataTable
         columns={columns}
-        data={data.data?.rows}
+        data={rows}
         isLoading={data.isPending}
         isError={data.isError}
         onRetry={() => data.refetch()}
-        searchText={(r) => `${workerName(r.worker)} ${r.siteNames.join(' ')}`}
+        totalCount={data.data?.rows.length}
+        searchable
+        searchText={(r) => `${workerSearchText(r.worker)} ${r.siteNames.join(' ')}`}
         toolbar={
           <div className="flex flex-wrap items-center gap-2">
             <MonthSwitcher value={month} onChange={setMonth} />
+            <SiteFilter sites={sites} value={siteFilter} onChange={setSiteFilter} />
+            {showDepartments && (
+              <DepartmentFilter departments={departments.data ?? []} value={departmentFilter} onChange={setDepartmentFilter} />
+            )}
+            <Select value={adjustmentFilter} onValueChange={(v) => setAdjustmentFilter(v as AdjustmentFilterValue)}>
+              <SelectTrigger className="w-full sm:w-48" aria-label={t('adjustments.entries')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('adjustments.filterAll')}</SelectItem>
+                <SelectItem value="any">{t('adjustments.filterAny')}</SelectItem>
+                {ADJUSTMENT_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {t(`adjustments.types.${type}`)}
+                  </SelectItem>
+                ))}
+                <SelectItem value="cancelled">{t('adjustments.filterCancelled')}</SelectItem>
+              </SelectContent>
+            </Select>
             {locked && <StatusBadge tone="neutral">{t('monthlyHours.locked')}</StatusBadge>}
           </div>
         }

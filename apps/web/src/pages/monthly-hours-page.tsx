@@ -8,7 +8,9 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { DataTable } from '@/components/data-table';
+import { DepartmentFilter, inDepartmentFilter, type DepartmentFilterValue } from '@/components/department-select';
 import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
+import { ALL_SITES, ALL_TEAMS, SiteFilter, TeamFilter } from '@/components/list-filters';
 import { MonthSwitcher } from '@/components/month-switcher';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
@@ -16,34 +18,41 @@ import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
-import { canEnterMonthlyHours } from '@/lib/auth';
+import { canEnterMonthlyHours, usesDepartments, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { workerName } from '@/lib/organisation';
+import { useDepartments, workerName, workerSearchText } from '@/lib/organisation';
 import {
   currentMonth,
+  HOURS_STATUSES,
+  hoursStatus,
   MONTHLY_HOURS_KEY,
   PAYROLL_KEY,
+  siteChoices,
   useMonthlyHours,
+  type HoursStatus,
   type MonthlyHoursEntry,
   type MonthlyHoursRow,
 } from '@/lib/payroll';
+import { rowTeamKey, rowTeams } from '@/lib/timesheet';
 
 const HOUR_FIELDS = ['normalHours', 'overtimeHours', 'restDayHours', 'holidayHours'] as const;
 const DAY_FIELDS = ['workdaysWorked', 'leaveDays', 'sickDays', 'travelDays'] as const;
+const STATUS_TONES = { notEntered: 'warning', shiftChanged: 'warning', entered: 'success', dailyEntries: 'info' } as const;
 
 export function MonthlyHoursPage() {
   const { t } = useTranslation();
   return (
     <>
       <PageHeader title={t('monthlyHours.title')} description={t('monthlyHours.description')} />
-      <RequireAccess allowed={canEnterMonthlyHours}>{() => <MonthlyHoursView />}</RequireAccess>
+      <RequireAccess allowed={canEnterMonthlyHours}>{(me) => <MonthlyHoursView me={me} />}</RequireAccess>
     </>
   );
 }
 
-function MonthlyHoursView() {
+function MonthlyHoursView({ me }: { me: Me }) {
   const { t } = useTranslation();
   const format = useFormat();
   const queryClient = useQueryClient();
@@ -51,6 +60,32 @@ function MonthlyHoursView() {
   const [editing, setEditing] = useState<MonthlyHoursRow | null>(null);
   const data = useMonthlyHours(month);
   const locked = data.data?.locked ?? false;
+  const showDepartments = usesDepartments(me);
+  const departments = useDepartments({ enabled: showDepartments });
+  const [chosenSite, setSiteFilter] = useState(ALL_SITES);
+  const [chosenTeam, setTeamFilter] = useState(ALL_TEAMS);
+  const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilterValue>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | HoursStatus>('all');
+  const sites = useMemo(() => siteChoices(data.data?.rows.map((r) => r.siteName) ?? []), [data.data]);
+  // A site or team without rows in the month on screen falls back to all of them.
+  const siteFilter = sites.some((s) => s.value === chosenSite) ? chosenSite : ALL_SITES;
+  // Teams belong to a site, so they are offered once one is chosen.
+  const teams = useMemo(
+    () => (siteFilter === ALL_SITES ? [] : rowTeams(data.data?.rows.filter((r) => r.siteName === siteFilter) ?? [])),
+    [data.data, siteFilter],
+  );
+  const teamFilter = teams.some((team) => team.key === chosenTeam) ? chosenTeam : ALL_TEAMS;
+  const rows = useMemo(
+    () =>
+      data.data?.rows.filter(
+        (r) =>
+          (siteFilter === ALL_SITES || r.siteName === siteFilter) &&
+          (teamFilter === ALL_TEAMS || rowTeamKey(r) === teamFilter) &&
+          (!showDepartments || inDepartmentFilter(departmentFilter, r.departmentId, departments.data ?? [])) &&
+          (statusFilter === 'all' || hoursStatus(r) === statusFilter),
+      ),
+    [data.data, siteFilter, teamFilter, showDepartments, departmentFilter, departments.data, statusFilter],
+  );
 
   const columns = useMemo<ColumnDef<MonthlyHoursRow, unknown>[]>(
     () => [
@@ -99,16 +134,10 @@ function MonthlyHoursView() {
         id: 'status',
         header: t('workers.status'),
         enableSorting: false,
-        cell: ({ row }) =>
-          row.original.hasDailyEntries ? (
-            <StatusBadge tone="info">{t('monthlyHours.dailyEntries')}</StatusBadge>
-          ) : row.original.history.length > 0 ? (
-            <StatusBadge tone="success">{t('monthlyHours.entered')}</StatusBadge>
-          ) : row.original.outdated.length > 0 ? (
-            <StatusBadge tone="warning">{t('monthlyHours.shiftChanged')}</StatusBadge>
-          ) : (
-            <StatusBadge tone="warning">{t('monthlyHours.notEntered')}</StatusBadge>
-          ),
+        cell: ({ row }) => {
+          const status = hoursStatus(row.original);
+          return <StatusBadge tone={STATUS_TONES[status]}>{t(`monthlyHours.${status}`)}</StatusBadge>;
+        },
       },
       {
         id: 'actions',
@@ -133,14 +162,34 @@ function MonthlyHoursView() {
     <>
       <DataTable
         columns={columns}
-        data={data.data?.rows}
+        data={rows}
         isLoading={data.isPending}
         isError={data.isError}
         onRetry={() => data.refetch()}
-        searchText={(r) => [workerName(r.worker), r.siteName, r.shift?.name].filter(Boolean).join(' ')}
+        totalCount={data.data?.rows.length}
+        searchable
+        searchText={(r) => [workerSearchText(r.worker), r.siteName, r.teamName, r.shift?.name].filter(Boolean).join(' ')}
         toolbar={
           <div className="flex flex-wrap items-center gap-2">
             <MonthSwitcher value={month} onChange={setMonth} />
+            <SiteFilter sites={sites} value={siteFilter} onChange={setSiteFilter} />
+            {teams.length > 1 && <TeamFilter teams={teams} value={teamFilter} onChange={setTeamFilter} />}
+            {showDepartments && (
+              <DepartmentFilter departments={departments.data ?? []} value={departmentFilter} onChange={setDepartmentFilter} />
+            )}
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+              <SelectTrigger className="w-full sm:w-44" aria-label={t('workers.status')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('workers.filterAll')}</SelectItem>
+                {HOURS_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {t(`monthlyHours.${status}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {locked && <StatusBadge tone="neutral">{t('monthlyHours.locked')}</StatusBadge>}
           </div>
         }

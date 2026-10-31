@@ -47,6 +47,7 @@ import {
 import { ErrorState } from '@/components/error-state';
 import { Field, fieldControlProps, FormActions, FormError, MonthField } from '@/components/form';
 import { LoadingState } from '@/components/loading-state';
+import { ALL_SITES, SiteFilter } from '@/components/list-filters';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
 import { StatusBadge } from '@/components/status-badge';
@@ -146,7 +147,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
   const pay = seesPay(me);
   const assignShifts = canAssignShifts(me);
   const currency = me.activeCompany!.currency;
-  const [siteFilter, setSiteFilter] = useState<string>(ALL);
+  const [siteFilter, setSiteFilter] = useState(ALL_SITES);
   const [status, setStatus] = useState<Status>('working');
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilterValue>(ALL);
   const [action, setAction] = useState<Action | null>(null);
@@ -156,7 +157,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
     () =>
       workers.data?.filter(
         (w) =>
-          (siteFilter === ALL || w.placement?.siteId === siteFilter) &&
+          (siteFilter === ALL_SITES || w.placement?.siteId === siteFilter) &&
           (!showDepartments || inDepartmentFilter(departmentFilter, w.placement?.departmentId, departments.data ?? [])) &&
           (status === 'all' || (status === 'left') === hasLeft(w)),
       ),
@@ -358,19 +359,11 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         }
         toolbar={
           <>
-            <Select value={siteFilter} onValueChange={setSiteFilter}>
-              <SelectTrigger className="w-full sm:w-48" aria-label={t('workers.site')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t('workers.allSites')}</SelectItem>
-                {(sites.data ?? []).map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SiteFilter
+              sites={(sites.data ?? []).map((s) => ({ value: s.id, name: s.name }))}
+              value={siteFilter}
+              onChange={setSiteFilter}
+            />
             {showDepartments && (
               <DepartmentFilter departments={departments.data ?? []} value={departmentFilter} onChange={setDepartmentFilter} />
             )}

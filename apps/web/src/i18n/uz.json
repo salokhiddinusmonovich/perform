@@ -75,7 +75,8 @@
     "nextYear": "Keyingi yil",
     "previousMonth": "Oldingi oy",
     "nextMonth": "Keyingi oy",
-    "corrected": "Tuzatilgan"
+    "corrected": "Tuzatilgan",
+    "rowsOfTotal": "{{total}} tadan {{shown}} ta qator"
   },
   "states": {
     "emptyTitle": "Hozircha hech narsa yoʻq",
@@ -1005,7 +1006,10 @@
     "cancelTitle": "{{name}}: {{amount}} miqdoridagi «{{type}}» bekor qilinsinmi?",
     "cancelHint": "Yozuv roʻyxatda «bekor qilingan» belgisi bilan qoladi va ish haqida hisoblanmaydi. Sabab audit jurnaliga yoziladi.",
     "cancelReason": "Sabab",
-    "cancelSubmit": "Yozuvni bekor qilish"
+    "cancelSubmit": "Yozuvni bekor qilish",
+    "filterAll": "Barcha ishchilar",
+    "filterAny": "Qoʻshimchasi bor",
+    "filterCancelled": "Bekor qilingani bor"
   },
   "payroll": {
     "title": "Ish haqi hisobi",
@@ -1096,7 +1100,12 @@
     "payOutTotal": "Toʻlanadi",
     "goToAdjustments": "Qoʻshimcha va ushlanmalarga oʻtish",
     "byDepartment": "Boʻlimlar boʻyicha",
-    "byDepartmentHint": "Har bir ishchi oy oxiridagi boʻlimida hisoblanadi. Boʻlim ichki boʻlimlarini ham oʻz ichiga oladi."
+    "byDepartmentHint": "Har bir ishchi oy oxiridagi boʻlimida hisoblanadi. Boʻlim ichki boʻlimlarini ham oʻz ichiga oladi.",
+    "filterAllWorkers": "Barcha ishchilar",
+    "filterProblems": "Muammosi bor",
+    "filterNoProblems": "Muammosiz",
+    "filterAllSources": "Barcha manbalar",
+    "problemsFilter": "Muammolar"
   },
   "timesheet": {
     "title": "Tabel",

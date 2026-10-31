@@ -93,13 +93,15 @@ export interface PayOutView extends Omit<PayOut, 'adjustments'> {
 }
 
 export interface PayrollWorkerView {
-  worker: { id: string; lastName: string; firstName: string; patronymic: string | null; position: string | null };
+  worker: { id: string; employeeNumber: string | null; lastName: string; firstName: string; patronymic: string | null; position: string | null };
   /**
    * The worker's department for the month (AGENTS.md: Departments): the one of their last
    * placement in it, so each worker counts in one department's totals. null: none set;
    * absent in months locked before departments.
    */
   department?: { id: string; name: string } | null;
+  /** Sites of the worker's placements in the month, in placement order; absent in months locked before this was saved */
+  siteNames?: string[];
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
   /** Where the hours came from (IMPORT: an Excel import, AGENTS.md: Excel import), or null when there are none */
   source: 'DAILY' | 'IMPORT' | 'TOTALS' | null;
@@ -170,7 +172,7 @@ type Db = Prisma.TransactionClient | PrismaService;
 type Sees = (placement: { siteId: string; teamId: string | null }) => boolean;
 
 const PLACEMENT_INCLUDE = {
-  worker: { select: { id: true, lastName: true, firstName: true, patronymic: true, position: true } },
+  worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, position: true } },
   site: { select: { name: true } },
   department: { select: { id: true, name: true } },
   travelRoute: { select: { name: true, amountPerDay: true } },
@@ -451,6 +453,7 @@ export class PayrollService {
         worker: own[0].worker,
         // Placements are in the order of their first day.
         department: own.at(-1)!.department,
+        siteNames: [...new Set(own.map((p) => p.site.name))],
         salary: salary && {
           fromYear: salary.fromYear,
           fromMonth: salary.fromMonth,

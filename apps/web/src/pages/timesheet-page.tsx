@@ -1,24 +1,26 @@
 import { GRID_CODE_STATUSES, type YearMonth } from '@puantaj/schemas';
-import { CalendarX, Info, MapPin, TriangleAlert } from 'lucide-react';
+import { CalendarX, Info, MapPin, Search, TriangleAlert } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { DepartmentFilter, inDepartmentFilter, type DepartmentFilterValue } from '@/components/department-select';
 import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
+import { ALL_TEAMS, TeamFilter } from '@/components/list-filters';
 import { LoadingState } from '@/components/loading-state';
 import { MonthSwitcher } from '@/components/month-switcher';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
+import { SearchInput } from '@/components/search-input';
 import { StatusBadge } from '@/components/status-badge';
 import { TimesheetGrid } from '@/components/timesheet-grid';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { canManageCompany, hasTimesheet, type Me } from '@/lib/auth';
-import { useSites } from '@/lib/organisation';
+import { canManageCompany, hasTimesheet, seesDepartments, usesDepartments, type Me } from '@/lib/auth';
+import { useDepartments, useSites, workerSearchText } from '@/lib/organisation';
 import { currentMonth } from '@/lib/payroll';
 import { rowTeamKey, rowTeams, useTimesheet, useTimesheetCodes, type TimesheetCodeItem, type TimesheetMonth } from '@/lib/timesheet';
-
-const ALL_TEAMS = 'all';
+import { matchesSearch } from '@/lib/utils';
 
 export function TimesheetPage() {
   const { t } = useTranslation();
@@ -45,9 +47,23 @@ function TimesheetView({ me }: { me: Me }) {
   const teams = useMemo(() => rowTeams(loaded?.rows ?? []), [loaded]);
   // A team without rows in the month on screen falls back to everyone.
   const teamKey = teams.some((team) => team.key === chosenTeam) ? chosenTeam : ALL_TEAMS;
+  const [search, setSearch] = useState('');
+  // Timekeepers and foremen don't see the department list, so they don't get this filter.
+  const showDepartments = usesDepartments(me) && seesDepartments(me);
+  const departments = useDepartments({ enabled: showDepartments });
+  const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilterValue>('all');
   const shown = useMemo(
-    () => loaded && (teamKey === ALL_TEAMS ? loaded : { ...loaded, rows: loaded.rows.filter((r) => rowTeamKey(r) === teamKey) }),
-    [loaded, teamKey],
+    () =>
+      loaded && {
+        ...loaded,
+        rows: loaded.rows.filter(
+          (r) =>
+            (teamKey === ALL_TEAMS || rowTeamKey(r) === teamKey) &&
+            (!showDepartments || inDepartmentFilter(departmentFilter, r.departmentId, departments.data ?? [])) &&
+            matchesSearch(workerSearchText(r.worker), search),
+        ),
+      },
+    [loaded, teamKey, showDepartments, departmentFilter, departments.data, search],
   );
 
   const chooseSite = (id: string) => {
@@ -78,25 +94,17 @@ function TimesheetView({ me }: { me: Me }) {
             ))}
           </SelectContent>
         </Select>
-        {teams.length > 1 && (
-          <Select value={teamKey} onValueChange={setChosenTeam}>
-            <SelectTrigger className="w-full sm:w-64" aria-label={t('timesheet.team')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_TEAMS}>{t('timesheet.allTeams')}</SelectItem>
-              {teams.map((team) => (
-                <SelectItem key={team.key} value={team.key}>
-                  {team.name ?? t('timesheet.noTeam')}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {teams.length > 1 && <TeamFilter teams={teams} value={teamKey} onChange={setChosenTeam} />}
+        {showDepartments && (
+          <DepartmentFilter departments={departments.data ?? []} value={departmentFilter} onChange={setDepartmentFilter} />
         )}
+        <SearchInput value={search} onChange={setSearch} />
         {data.data?.locked &&<StatusBadge tone="neutral">{t('timesheet.locked')}</StatusBadge>}
       </div>
       {data.isError ? (
         <ErrorState onRetry={() => data.refetch()} />
+      ) : shown && loaded && loaded.rows.length > 0 && shown.rows.length === 0 ? (
+        <EmptyState icon={Search} title={t('states.noResults')} />
       ) : shown ? (
         <MonthView data={shown} codes={codes.data} me={me} />
       ) : (

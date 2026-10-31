@@ -151,8 +151,8 @@ export function useShifts() {
 
 export const DEPARTMENTS_KEY = ['departments'] as const;
 
-export function useDepartments() {
-  return useQuery({ queryKey: DEPARTMENTS_KEY, queryFn: () => api.get<DepartmentItem[]>('/departments') });
+export function useDepartments({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery({ queryKey: DEPARTMENTS_KEY, queryFn: () => api.get<DepartmentItem[]>('/departments'), enabled });
 }
 
 /** Departments in tree order: each one followed by its sub-departments, siblings by name (the API's order). */
@@ -211,3 +211,8 @@ export function useRefreshOrganisation() {
 
 export const workerName = (w: Pick<WorkerItem, 'lastName' | 'firstName' | 'patronymic'>) =>
   [w.lastName, w.firstName, w.patronymic].filter(Boolean).join(' ');
+
+/** What a search box matches a worker on: name, the company's number for them, and position. */
+export const workerSearchText = (
+  w: Pick<WorkerItem, 'lastName' | 'firstName' | 'patronymic' | 'position'> & { employeeNumber?: string | null },
+) => [workerName(w), w.employeeNumber, w.position].filter(Boolean).join(' ');

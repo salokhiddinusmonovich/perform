@@ -327,6 +327,7 @@ describe('adjustments', () => {
       {
         worker: expect.objectContaining({ id: workerId, lastName: 'Testov' }),
         siteNames: ['Site A'],
+        departmentId: null,
         adjustments: [
           expect.objectContaining({ id: deduction, type: 'DEDUCTION', amount: '123456.78', signedAmount: '-123456.78', note: null, cancelled: null }),
           expect.objectContaining({ id: advance, type: 'ADVANCE', amount: '2000000' }),

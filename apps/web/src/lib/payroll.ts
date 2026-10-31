@@ -25,6 +25,8 @@ export interface MonthlyHoursEntry extends MonthlyTotals {
 
 export interface WorkerName {
   id: string;
+  /** The company's own number for the worker; null: none given. Absent in months locked before it was saved. */
+  employeeNumber?: string | null;
   lastName: string;
   firstName: string;
   patronymic: string | null;
@@ -35,7 +37,9 @@ export interface MonthlyHoursRow {
   assignmentId: string;
   worker: WorkerName;
   siteName: string;
+  teamId: string | null;
   teamName: string | null;
+  departmentId: string | null;
   from: string;
   until: string | null;
   /** The days of one shift in the month that totals are entered for: the whole month without a shift change */
@@ -98,6 +102,8 @@ export interface PayrollWorker {
   worker: WorkerName;
   /** The worker's department of the month (of their last placement in it); absent in months locked before departments */
   department?: { id: string; name: string } | null;
+  /** Sites of the worker's placements in the month; absent in months locked before this was saved */
+  siteNames?: string[];
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
   source: 'DAILY' | 'IMPORT' | 'TOTALS' | null;
   /** Days of an imported month changed by hand since the import; absent when none */
@@ -161,6 +167,8 @@ export interface AdjustmentItem {
 export interface AdjustmentsRow {
   worker: WorkerName;
   siteNames: string[];
+  /** The department of the worker's last placement in the month, as in the payroll run; null: none */
+  departmentId: string | null;
   /** Newest first */
   adjustments: AdjustmentItem[];
   /** Signed sum of the adjustments that count */
@@ -200,6 +208,35 @@ export function usePayroll({ year, month }: YearMonth) {
     queryKey: [...PAYROLL_KEY, year, month],
     queryFn: () => api.get<PayrollMonth>(`/payroll/${year}/${month}`),
   });
+}
+
+/** A worker's sites in the month. A month locked before they were saved has them in its pay parts. */
+export function payrollSiteNames(w: Pick<PayrollWorker, 'siteNames' | 'parts'>): string[] {
+  return w.siteNames ?? [...new Set(w.parts.flatMap((p) => Object.values(p.places).map((place) => place.siteName)))];
+}
+
+/** Each name once, sorted, as a site filter offers them. */
+export function siteChoices(names: readonly string[]): { value: string; name: string }[] {
+  return [...new Set(names)].sort((a, b) => a.localeCompare(b)).map((name) => ({ value: name, name }));
+}
+
+export const HOURS_STATUSES = ['notEntered', 'shiftChanged', 'entered', 'dailyEntries'] as const;
+export type HoursStatus = (typeof HOURS_STATUSES)[number];
+
+/** Where a row of the monthly hours stands (also its translation key under monthlyHours). */
+export function hoursStatus(row: Pick<MonthlyHoursRow, 'hasDailyEntries' | 'history' | 'outdated'>): HoursStatus {
+  if (row.hasDailyEntries) return 'dailyEntries';
+  if (row.history.length > 0) return 'entered';
+  return row.outdated.length > 0 ? 'shiftChanged' : 'notEntered';
+}
+
+/** The adjustments filter: every worker, those with one that counts, one type that counts, or those with a cancelled one. */
+export type AdjustmentFilterValue = 'all' | 'any' | 'cancelled' | AdjustmentType;
+
+export function matchesAdjustmentFilter(filter: AdjustmentFilterValue, items: readonly AdjustmentItem[]): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'cancelled') return items.some((a) => a.cancelled);
+  return items.some((a) => !a.cancelled && (filter === 'any' || a.type === filter));
 }
 
 /** The current month, by the viewer's clock. */

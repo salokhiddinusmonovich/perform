@@ -209,7 +209,8 @@ describe('daily hour entry', () => {
     const lateRow = grid.rows.find((r: { worker: { id: string } }) => r.worker.id === late);
     expect(lateRow).toMatchObject({ employed: [{ from: '2026-09-10', until: null }], canEnter: true, hasMonthlyTotals: false });
     // Personal data never comes with the grid.
-    expect(Object.keys(lateRow.worker).sort()).toEqual(['firstName', 'id', 'lastName', 'patronymic', 'position']);
+    expect(Object.keys(lateRow.worker).sort()).toEqual(['employeeNumber', 'firstName', 'id', 'lastName', 'patronymic', 'position']);
+    expect(lateRow.departmentId).toBeNull();
   });
 });
 

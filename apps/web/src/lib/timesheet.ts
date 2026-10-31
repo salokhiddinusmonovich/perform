@@ -26,6 +26,8 @@ export interface TimesheetRow {
   worker: WorkerName;
   teamId: string | null;
   teamName: string | null;
+  /** The placement's department; null: none */
+  departmentId: string | null;
   /** Spans the worker is employed in the month, at any site */
   employed: { from: string; until: string | null }[];
   /** Hours for this worker-month come from monthly totals */

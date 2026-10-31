@@ -75,7 +75,8 @@
     "nextYear": "Next year",
     "previousMonth": "Previous month",
     "nextMonth": "Next month",
-    "corrected": "Corrected"
+    "corrected": "Corrected",
+    "rowsOfTotal": "{{shown}} of {{total}} rows"
   },
   "states": {
     "emptyTitle": "Nothing here yet",
@@ -1005,7 +1006,10 @@
     "cancelTitle": "Cancel the {{type}} of {{amount}} for {{name}}?",
     "cancelHint": "The entry stays in the list, marked as cancelled, and no longer counts in pay. The reason goes into the audit log.",
     "cancelReason": "Reason",
-    "cancelSubmit": "Cancel entry"
+    "cancelSubmit": "Cancel entry",
+    "filterAll": "All workers",
+    "filterAny": "With adjustments",
+    "filterCancelled": "With cancelled"
   },
   "payroll": {
     "title": "Pay calculation",
@@ -1096,7 +1100,12 @@
     "payOutTotal": "To pay out",
     "goToAdjustments": "Go to adjustments",
     "byDepartment": "By department",
-    "byDepartmentHint": "Each worker counts in their department at the end of the month. A department includes its sub-departments."
+    "byDepartmentHint": "Each worker counts in their department at the end of the month. A department includes its sub-departments.",
+    "filterAllWorkers": "All workers",
+    "filterProblems": "With problems",
+    "filterNoProblems": "No problems",
+    "filterAllSources": "All sources",
+    "problemsFilter": "Problems"
   },
   "timesheet": {
     "title": "Timesheet",

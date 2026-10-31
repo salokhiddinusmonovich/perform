@@ -30,9 +30,11 @@ export interface TimesheetEntryView {
 
 /** One worker at one team of the site (or no team), with their entries there. */
 export interface TimesheetRowView {
-  worker: { id: string; lastName: string; firstName: string; patronymic: string | null; position: string | null };
+  worker: { id: string; employeeNumber: string | null; lastName: string; firstName: string; patronymic: string | null; position: string | null };
   teamId: string | null;
   teamName: string | null;
+  /** The placement's department; null: none */
+  departmentId: string | null;
   /** Spans the worker is employed in the month, at any site: days outside them take no entries. */
   employed: { from: string; until: string | null }[];
   /** Hours for this worker-month come from monthly totals, so no daily entries can be added. */
@@ -67,7 +69,7 @@ const ENTRY_INCLUDE = {
 
 type EntryRow = Prisma.TimesheetEntryGetPayload<{ include: typeof ENTRY_INCLUDE }>;
 
-const WORKER_SELECT = { id: true, lastName: true, firstName: true, patronymic: true, position: true } as const;
+const WORKER_SELECT = { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, position: true } as const;
 
 function entryView(e: EntryRow): TimesheetEntryView {
   return {
@@ -125,7 +127,7 @@ export class TimesheetService {
         where: { companyId, siteId, date: { gte: first, lte: last } },
         include: {
           ...ENTRY_INCLUDE,
-          assignment: { select: { workerId: true, worker: { select: WORKER_SELECT } } },
+          assignment: { select: { workerId: true, departmentId: true, worker: { select: WORKER_SELECT } } },
           team: { select: { name: true } },
         },
         orderBy: { date: 'asc' },
@@ -137,7 +139,7 @@ export class TimesheetService {
     ]);
 
     const rows = new Map<string, TimesheetRowView>();
-    const rowFor = (worker: TimesheetRowView['worker'], teamId: string | null, teamName: string | null) => {
+    const rowFor = (worker: TimesheetRowView['worker'], teamId: string | null, teamName: string | null, departmentId: string | null) => {
       const key = `${worker.id}:${teamId ?? ''}`;
       let row = rows.get(key);
       if (!row) {
@@ -145,6 +147,7 @@ export class TimesheetService {
           worker,
           teamId,
           teamName,
+          departmentId,
           employed: [],
           hasMonthlyTotals: false,
           hasImportedHours: false,
@@ -157,11 +160,11 @@ export class TimesheetService {
       return row;
     };
     for (const p of placements) {
-      if (seesPlacement(auth, p.siteId, p.teamId)) rowFor(p.worker, p.teamId, p.team?.name ?? null);
+      if (seesPlacement(auth, p.siteId, p.teamId)) rowFor(p.worker, p.teamId, p.team?.name ?? null, p.departmentId);
     }
     for (const e of entries) {
       if (!seesPlacement(auth, e.siteId, e.teamId)) continue;
-      rowFor(e.assignment.worker, e.teamId, e.team?.name ?? null).entries.push(entryView(e));
+      rowFor(e.assignment.worker, e.teamId, e.team?.name ?? null, e.assignment.departmentId).entries.push(entryView(e));
     }
 
     const workerIds = [...new Set([...rows.values()].map((r) => r.worker.id))];

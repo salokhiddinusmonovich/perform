@@ -274,6 +274,42 @@ describe('payroll by department', () => {
   });
 });
 
+describe('what lists filter and search on', () => {
+  it('gives each row the employee number, sites, team and department of the month', async () => {
+    const { agent, site, hse, qa } = await company();
+    await turnOn(agent);
+    const other = (await agent.post('/api/sites').send({ name: 'Site B' }).expect(201)).body.id as string;
+    const worker = (
+      await agent
+        .post('/api/workers')
+        .send({
+          worker: { employeeNumber: 'E-7', lastName: 'Testov', firstName: 'Test', employmentType: 'DIRECT' },
+          placement: { siteId: site, departmentId: hse, from: '2026-09-01' },
+        })
+        .expect(201)
+    ).body.id;
+    await agent.post(`/api/workers/${worker}/placements`).send({ siteId: other, departmentId: qa, from: '2026-09-16' }).expect(204);
+
+    // Without hours or a salary: the sites must not depend on the pay parts.
+    const payroll = (await agent.get('/api/payroll/2026/9').expect(200)).body.workers[0];
+    expect(payroll.worker.employeeNumber).toBe('E-7');
+    expect(payroll.parts).toEqual([]);
+    expect(payroll.siteNames).toEqual(['Site A', 'Site B']);
+
+    const hours = (await agent.get('/api/monthly-hours/2026/9').expect(200)).body.rows;
+    expect(hours.map((r: { siteName: string; teamId: string | null; departmentId: string; worker: { employeeNumber: string } }) => [r.siteName, r.teamId, r.departmentId, r.worker.employeeNumber])).toEqual(
+      expect.arrayContaining([
+        ['Site A', null, hse, 'E-7'],
+        ['Site B', null, qa, 'E-7'],
+      ]),
+    );
+
+    const adjustments = (await agent.get('/api/adjustments/2026/9').expect(200)).body.rows[0];
+    expect(adjustments.worker.employeeNumber).toBe('E-7');
+    expect(adjustments.departmentId).toBe(qa);
+  });
+});
+
 describe('tenant isolation', () => {
   it("never shows, changes or uses another company's departments", async () => {
     const a = await company();

@@ -34,9 +34,11 @@ export interface MonthlyHoursEntryView extends MonthlyTotals {
  */
 export interface MonthlyHoursRowView {
   assignmentId: string;
-  worker: { id: string; lastName: string; firstName: string; patronymic: string | null; position: string | null };
+  worker: { id: string; employeeNumber: string | null; lastName: string; firstName: string; patronymic: string | null; position: string | null };
   siteName: string;
+  teamId: string | null;
   teamName: string | null;
+  departmentId: string | null;
   /** First and last day of the placement (last null while it continues) */
   from: string;
   until: string | null;
@@ -124,7 +126,7 @@ export class MonthlyHoursService {
       this.prisma.assignment.findMany({
         where: { AND: [{ companyId }, inMonth(year, month)] },
         include: {
-          worker: { select: { id: true, lastName: true, firstName: true, patronymic: true, position: true } },
+          worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, position: true } },
           site: { select: { name: true } },
           team: { select: { name: true } },
           monthlyHours: {
@@ -163,7 +165,9 @@ export class MonthlyHoursService {
         assignmentId: p.id,
         worker: p.worker,
         siteName: p.site.name,
+        teamId: p.teamId,
         teamName: p.team?.name ?? null,
+        departmentId: p.departmentId,
         from: isoDay(p.hiredOn),
         until: p.leftOn ? isoDay(p.leftOn) : null,
         part: { from: part.from, until: part.until },

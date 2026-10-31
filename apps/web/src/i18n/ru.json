@@ -75,7 +75,8 @@
     "nextYear": "Следующий год",
     "previousMonth": "Предыдущий месяц",
     "nextMonth": "Следующий месяц",
-    "corrected": "Исправлено"
+    "corrected": "Исправлено",
+    "rowsOfTotal": "{{shown}} из {{total}} строк"
   },
   "states": {
     "emptyTitle": "Здесь пока ничего нет",
@@ -1005,7 +1006,10 @@
     "cancelTitle": "Аннулировать «{{type}}» на {{amount}} для {{name}}?",
     "cancelHint": "Запись остаётся в списке с пометкой «аннулировано» и больше не учитывается в зарплате. Причина записывается в журнал аудита.",
     "cancelReason": "Причина",
-    "cancelSubmit": "Аннулировать запись"
+    "cancelSubmit": "Аннулировать запись",
+    "filterAll": "Все работники",
+    "filterAny": "С начислениями и удержаниями",
+    "filterCancelled": "С отменёнными"
   },
   "payroll": {
     "title": "Расчёт зарплаты",
@@ -1096,7 +1100,12 @@
     "payOutTotal": "К выплате",
     "goToAdjustments": "К начислениям и удержаниям",
     "byDepartment": "По отделам",
-    "byDepartmentHint": "Каждый работник учитывается в своём отделе на конец месяца. Отдел включает свои подотделы."
+    "byDepartmentHint": "Каждый работник учитывается в своём отделе на конец месяца. Отдел включает свои подотделы.",
+    "filterAllWorkers": "Все работники",
+    "filterProblems": "С проблемами",
+    "filterNoProblems": "Без проблем",
+    "filterAllSources": "Все источники",
+    "problemsFilter": "Проблемы"
   },
   "timesheet": {
     "title": "Табель",

@@ -48,6 +48,16 @@ describe('DataTable', () => {
     expect(screen.getByText('No results match your search')).toBeTruthy();
   });
 
+  it('tells filtered rows from an empty list when the page filters them itself', () => {
+    render(<DataTable columns={columns} data={rows.slice(0, 1)} totalCount={3} />);
+    expect(screen.getByText('1 of 3 rows')).toBeTruthy();
+    cleanup();
+
+    render(<DataTable columns={columns} data={[]} totalCount={3} emptyTitle="No workers yet" />);
+    expect(screen.getByText('No results match your search')).toBeTruthy();
+    expect(screen.queryByText('No workers yet')).toBeNull();
+  });
+
   it('sorts when a header is clicked', async () => {
     const user = userEvent.setup();
     render(<DataTable columns={columns} data={rows} />);

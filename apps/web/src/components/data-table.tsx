@@ -14,8 +14,8 @@ import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
+import { SearchInput } from '@/components/search-input';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -25,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { matchesSearch } from '@/lib/utils';
 
 interface DataTableProps<TData> {
   columns: ColumnDef<TData, unknown>[];
@@ -45,6 +46,11 @@ interface DataTableProps<TData> {
   emptyDescription?: string;
   emptyAction?: ReactNode;
   pageSize?: number;
+  /**
+   * The rows before the page's own filters, when `data` is already filtered: the table then
+   * says "no results" instead of "nothing here yet", and "3 of 10 rows".
+   */
+  totalCount?: number;
 }
 
 const SKELETON_ROWS = 5;
@@ -63,6 +69,7 @@ export function DataTable<TData>({
   emptyDescription,
   emptyAction,
   pageSize = 25,
+  totalCount,
 }: DataTableProps<TData>) {
   const { t } = useTranslation();
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -70,7 +77,7 @@ export function DataTable<TData>({
 
   const searchFilter: FilterFn<TData> | undefined = searchText
     ? (row, _columnId, filter: string) =>
-        searchText(row.original).toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase())
+        matchesSearch(searchText(row.original), filter)
     : undefined;
 
   const table = useReactTable<TData>({
@@ -90,7 +97,8 @@ export function DataTable<TData>({
   const rows = table.getRowModel().rows;
   const filteredCount = table.getFilteredRowModel().rows.length;
   const pageCount = table.getPageCount();
-  const hasData = (data?.length ?? 0) > 0;
+  const total = totalCount ?? data?.length ?? 0;
+  const hasData = total > 0;
 
   let body: ReactNode;
   if (isError) {
@@ -110,23 +118,8 @@ export function DataTable<TData>({
   return (
     <div className="space-y-3">
       {(searchable || toolbar) && (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          {searchable && (
-            <div className="relative sm:max-w-xs sm:flex-1">
-              <Search
-                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
-                type="search"
-                value={globalFilter}
-                onChange={(e) => setGlobalFilter(e.target.value)}
-                placeholder={t('common.search')}
-                aria-label={t('common.search')}
-                className="pl-9"
-              />
-            </div>
-          )}
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          {searchable && <SearchInput value={globalFilter} onChange={setGlobalFilter} />}
           {toolbar && <div className="flex flex-wrap items-center gap-2 sm:ml-auto">{toolbar}</div>}
         </div>
       )}
@@ -197,7 +190,11 @@ export function DataTable<TData>({
 
       {!isLoading && !isError && filteredCount > 0 && (
         <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <span>{t('common.rowsTotal', { count: filteredCount })}</span>
+          <span>
+            {filteredCount < total
+              ? t('common.rowsOfTotal', { shown: filteredCount, total })
+              : t('common.rowsTotal', { count: filteredCount })}
+          </span>
           {pageCount > 1 && (
             <div className="flex items-center gap-2">
               <span>
