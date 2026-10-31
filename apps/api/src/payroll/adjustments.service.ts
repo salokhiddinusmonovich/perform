@@ -4,7 +4,7 @@ import { ADJUSTMENT_SIGN } from '@puantaj/payroll';
 import type { Adjustment, AdjustmentType, YearMonth } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
-import { conflict, notFound } from '../common/api-error';
+import { badRequest, conflict, notFound } from '../common/api-error';
 import { inMonth } from '../common/dates';
 import { seesPlacement } from '../organisation/access';
 import { assertMonthsOpen } from '../pay-rules/months';
@@ -18,6 +18,8 @@ export interface AdjustmentView {
   /** The amount with its sign: negative for advances and deductions */
   signedAmount: string;
   note: string | null;
+  /** The payslip it belongs to (AGENTS.md: Firms); null: no firm named */
+  firm: { id: string; name: string } | null;
   setBy: { fullName: string };
   setAt: Date;
   /** Cancelled adjustments stay visible but no longer count. */
@@ -31,6 +33,8 @@ export interface AdjustmentRowView {
   siteNames: string[];
   /** The department of the worker's last placement in the month, as in the payroll run; null: none */
   departmentId: string | null;
+  /** The firms of the worker's placements in the month (AGENTS.md: Firms); empty while the company doesn't use them */
+  firms: { id: string; name: string }[];
   /** Newest first */
   adjustments: AdjustmentView[];
   /** Signed sum of the adjustments that count */
@@ -42,6 +46,22 @@ export interface AdjustmentsMonthView {
   month: number;
   locked: boolean;
   rows: AdjustmentRowView[];
+}
+
+/**
+ * The firm an adjustment goes to (AGENTS.md: Firms): the worker's only firm that month, or the
+ * one named, which must be among them. A placement still without a firm has no payslip an
+ * adjustment could name next to another firm's, so its firm is filled in first.
+ */
+function firmOfAdjustment(named: string | null, placed: readonly (string | null)[]): string | null {
+  const firms = [...new Set(placed)];
+  if (named) {
+    if (!firms.includes(named)) throw conflict('adjustment.firmNotInMonth');
+    return named;
+  }
+  if (firms.length === 1) return firms[0];
+  if (firms.includes(null)) throw conflict('placement.noFirm');
+  throw badRequest('validation', { issues: [{ path: 'firmId', message: 'validation.required' }] });
 }
 
 /** The adjustments that count in a worker-month (not cancelled). Payroll reads only these. */
@@ -69,6 +89,7 @@ export class AdjustmentsService {
           siteId: true,
           teamId: true,
           departmentId: true,
+          firm: { select: { id: true, name: true } },
           site: { select: { name: true } },
           worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, position: true } },
         },
@@ -81,6 +102,7 @@ export class AdjustmentsService {
       where: { companyId, year, month, workerId: { in: [...visible] } },
       include: {
         setBy: { select: { fullName: true } },
+        firm: { select: { id: true, name: true } },
         cancel: { include: { cancelledBy: { select: { fullName: true } } } },
       },
       orderBy: { seq: 'desc' },
@@ -95,12 +117,16 @@ export class AdjustmentsService {
         worker: own[0].worker,
         siteNames: [...new Set(own.map((p) => p.site.name))],
         departmentId: own.at(-1)!.departmentId,
+        firms: auth.company.firms
+          ? [...new Map(own.flatMap((p) => (p.firm ? [[p.firm.id, p.firm] as const] : []))).values()]
+          : [],
         adjustments: list.map((a) => ({
           id: a.id,
           type: a.type,
           amount: a.amount.toString(),
           signedAmount: a.signed.toFixed(2),
           note: a.note,
+          firm: a.firm,
           setBy: a.setBy,
           setAt: a.setAt,
           cancelled: a.cancel && { reason: a.cancel.reason, by: a.cancel.cancelledBy, at: a.cancel.cancelledAt },
@@ -126,11 +152,15 @@ export class AdjustmentsService {
       await assertMonthsOpen(tx, companyId, { year, month });
       const worker = await tx.worker.findFirst({ where: { id: workerId, companyId }, select: { id: true } });
       if (!worker) throw notFound('worker.notFound');
-      const placed = await tx.assignment.count({ where: { AND: [{ companyId, workerId }, inMonth(year, month)] } });
-      if (placed === 0) throw conflict('adjustment.notInMonth');
+      const placements = await tx.assignment.findMany({
+        where: { AND: [{ companyId, workerId }, inMonth(year, month)] },
+        select: { firmId: true },
+      });
+      if (placements.length === 0) throw conflict('adjustment.notInMonth');
+      const firmId = auth.company.firms ? firmOfAdjustment(input.firmId, placements.map((p) => p.firmId)) : null;
 
       const row = await tx.adjustment.create({
-        data: { companyId, workerId, year, month, type: input.type, amount: input.amount, note: input.note, setById: auth.user.id },
+        data: { companyId, workerId, firmId, year, month, type: input.type, amount: input.amount, note: input.note, setById: auth.user.id },
       });
       await this.audit.record(
         {
@@ -139,7 +169,7 @@ export class AdjustmentsService {
           auth,
           entityType: 'Worker',
           entityId: workerId,
-          data: { adjustmentId: row.id, year, month, type: input.type, amount: input.amount, note: input.note },
+          data: { adjustmentId: row.id, firmId, year, month, type: input.type, amount: input.amount, note: input.note },
         },
         tx,
       );

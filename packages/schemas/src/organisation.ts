@@ -26,7 +26,7 @@ const birthDateSchema = z
   .pipe(calendarDaySchema(1900, MAX_YEAR).nullable());
 
 const uuid = z.uuid({ error: 'validation.required' });
-const optionalUuid = z
+export const optionalUuid = z
   .string()
   .nullish()
   .transform((value) => (value ? value : null))
@@ -108,6 +108,8 @@ export const placementSchema = z.object({
   siteId: uuid,
   teamId: optionalUuid,
   departmentId: optionalUuid,
+  /** The employer (AGENTS.md: Firms); required by the API while the company uses firms. */
+  firmId: optionalUuid,
   /** First day at this site (the hire date for a new worker). */
   from: isoDateSchema,
 });
@@ -143,6 +145,35 @@ export const departmentSettingsSchema = z.object({ enabled: z.boolean() });
 export type DepartmentSettingsInput = z.input<typeof departmentSettingsSchema>;
 export type DepartmentSettings = z.output<typeof departmentSettingsSchema>;
 
+/** Mirrors FirmType in apps/api/prisma/schema.prisma. */
+export const FIRM_TYPES = ['OWN', 'SUBCONTRACTOR'] as const;
+export type FirmType = (typeof FIRM_TYPES)[number];
+
+/** An employer inside the company (AGENTS.md: Firms). The type never changes how pay is worked out. */
+export const firmSchema = z.object({
+  name: requiredName(120),
+  type: z.enum(FIRM_TYPES, { error: 'validation.required' }),
+});
+export type FirmInput = z.input<typeof firmSchema>;
+export type Firm = z.output<typeof firmSchema>;
+
+/** Renaming, changing the type of, or (de)activating a firm. */
+export const updateFirmSchema = firmSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
+export type UpdateFirm = z.output<typeof updateFirmSchema>;
+
+/** Whether the company uses firms (every new placement then needs one). */
+export const firmSettingsSchema = z.object({ enabled: z.boolean() });
+export type FirmSettingsInput = z.input<typeof firmSettingsSchema>;
+export type FirmSettings = z.output<typeof firmSettingsSchema>;
+
+/** Fills in the firm of a placement that has none (placements from before firms were used). */
+export const placementFirmSchema = z.object({ firmId: uuid });
+export type PlacementFirmInput = z.input<typeof placementFirmSchema>;
+export type PlacementFirm = z.output<typeof placementFirmSchema>;
+
 export const createWorkerSchema = z.object({ worker: workerSchema, placement: placementSchema });
 export type CreateWorkerInput = z.input<typeof createWorkerSchema>;
 export type CreateWorker = z.output<typeof createWorkerSchema>;
@@ -158,6 +189,8 @@ export type Leave = z.output<typeof leaveSchema>;
  * is a new salary from the same month.
  */
 export const salarySchema = z.object({
+  /** The firm it is paid by (AGENTS.md: Firms); required by the API while the company uses firms. */
+  firmId: optionalUuid,
   fromYear: yearSchema,
   fromMonth: monthSchema,
   /** More than 0: the hourly rate is worked out from it. Fits Decimal(14,2). */

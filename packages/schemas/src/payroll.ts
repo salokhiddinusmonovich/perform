@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { optionalText } from './organisation.js';
+import { optionalText, optionalUuid } from './organisation.js';
 import { decimalSchema, isoDateSchema } from './pay-rules.js';
 
 // Hours entered as monthly totals and the payroll run (AGENTS.md: Modules, Pay model).
@@ -57,6 +57,8 @@ export type AdjustmentType = (typeof ADJUSTMENT_TYPES)[number];
  * amount is always positive; the type gives the sign. Fits Decimal(14,2).
  */
 export const adjustmentSchema = z.object({
+  /** The payslip it belongs to (AGENTS.md: Firms); required by the API when the worker has more than one firm that month. */
+  firmId: optionalUuid,
   type: z.enum(ADJUSTMENT_TYPES, { error: 'validation.required' }),
   amount: decimalSchema({ min: 0, minExclusive: true, max: 999_999_999_999, rangeError: 'validation.adjustmentRange' }),
   note: optionalText(500),

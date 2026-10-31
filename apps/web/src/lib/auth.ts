@@ -22,6 +22,8 @@ export interface Me {
     modules: ('PAYROLL' | 'TIMESHEET')[];
     /** The company uses departments: placements need one, and they are shown */
     departments: boolean;
+    /** The company uses firms: placements need one, and salaries and payslips go per firm */
+    firms: boolean;
     /** Sites a project manager or timekeeper works on; null for other roles */
     siteIds: string[] | null;
     /** Teams a foreman leads; null for other roles */
@@ -159,6 +161,20 @@ export function usesDepartments(me: Me | null | undefined): boolean {
 export function seesDepartments(me: Me | null | undefined): boolean {
   const role = me?.activeCompany?.role;
   return canManageCompany(me) || (usesDepartments(me) && (role === 'ACCOUNTANT' || role === 'PROJECT_MANAGER'));
+}
+
+/** The company uses firms (switched on by an owner or admin). */
+export function usesFirms(me: Me | null | undefined): boolean {
+  return me?.activeCompany?.firms === true;
+}
+
+/**
+ * Sees the firm list: owners and admins always (they set it up and switch it on), accountants
+ * and project managers while the company uses firms.
+ */
+export function seesFirms(me: Me | null | undefined): boolean {
+  const role = me?.activeCompany?.role;
+  return canManageCompany(me) || (usesFirms(me) && (role === 'ACCOUNTANT' || role === 'PROJECT_MANAGER'));
 }
 
 /** Can change who enters daily hours (Timesheet module, owners and admins). */

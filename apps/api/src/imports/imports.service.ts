@@ -19,7 +19,7 @@ import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict } from '../common/api-error';
 import { dayToDate, inMonth, isoDay, monthSpan, previousDay } from '../common/dates';
-import { SALARY_ORDER, WorkersService } from '../organisation/workers.service';
+import { SALARY_ORDER, salaryForFirm, WorkersService } from '../organisation/workers.service';
 import { shiftPartsOf } from '../organisation/worker-shifts';
 import { assertMonthsOpen, lockWorkerMonth, monthIndex } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
@@ -63,7 +63,7 @@ export interface ImportWorkerChange {
   row: number;
   employeeNumber: string;
   name: string;
-  field: 'site' | 'department' | 'leftOn' | 'salary';
+  field: 'site' | 'department' | 'firm' | 'leftOn' | 'salary';
   file: string | null;
   app: string | null;
 }
@@ -128,6 +128,19 @@ interface PlannedDay {
   assignmentId: string;
   siteId: string;
   teamId: string | null;
+}
+
+/** A row's placement, exit date and salary, for a worker new to the app. */
+interface PlannedPlacement {
+  placement: CreateWorker['placement'];
+  leftOn: string | null;
+  salary: string | null;
+}
+
+/** A worker the workers step adds, with one placement per row of the file, oldest first. */
+interface PlannedWorker {
+  worker: CreateWorker['worker'];
+  placements: PlannedPlacement[];
 }
 
 interface WorkerMonth {
@@ -244,10 +257,21 @@ export class ImportsService {
       const checked = await this.checkWorkers(tx, auth, ym, sheet, read.mapping);
       if (checked.problems.length > 0) throw conflict('import.hasProblems', { problems: checked.problems.length });
       for (const plan of checked.create) {
-        const { id } = await this.workers.createIn(tx, auth, plan.input);
-        if (plan.leftOn) await this.workers.leaveIn(tx, auth, id, plan.leftOn);
-        if (plan.salary) {
-          await this.workers.addSalaryIn(tx, auth, id, { fromYear: ym.year, fromMonth: ym.month, monthlySalary: plan.salary, reason: null });
+        const first = plan.placements[0];
+        const { id } = await this.workers.createIn(tx, auth, { worker: plan.worker, placement: first.placement });
+        for (const [i, p] of plan.placements.entries()) {
+          if (i > 0) await this.workers.placeIn(tx, auth, id, p.placement);
+          // A later placement ends this one by itself; the file's own exit date counts when there is one.
+          if (p.leftOn) await this.workers.leaveIn(tx, auth, id, p.leftOn);
+          if (p.salary) {
+            await this.workers.addSalaryIn(tx, auth, id, {
+              firmId: p.placement.firmId,
+              fromYear: ym.year,
+              fromMonth: ym.month,
+              monthlySalary: p.salary,
+              reason: null,
+            });
+          }
         }
       }
       await this.saveMapping(tx, auth, read.mapping);
@@ -440,16 +464,20 @@ export class ImportsService {
     return problems;
   }
 
-  /** The rows of each employee number, and a problem for every row of a number that is there twice. */
-  private numbered(rows: Row[], problems: ImportProblem[]): Row[] {
+  /**
+   * The rows of each employee number, and a problem for every row of a number that is there
+   * twice. A worker who moved firms in the month may be there once per firm (AGENTS.md: Firms).
+   */
+  private numbered(rows: Row[], problems: ImportProblem[], byFirm: boolean): Row[] {
+    const key = (r: Row) => `${r.employeeNumber}\u0000${byFirm ? foldText(cellText(r.field('firm')) ?? '') : ''}`;
     const counts = new Map<string, number>();
-    for (const r of rows) if (r.employeeNumber) counts.set(r.employeeNumber, (counts.get(r.employeeNumber) ?? 0) + 1);
+    for (const r of rows) if (r.employeeNumber) counts.set(key(r), (counts.get(key(r)) ?? 0) + 1);
     return rows.filter((r) => {
       if (!r.employeeNumber) {
         problems.push(rowProblem(r, 'import.noEmployeeNumber'));
         return false;
       }
-      if (counts.get(r.employeeNumber)! > 1) {
+      if (counts.get(key(r))! > 1) {
         problems.push(rowProblem(r, 'import.duplicateEmployeeNumber', { value: r.employeeNumber }));
         return false;
       }
@@ -460,11 +488,15 @@ export class ImportsService {
   /** The workers step: which rows add a worker, and what keeps it from running. */
   private async checkWorkers(db: Db, auth: CompanyAuthContext, ym: YearMonth, sheet: Sheet, mapping: ImportMapping) {
     const companyId = auth.company.id;
-    const required: ImportField[] = [...WORKER_IMPORT_REQUIRED, ...(auth.company.departments ? (['department'] as const) : [])];
+    const required: ImportField[] = [
+      ...WORKER_IMPORT_REQUIRED,
+      ...(auth.company.departments ? (['department'] as const) : []),
+      ...(auth.company.firms ? (['firm'] as const) : []),
+    ];
     const problems = this.mappingProblems(sheet, mapping, required);
     const all = this.rows(sheet, mapping);
-    const rows = this.numbered(all, problems);
-    const create: { input: CreateWorker; leftOn: string | null; salary: string | null }[] = [];
+    const rows = this.numbered(all, problems, auth.company.firms);
+    const create: PlannedWorker[] = [];
     const changes: ImportWorkerChange[] = [];
     const notes: ImportProblem[] = [];
 
@@ -473,31 +505,32 @@ export class ImportsService {
     ].sort();
     const typeOf = (folded: string) => mapping.values.employmentType[folded] ?? guessEmploymentType(folded);
 
-    const [existing, sites, departments, pinfls, codeRows] = await Promise.all([
+    const [existing, sites, departments, firms, pinfls, codeRows] = await Promise.all([
       db.worker.findMany({
         where: { companyId, employeeNumber: { in: rows.map((r) => r.employeeNumber!) } },
         include: {
-          assignments: { orderBy: { hiredOn: 'desc' }, include: { site: true, department: true } },
+          assignments: { orderBy: { hiredOn: 'desc' }, include: { site: true, department: true, firm: true } },
           salaries: { orderBy: SALARY_ORDER },
         },
       }),
       db.site.findMany({ where: { companyId } }),
       db.department.findMany({ where: { companyId } }),
+      db.firm.findMany({ where: { companyId } }),
       db.worker.findMany({ where: { companyId, pinfl: { not: null } }, select: { pinfl: true, employeeNumber: true } }),
       db.timesheetCode.findMany({ where: { companyId } }),
     ]);
     const codes: CodeMap = new Map(codeRows.map((c) => [normalizeCode(c.code), c.status]));
-    const filePinfls = new Map<string, number>();
+    const filePinfls = new Map<string, string>();
 
     for (const r of rows) {
       const days = employmentInDays(r, sheet, codes, ym);
       const worker = existing.find((w) => w.employeeNumber === r.employeeNumber);
       if (worker) {
-        const latest = worker.assignments[0];
+        const latest = placementForRow(worker.assignments, r, auth.company.firms);
         const fileLeftOn = cellDate(r.field('leftOn'));
         // No exit date in the file: the day before a "not employed" code after the worker started.
         const leftOn = fileLeftOn ?? (latest ? days.exitBefore(isoDay(latest.hiredOn))?.leftOn ?? null : null);
-        changes.push(...this.changesOf(r, worker, ym, mapping, auth.company.departments, leftOn));
+        changes.push(...this.changesOf(r, worker, ym, mapping, auth.company, leftOn));
         continue;
       }
       const rowProblems: ImportProblem[] = [];
@@ -539,8 +572,9 @@ export class ImportsService {
       } else if (details.data.pinfl) {
         const pinfl = details.data.pinfl;
         if (pinfls.some((p) => p.pinfl === pinfl)) add('worker.pinflTaken', { field: 'pinfl' });
-        else if (filePinfls.has(pinfl)) add('import.duplicatePinfl', { field: 'pinfl' });
-        filePinfls.set(pinfl, r.row);
+        // A worker on two rows (one per firm) has the same PINFL on both.
+        else if (filePinfls.has(pinfl) && filePinfls.get(pinfl) !== r.employeeNumber) add('import.duplicatePinfl', { field: 'pinfl' });
+        filePinfls.set(pinfl, r.employeeNumber!);
       }
 
       const siteName = text('site');
@@ -558,6 +592,16 @@ export class ImportsService {
         else if (found.length > 1) add('import.departmentAmbiguous', { field: 'department', value: name });
         else if (!found[0].isActive) add('department.inactive', { field: 'department', value: name });
         else departmentId = found[0].id;
+      }
+
+      let firmId: string | null = null;
+      if (auth.company.firms) {
+        const name = text('firm');
+        const found = name === null ? undefined : firms.find((f) => foldText(f.name) === foldText(name));
+        if (name === null) add('validation.required', { field: 'firm' });
+        else if (!found) add('import.firmNotFound', { field: 'firm', value: name });
+        else if (!found.isActive) add('firm.inactive', { field: 'firm', value: name });
+        else firmId = found.id;
       }
 
       let hiredOn = date('hiredOn');
@@ -588,11 +632,16 @@ export class ImportsService {
 
       problems.push(...rowProblems);
       if (rowProblems.length === 0 && details.success && site && hiredOn) {
-        create.push({
-          input: { worker: details.data, placement: { siteId: site.id, teamId: null, departmentId, from: hiredOn } },
+        const planned = {
+          placement: { siteId: site.id, teamId: null, departmentId, firmId, from: hiredOn },
           leftOn,
           salary,
-        });
+        };
+        const same = create.find((c) => c.worker.employeeNumber === r.employeeNumber);
+        if (same) {
+          same.placements.push(planned);
+          same.placements.sort((a, b) => a.placement.from.localeCompare(b.placement.from));
+        } else create.push({ worker: details.data, placements: [planned] });
       }
     }
     return { rows: all.length, existing: existing.length, create, problems, notes, changes, employmentTypes };
@@ -602,25 +651,26 @@ export class ImportsService {
   private changesOf(
     r: Row,
     worker: Prisma.WorkerGetPayload<{
-      include: { assignments: { include: { site: true; department: true } }; salaries: true };
+      include: { assignments: { include: { site: true; department: true; firm: true } }; salaries: true };
     }>,
     ym: YearMonth,
     mapping: ImportMapping,
-    departments: boolean,
+    company: { departments: boolean; firms: boolean },
     /** The exit date the file gives, from its column or a code; 'invalid' when it can't be read */
     fileLeftOn: string | null | 'invalid',
   ): ImportWorkerChange[] {
     const out: ImportWorkerChange[] = [];
     const base = { row: r.row, employeeNumber: r.employeeNumber!, name: r.name ?? r.employeeNumber! };
-    const latest = worker.assignments[0] ?? null;
+    const latest = placementForRow(worker.assignments, r, company.firms) ?? null;
     const text = (f: ImportField) => cellText(r.field(f));
     const differs = (field: ImportWorkerChange['field'], file: string | null, app: string | null) => {
       if (file !== null && (app === null || foldText(file) !== foldText(app))) out.push({ ...base, field, file, app });
     };
     if (mapping.columns.site !== undefined) differs('site', text('site'), latest?.site.name ?? null);
-    if (departments && mapping.columns.department !== undefined) {
+    if (company.departments && mapping.columns.department !== undefined) {
       differs('department', text('department'), latest?.department?.name ?? null);
     }
+    if (company.firms && mapping.columns.firm !== undefined) differs('firm', text('firm'), latest?.firm?.name ?? null);
     if (mapping.columns.leftOn !== undefined || fileLeftOn !== null) {
       const app = latest?.leftOn ? isoDay(latest.leftOn) : null;
       if (fileLeftOn !== 'invalid' && fileLeftOn !== app) out.push({ ...base, field: 'leftOn', file: fileLeftOn, app });
@@ -628,7 +678,11 @@ export class ImportsService {
     const salaryText = text('salary');
     if (salaryText !== null && Number(salaryText) !== 0) {
       const index = monthIndex(ym.year, ym.month);
-      const inForce = worker.salaries.find((s) => monthIndex(s.fromYear, s.fromMonth) <= index);
+      const inForce = salaryForFirm(
+        worker.salaries.filter((s) => monthIndex(s.fromYear, s.fromMonth) <= index),
+        latest?.firmId ?? null,
+        company.firms,
+      );
       const parsed = salarySchema.shape.monthlySalary.safeParse(salaryText);
       if (parsed.success && !(inForce && inForce.monthlySalary.equals(parsed.data))) {
         out.push({ ...base, field: 'salary', file: parsed.data, app: inForce ? inForce.monthlySalary.toString() : null });
@@ -645,13 +699,14 @@ export class ImportsService {
     const problems = this.mappingProblems(sheet, mapping, HOURS_IMPORT_REQUIRED);
     const missingDays = [...Array(daysInMonth).keys()].map((i) => i + 1).filter((d) => !sheet.dayColumns.has(d));
     if (missingDays.length > 0) problems.push(fileProblem('import.dayColumnsMissing', { days: missingDays }));
-    const rows = this.numbered(this.rows(sheet, mapping), problems);
+    const byFirm = auth.company.firms && mapping.columns.firm !== undefined;
+    const rows = this.numbered(this.rows(sheet, mapping), problems, byFirm);
 
     const [codeRows, workers] = await Promise.all([
       db.timesheetCode.findMany({ where: { companyId } }),
       db.worker.findMany({
         where: { companyId, employeeNumber: { in: rows.map((r) => r.employeeNumber!) } },
-        include: { assignments: { where: inMonth(ym.year, ym.month), orderBy: { hiredOn: 'asc' } } },
+        include: { assignments: { where: inMonth(ym.year, ym.month), orderBy: { hiredOn: 'asc' }, include: { firm: true } } },
       }),
     ]);
     const codes: CodeMap = new Map(codeRows.map((c) => [normalizeCode(c.code), c.status]));
@@ -673,7 +728,7 @@ export class ImportsService {
       mapping.columns.shift === undefined ? null : shiftPartsOf(db, companyId, workerIds, ym.year, ym.month),
     ]);
 
-    const months: WorkerMonth[] = [];
+    const months: (WorkerMonth & { row: Row })[] = [];
     const notes: ImportProblem[] = [];
     let replaces = 0;
     let overwritesEdits = 0;
@@ -683,8 +738,14 @@ export class ImportsService {
         problems.push(rowProblem(r, 'import.workerNotFound', { value: r.employeeNumber! }));
         continue;
       }
+      // A worker on two rows (one per firm): each row speaks only for the placements of its firm.
+      const onSeveralRows = rows.filter((o) => o.employeeNumber === r.employeeNumber).length > 1;
+      const rowFirm = foldText(cellText(r.field('firm')) ?? '');
       const placementOn = (date: string) =>
-        worker.assignments.filter((p) => isoDay(p.hiredOn) <= date && (!p.leftOn || isoDay(p.leftOn) >= date)).at(-1) ?? null;
+        worker.assignments
+          .filter((p) => isoDay(p.hiredOn) <= date && (!p.leftOn || isoDay(p.leftOn) >= date))
+          .filter((p) => !onSeveralRows || foldText(p.firm?.name ?? '') === rowFirm)
+          .at(-1) ?? null;
       // Not employed this month and nothing in the file: not part of this month.
       if (worker.assignments.length === 0 && !r.hasDays) continue;
 
@@ -695,7 +756,7 @@ export class ImportsService {
         if (found) found.days!.push(day);
         else cellProblems.set(key, rowProblem(r, code, { value, days: [day] }));
       };
-      const month: WorkerMonth = { workerId: worker.id, cells: {}, entries: [] };
+      const month: WorkerMonth & { row: Row } = { workerId: worker.id, cells: {}, entries: [], row: r };
       const absentDays: number[] = [];
       for (let day = 1; day <= daysInMonth; day++) {
         if (!sheet.dayColumns.has(day)) continue;
@@ -752,23 +813,33 @@ export class ImportsService {
 
       problems.push(...rowProblems);
       if (rowProblems.length === 0) {
-        months.push(month);
-        if (own.length > 0) replaces++;
-        // Days changed by hand that the file says differently: the import would undo them.
-        const overwritten = edits.flatMap((edit) => {
-          if (edit.workerId !== worker.id) return [];
-          const date = isoDay(edit.date);
-          const inFile = month.entries.filter((e) => e.date === date);
-          const inApp = own.filter((e) => isoDay(e.date) === date);
-          const same =
-            inFile.length === inApp.length &&
-            inFile.every((n) => inApp.some((o) => o.status === n.status && o.hours.equals(n.hours)));
-          return same ? [] : [edit.date.getUTCDate()];
-        });
-        if (overwritten.length > 0) {
-          notes.push(rowProblem(r, 'import.overwritesEdits', { days: overwritten }));
-          overwritesEdits += overwritten.length;
+        // The rows of one worker make one worker-month.
+        const earlier = months.find((m) => m.workerId === worker.id);
+        if (earlier) {
+          Object.assign(earlier.cells, month.cells);
+          earlier.entries.push(...month.entries);
+        } else {
+          months.push(month);
+          if (own.length > 0) replaces++;
         }
+      }
+    }
+    // Days changed by hand that the file says differently: the import would undo them.
+    for (const month of months) {
+      const own = entries.filter((e) => e.assignment.workerId === month.workerId);
+      const overwritten = edits.flatMap((edit) => {
+        if (edit.workerId !== month.workerId) return [];
+        const date = isoDay(edit.date);
+        const inFile = month.entries.filter((e) => e.date === date);
+        const inApp = own.filter((e) => isoDay(e.date) === date);
+        const same =
+          inFile.length === inApp.length &&
+          inFile.every((n) => inApp.some((o) => o.status === n.status && o.hours.equals(n.hours)));
+        return same ? [] : [edit.date.getUTCDate()];
+      });
+      if (overwritten.length > 0) {
+        notes.push(rowProblem(month.row, 'import.overwritesEdits', { days: overwritten }));
+        overwritesEdits += overwritten.length;
       }
     }
     return { months, replaces, overwritesEdits, problems, notes };
@@ -793,6 +864,16 @@ export class ImportsService {
       tx,
     );
   }
+}
+
+/**
+ * The placement a row of the file speaks of (placements newest first): the latest one of the
+ * row's firm while the company uses firms, otherwise the latest.
+ */
+function placementForRow<P extends { firm: { name: string } | null }>(placements: readonly P[], r: Row, firms: boolean): P | undefined {
+  const firm = firms ? cellText(r.field('firm')) : null;
+  const own = firm === null ? undefined : placements.find((p) => p.firm && foldText(p.firm.name) === foldText(firm));
+  return own ?? placements[0];
 }
 
 /**

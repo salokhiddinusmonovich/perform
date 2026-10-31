@@ -150,6 +150,7 @@ const GUESSES: [ImportField, string[]][] = [
   ['phone', ['CONTACT NUMBER', 'ТЕЛЕФОН', 'TELEFON', 'PHONE', 'КОНТАКТ']],
   ['site', ['ОБЪЕКТ', 'SANTIYE', 'OBYEKT', 'SITE', 'PROJE']],
   ['department', ['ПОДРАЗДЕЛЕНИЕ', 'EKIB', 'EKIP', 'BOLUM', 'BOLIM', 'DEPARTMENT', 'ОТДЕЛ']],
+  ['firm', ['ФИРМА', 'FIRMA', 'FIRM', 'KOMPANIYA', 'SIRKET']],
   ['hiredOn', ['GIRIS TARIHI', 'ДАТА ПРИЕМА', 'ДАТА ПРИЁМА', 'ISHGA KIRGAN', 'HIRE DATE', 'START DATE']],
   ['leftOn', ['CIKIS TARIHI', 'УВОЛЬН', 'ДАТА УВОЛЬНЕНИЯ', 'ISHDAN BOSHAGAN', 'EXIT DATE', 'END DATE']],
   ['salary', ['UCRET', 'MAAS', 'ОКЛАД', 'SALARY', 'MONTHLY SALARY']],

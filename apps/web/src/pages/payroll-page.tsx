@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
 import { DepartmentFilter, inDepartmentFilter, type DepartmentFilterValue } from '@/components/department-select';
+import { FirmFilter, inFirmFilter, type FirmFilterValue } from '@/components/firm-select';
 import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
 import { ALL_SITES, SiteFilter } from '@/components/list-filters';
 import { MonthSwitcher } from '@/components/month-switcher';
@@ -33,10 +34,11 @@ import {
   seesPay,
   useMe,
   usesDepartments,
+  usesFirms,
   type Me,
 } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { departmentTree, useDepartments, workerName, workerSearchText, type DepartmentNode } from '@/lib/organisation';
+import { departmentTree, useDepartments, useFirms, workerName, workerSearchText, type DepartmentNode } from '@/lib/organisation';
 import {
   ADJUSTMENTS_KEY,
   currentMonth,
@@ -44,9 +46,11 @@ import {
   MONTHLY_HOURS_KEY,
   PAYROLL_KEY,
   payrollSiteNames,
+  payslipsOf,
   siteChoices,
   usePayroll,
   type DepartmentTotal,
+  type FirmTotal,
   type LockItem,
   type PayrollMonth,
   type PayrollPart,
@@ -80,6 +84,9 @@ function PayrollView({ me }: { me: Me }) {
   const departments = useDepartments();
   const tree = useMemo(() => departmentTree(departments.data ?? []), [departments.data]);
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilterValue>('all');
+  const showFirms = usesFirms(me);
+  const firms = useFirms({ enabled: showFirms });
+  const [firmFilter, setFirmFilter] = useState<FirmFilterValue>('all');
   const [chosenSite, setSiteFilter] = useState(ALL_SITES);
   const [problemFilter, setProblemFilter] = useState<'all' | 'problems' | 'ok'>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | NonNullable<PayrollWorker['source']>>('all');
@@ -91,11 +98,12 @@ function PayrollView({ me }: { me: Me }) {
       data.data?.workers.filter(
         (w) =>
           (!showDepartments || inDepartmentFilter(departmentFilter, w.department?.id, departments.data ?? [])) &&
+          (!showFirms || inFirmFilter(firmFilter, w.firms ?? [])) &&
           (siteFilter === ALL_SITES || payrollSiteNames(w).includes(siteFilter)) &&
           (problemFilter === 'all' || (w.problems.length > 0) === (problemFilter === 'problems')) &&
           (sourceFilter === 'all' || w.source === sourceFilter),
       ),
-    [data.data, showDepartments, departmentFilter, departments.data, siteFilter, problemFilter, sourceFilter],
+    [data.data, showDepartments, departmentFilter, departments.data, showFirms, firmFilter, siteFilter, problemFilter, sourceFilter],
   );
   const departmentPaths = useMemo(() => new Map(tree.map((d) => [d.id, d.path])), [tree]);
 
@@ -121,6 +129,16 @@ function PayrollView({ me }: { me: Me }) {
               accessorFn: (w) => (w.department ? (tree.find((d) => d.id === w.department!.id)?.path ?? w.department.name) : ''),
               header: t('departments.department'),
               cell: ({ getValue }) => (getValue() as string) || '—',
+            } satisfies ColumnDef<PayrollWorker, unknown>,
+          ]
+        : []),
+      ...(showFirms
+        ? [
+            {
+              id: 'firm',
+              accessorFn: (w) => w.firms?.map((f) => f.name).join(', ') ?? '',
+              header: t('firms.firm'),
+              cell: ({ getValue }) => <div className="min-w-32">{(getValue() as string) || '—'}</div>,
             } satisfies ColumnDef<PayrollWorker, unknown>,
           ]
         : []),
@@ -170,7 +188,7 @@ function PayrollView({ me }: { me: Me }) {
         ),
       },
     ],
-    [t, format, currency, showDepartments, tree],
+    [t, format, currency, showDepartments, tree, showFirms],
   );
 
   const monthName = format.month(month.year, month.month);
@@ -225,6 +243,7 @@ function PayrollView({ me }: { me: Me }) {
             workerSearchText(w.worker),
             ...payrollSiteNames(w),
             showDepartments && w.department ? departmentPaths.get(w.department.id) : null,
+            ...(showFirms ? (w.firms ?? []).map((f) => f.name) : []),
           ]
             .filter(Boolean)
             .join(' ')
@@ -236,6 +255,7 @@ function PayrollView({ me }: { me: Me }) {
             {showDepartments && (
               <DepartmentFilter departments={departments.data ?? []} value={departmentFilter} onChange={setDepartmentFilter} />
             )}
+            {showFirms && <FirmFilter firms={firms.data ?? []} value={firmFilter} onChange={setFirmFilter} />}
             <Select value={problemFilter} onValueChange={(v) => setProblemFilter(v as typeof problemFilter)}>
               <SelectTrigger className="w-full sm:w-44" aria-label={t('payroll.problemsFilter')}>
                 <SelectValue />
@@ -267,6 +287,7 @@ function PayrollView({ me }: { me: Me }) {
       {showDepartments && data.data && data.data.departments.length > 0 && (
         <DepartmentTotals totals={data.data.departments} tree={tree} currency={currency} />
       )}
+      {showFirms && data.data && data.data.firms.length > 0 && <FirmTotals totals={data.data.firms} currency={currency} />}
       {data.data && data.data.locks.length > 0 && <LockHistory locks={data.data.locks} currency={currency} />}
       {open && <PayslipDialog worker={open} month={month} currency={currency} onClose={() => setOpen(null)} />}
       {data.data && (
@@ -435,6 +456,58 @@ function DepartmentTotals({
   );
 }
 
+/** The month's pay per firm, and together per type. A worker who moved between firms counts in both. */
+function FirmTotals({ totals, currency }: { totals: FirmTotal[]; currency: string }) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const columns = useMemo<ColumnDef<FirmTotal, unknown>[]>(
+    () => [
+      {
+        id: 'firm',
+        header: t('firms.firm'),
+        enableSorting: false,
+        cell: ({ row }) => row.original.firm?.name ?? t('firms.none'),
+      },
+      {
+        id: 'type',
+        header: t('firms.type'),
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.firm ? <StatusBadge tone="info">{t(`firms.types.${row.original.firm.type}`)}</StatusBadge> : '—',
+      },
+      {
+        id: 'workers',
+        header: t('firms.workers'),
+        enableSorting: false,
+        cell: ({ row }) => <span className="tabular-nums">{row.original.workers}</span>,
+      },
+      {
+        id: 'total',
+        header: t('payroll.pay'),
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold tabular-nums">{format.money(row.original.total, currency)}</span>
+            {row.original.withProblems > 0 && (
+              <StatusBadge tone="warning">{t('payroll.workersWithProblems', { count: row.original.withProblems })}</StatusBadge>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [t, format, currency],
+  );
+  return (
+    <section className="mt-4 space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold">{t('payroll.byFirm')}</h2>
+        <p className="text-sm text-muted-foreground">{t('payroll.byFirmHint')}</p>
+      </div>
+      <DataTable columns={columns} data={totals} />
+    </section>
+  );
+}
+
 /** Every lock of the month, what changed since the lock before, and why it was reopened. */
 function LockHistory({ locks, currency }: { locks: LockItem[]; currency: string }) {
   const { t } = useTranslation();
@@ -508,6 +581,7 @@ function PayslipDialog({
   const { t } = useTranslation();
   const format = useFormat();
   const me = useMe().data;
+  const payslips = payslipsOf(worker);
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-2xl">
@@ -537,15 +611,33 @@ function PayslipDialog({
           </section>
         ) : (
           <>
-            {worker.parts.map((part, i) => (
-              <PartView
-                key={i}
-                part={part}
-                currency={currency}
-                showHeading={worker.parts.length > 1 || part.ruleSetSiteName !== null || Boolean(part.shift)}
-              />
+            {payslips.map((slip, slipIndex) => (
+              <div key={slip.firm?.id ?? slipIndex} className="space-y-4">
+                {slip.firm && (
+                  <h3 className="flex flex-wrap items-center gap-2 font-semibold">
+                    {slip.firm.name}
+                    <StatusBadge tone="info">{t(`firms.types.${slip.firm.type}`)}</StatusBadge>
+                  </h3>
+                )}
+                {slip.parts.map((part, i) => (
+                  <PartView
+                    key={i}
+                    part={part}
+                    currency={currency}
+                    showHeading={
+                      slip.parts.length > 1 || part.ruleSetSiteName !== null || Boolean(part.ruleSetFirmName) || Boolean(part.shift)
+                    }
+                  />
+                ))}
+                <PayOutView payOut={slip.payOut} currency={currency} showEarned={slip.parts.length > 1} />
+              </div>
             ))}
-            <PayOutView payOut={worker.payOut!} currency={currency} showEarned={worker.parts.length > 1} />
+            {payslips.length > 1 && (
+              <div className="flex items-baseline justify-between border-t pt-4">
+                <span className="font-medium">{t('payroll.payslipsTotal')}</span>
+                <span className="text-lg font-semibold tabular-nums">{format.money(worker.total!, currency)}</span>
+              </div>
+            )}
             {canAddAdjustments(me) && (
               <Link to="/adjustments" className="text-sm underline underline-offset-4">
                 {t('payroll.goToAdjustments')}
@@ -562,6 +654,8 @@ function ProblemText({ problem }: { problem: PayrollProblem }) {
   const { t } = useTranslation();
   const format = useFormat();
   switch (problem.code) {
+    case 'noSalary':
+      return problem.firmName ? t('payroll.problems.noSalaryInFirm', { firm: problem.firmName }) : t('payroll.problems.noSalary');
     case 'placementWithoutHours':
       return problem.until
         ? t('payroll.problems.daysWithoutHours', {
@@ -644,7 +738,11 @@ function PartView({ part, currency, showHeading }: { part: PayrollPart; currency
       {showHeading && (
         <h3 className="text-sm font-medium">
           {[
-            part.ruleSetSiteName ? t('payroll.siteRules', { site: part.ruleSetSiteName }) : t('payroll.defaultRules'),
+            part.ruleSetFirmName
+              ? t('payroll.firmRules', { firm: part.ruleSetFirmName })
+              : part.ruleSetSiteName
+                ? t('payroll.siteRules', { site: part.ruleSetSiteName })
+                : t('payroll.defaultRules'),
             part.days && t('monthlyHours.fromUntil', { from: format.date(part.days.from), until: format.date(part.days.until) }),
             part.shift && t('workers.shiftWithHours', { name: part.shift.name, hours: format.number(part.shift.normalHoursPerDay) }),
           ]

@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { hoursStatus, matchesAdjustmentFilter, payrollSiteNames, siteChoices, type AdjustmentItem, type PayrollPart } from './payroll';
+import {
+  hoursStatus,
+  matchesAdjustmentFilter,
+  payrollSiteNames,
+  payslipsOf,
+  siteChoices,
+  type AdjustmentItem,
+  type FirmRef,
+  type PayrollPart,
+  type PayrollPayOut,
+} from './payroll';
 
 const entry = {} as never;
 const part = (...siteNames: string[]) =>
@@ -14,6 +24,30 @@ describe('payrollSiteNames', () => {
 
   it('reads the pay parts of a month locked before sites were saved, each site once', () => {
     expect(payrollSiteNames({ parts: [part('North', 'South'), part('North')] })).toEqual(['North', 'South']);
+  });
+});
+
+describe('payslipsOf', () => {
+  const payOut = { total: '100.00' } as PayrollPayOut;
+  const firm = (id: string): FirmRef => ({ id, name: id, type: 'OWN' });
+
+  it('gives each firm its own parts', () => {
+    const first = { firm: firm('a') } as PayrollPart;
+    const second = { firm: firm('b') } as PayrollPart;
+    const slip = (id: string) => ({ firm: firm(id), salary: null, payOut, total: '100.00' });
+    const slips = payslipsOf({ parts: [first, second], payOut: null, payslips: [slip('a'), slip('b')], salary: null, total: '200.00' });
+    expect(slips.map((s) => s.parts)).toEqual([[first], [second]]);
+  });
+
+  it('reads the one pay-out of a month locked before firms', () => {
+    const parts = [{} as PayrollPart];
+    expect(payslipsOf({ parts, payOut, salary: null, total: '100.00' })).toEqual([
+      { firm: null, salary: null, payOut, total: '100.00', parts },
+    ]);
+  });
+
+  it('has none while the worker cannot be paid', () => {
+    expect(payslipsOf({ parts: [], payOut: null, salary: null, total: null })).toEqual([]);
   });
 });
 

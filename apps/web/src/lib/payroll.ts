@@ -1,5 +1,5 @@
 import type { MonthlyTotals, PayOut, PayOutAdjustment, PayResult, TotalsProblem } from '@puantaj/payroll';
-import type { AdjustmentType, YearMonth } from '@puantaj/schemas';
+import type { AdjustmentType, FirmType, YearMonth } from '@puantaj/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
 import type { ShiftInfo } from './organisation';
@@ -64,7 +64,9 @@ export interface MonthlyHoursMonth {
 }
 
 export type PayrollProblem =
-  | { code: 'noSalary' }
+  /** firmName: the firm without a salary, while the company uses firms */
+  | { code: 'noSalary'; firmName?: string }
+  | { code: 'adjustmentWithoutFirm' }
   | { code: 'noHours' }
   | { code: 'twoSources' }
   /** until is absent in months locked before shifts */
@@ -80,9 +82,19 @@ export interface PlaceLabel {
   until: string | null;
 }
 
+/** A firm as a pay result names it. */
+export interface FirmRef {
+  id: string;
+  name: string;
+  type: FirmType;
+}
+
 export interface PayrollPart {
-  /** null: the company default rules */
+  /** null: the company default rules, or the firm's when ruleSetFirmName is there */
   ruleSetSiteName: string | null;
+  ruleSetFirmName?: string;
+  /** The firm whose payslip it is on; absent while the company doesn't use firms */
+  firm?: FirmRef | null;
   /** The part's shift, or null: the rules' normal hours. Absent in months locked before shifts. */
   shift?: Pick<ShiftInfo, 'name' | 'normalHoursPerDay'> | null;
   /** The part's days. Absent in months locked before shifts. */
@@ -98,18 +110,32 @@ export interface PayrollPayOut extends Omit<PayOut, 'adjustments'> {
   adjustments: (PayOutAdjustment & { note: string | null })[];
 }
 
+/** What one firm pays the worker for the month; without firms, the worker's one payslip. */
+export interface PayrollPayslip {
+  firm: FirmRef | null;
+  salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
+  payOut: PayrollPayOut;
+  total: string;
+}
+
 export interface PayrollWorker {
   worker: WorkerName;
   /** The worker's department of the month (of their last placement in it); absent in months locked before departments */
   department?: { id: string; name: string } | null;
   /** Sites of the worker's placements in the month; absent in months locked before this was saved */
   siteNames?: string[];
+  /** Firms of the worker's placements in the month; absent while the company doesn't use firms and in months locked before them */
+  firms?: FirmRef[];
+  /** The salary of the firm of the last placement in the month */
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
   source: 'DAILY' | 'IMPORT' | 'TOTALS' | null;
   /** Days of an imported month changed by hand since the import; absent when none */
   editedDays?: number;
   parts: PayrollPart[];
+  /** null while there are problems, and with more than one payslip */
   payOut: PayrollPayOut | null;
+  /** One per firm; absent in months locked before firms (payslipsOf reads those too) */
+  payslips?: PayrollPayslip[];
   /** The amount to pay out; null while there are problems. Below zero: the worker owes it. */
   total: string | null;
   problems: PayrollProblem[];
@@ -137,6 +163,8 @@ export interface PayrollMonth {
   workers: PayrollWorker[];
   /** Totals per department with workers this month, a department's including its sub-departments */
   departments: DepartmentTotal[];
+  /** Totals per firm with workers this month */
+  firms: FirmTotal[];
   /** Oldest first */
   locks: LockItem[];
 }
@@ -150,8 +178,19 @@ export interface DepartmentTotal {
   total: string;
 }
 
+/** A firm's workers and pay in the month; firm null: workers with a placement without a firm. */
+export interface FirmTotal {
+  firm: FirmRef | null;
+  workers: number;
+  /** Not in the total: they can't be paid yet */
+  withProblems: number;
+  total: string;
+}
+
 export interface AdjustmentItem {
   id: string;
+  /** The payslip it belongs to; null: no firm named */
+  firm: { id: string; name: string } | null;
   type: AdjustmentType;
   /** Always positive; the type gives the sign */
   amount: string;
@@ -169,6 +208,8 @@ export interface AdjustmentsRow {
   siteNames: string[];
   /** The department of the worker's last placement in the month, as in the payroll run; null: none */
   departmentId: string | null;
+  /** The firms of the worker's placements in the month; empty while the company doesn't use them */
+  firms: { id: string; name: string }[];
   /** Newest first */
   adjustments: AdjustmentItem[];
   /** Signed sum of the adjustments that count */
@@ -213,6 +254,17 @@ export function usePayroll({ year, month }: YearMonth) {
 /** A worker's sites in the month. A month locked before they were saved has them in its pay parts. */
 export function payrollSiteNames(w: Pick<PayrollWorker, 'siteNames' | 'parts'>): string[] {
   return w.siteNames ?? [...new Set(w.parts.flatMap((p) => Object.values(p.places).map((place) => place.siteName)))];
+}
+
+/**
+ * A worker's payslips, each with its parts in the order of their days. A month locked before
+ * firms has one, read from the worker's own pay-out.
+ */
+export function payslipsOf(w: Pick<PayrollWorker, 'parts' | 'payOut' | 'payslips' | 'salary' | 'total'>): (PayrollPayslip & { parts: PayrollPart[] })[] {
+  if (w.payslips) {
+    return w.payslips.map((slip) => ({ ...slip, parts: w.parts.filter((p) => (p.firm?.id ?? null) === (slip.firm?.id ?? null)) }));
+  }
+  return w.payOut ? [{ firm: null, salary: w.salary, payOut: w.payOut, total: w.total!, parts: w.parts }] : [];
 }
 
 /** Each name once, sorted, as a site filter offers them. */

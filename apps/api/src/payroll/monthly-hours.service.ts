@@ -205,7 +205,8 @@ export class MonthlyHoursService {
       if (!part) throw conflict('monthlyHours.partChanged');
 
       const totals: MonthlyTotals = Object.fromEntries(TOTAL_FIELDS.map((f) => [f, input[f]])) as unknown as MonthlyTotals;
-      await this.assertFitsPart(tx, companyId, placement.siteId, year, month, part, totals);
+      const firmId = auth.company.firms ? placement.firmId : null;
+      await this.assertFitsPart(tx, companyId, { siteId: placement.siteId, firmId }, year, month, part, totals);
 
       const previous = await tx.monthlyHours.findFirst({
         where: { assignmentId, year, month, fromDay: dayToDate(part.from), untilDay: dayToDate(part.until) },
@@ -260,23 +261,23 @@ export class MonthlyHoursService {
   }
 
   /**
-   * The totals must fit the part's days under the rules of the placement's site, with the
+   * The totals must fit the part's days under the rules of the placement, with the
    * part's shift's normal hours (the rule set's without a shift).
    */
   private async assertFitsPart(
     tx: Tx,
     companyId: string,
-    siteId: string,
+    placement: { siteId: string; firmId: string | null },
     year: number,
     month: number,
     part: ShiftPart,
     totals: MonthlyTotals,
   ) {
-    const set = await this.rules.ruleSetForSite(companyId, siteId, tx);
+    const set = await this.rules.ruleSetForPlacement(companyId, placement, year, month, tx);
     const m = set && (await this.rules.month(companyId, set.id, year, month, tx));
     if (!m?.rules || !m.calendar) throw conflict('payRules.notSet');
     const normalHoursPerDay = part.shiftInfo?.normalHoursPerDay ?? m.rules.settings.normalHoursPerDay;
-    const issues = checkTotals([{ place: siteId, totals }], spanCalendar(m.calendar, part), normalHoursPerDay);
+    const issues = checkTotals([{ place: placement.siteId, totals }], spanCalendar(m.calendar, part), normalHoursPerDay);
     if (issues.length > 0) throw badRequest('validation', { issues: issues.map((i) => PROBLEM_FIELDS[i.problem]) });
   }
 }

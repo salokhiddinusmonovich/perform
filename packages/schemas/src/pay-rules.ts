@@ -105,6 +105,11 @@ export const payRulesSchema = z.object({
 export type PayRulesInput = z.input<typeof payRulesSchema>;
 export type PayRules = z.output<typeof payRulesSchema>;
 
+/** A firm's own rules (AGENTS.md: Firms): the rounding step stays company-wide. */
+export const firmPayRulesSchema = payRulesSchema.omit({ payRoundingStep: true });
+export type FirmPayRulesInput = z.input<typeof firmPayRulesSchema>;
+export type FirmPayRules = z.output<typeof firmPayRulesSchema>;
+
 /**
  * What a new company's rules form starts with: only the decided defaults
  * (AGENTS.md). Rest weekdays, normal hours, the multipliers and the travel pay

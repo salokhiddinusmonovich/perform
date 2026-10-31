@@ -33,7 +33,8 @@
     "codes": "Codes",
     "shifts": "Shifts",
     "departments": "Departments",
-    "import": "Excel import"
+    "import": "Excel import",
+    "firms": "Firms"
   },
   "settings": {
     "language": "Language",
@@ -420,7 +421,9 @@
     "placement": {
       "notFound": "Placement not found.",
       "hasDepartment": "This placement already has a department. Moving to another one is a move from a day.",
-      "departmentFromTeam": "This worker is in a brigade: set the brigade’s department instead."
+      "departmentFromTeam": "This worker is in a brigade: set the brigade’s department instead.",
+      "hasFirm": "This placement already has a firm. Moving to another one is a move from a day.",
+      "noFirm": "A placement this month has no firm yet. Set it first."
     },
     "monthlyHours": {
       "notInMonth": "The worker wasn’t at this site in this month.",
@@ -430,7 +433,8 @@
     "adjustment": {
       "notInMonth": "The worker wasn’t employed in this month.",
       "notFound": "This adjustment doesn’t exist.",
-      "alreadyCancelled": "This adjustment is already cancelled."
+      "alreadyCancelled": "This adjustment is already cancelled.",
+      "firmNotInMonth": "This worker has no placement in that firm this month."
     },
     "hours": {
       "otherSource": "The worker has daily timesheet entries this month. A month’s hours come from one source only.",
@@ -496,7 +500,15 @@
       "hireAfterExit": "The exit date is before the hire date “{{value}}”: the worker is placed from their first day in the month until the exit date.",
       "exitFromCode": "No exit date: the last working day is the day before “{{value}}”.",
       "overwritesEdits": "Days changed by hand in the app will be overwritten by the file.",
-      "blankAsAbsent": "Empty cells read as unexcused absence."
+      "blankAsAbsent": "Empty cells read as unexcused absence.",
+      "firmNotFound": "There is no firm “{{value}}” in the app. Add it first."
+    },
+    "firm": {
+      "notFound": "This firm doesn’t exist.",
+      "nameTaken": "A firm with this name already exists.",
+      "inactive": "This firm is closed.",
+      "hasWorkers": "Workers are placed in this firm, now or from a later day. Move them first.",
+      "noneActive": "Add a firm before switching firms on."
     }
   },
   "payRules": {
@@ -817,7 +829,11 @@
     "departmentOfTeam": "The brigade’s department",
     "employeeNumber": "Employee number",
     "employeeNumberHint": "The company’s own number, e.g. from the timesheet. Excel imports find the worker by it.",
-    "employeeNumberShort": "No. {{number}}"
+    "employeeNumberShort": "No. {{number}}",
+    "setFirm": "Set firm",
+    "setFirmHint": "This placement has no firm yet. If one of its months is locked, move the worker to the firm from a day instead.",
+    "firmHint": "Moving to another firm is an exit from this one and a hire in the new one, from the day below.",
+    "salaryFirmHint": "A worker who moves firms needs a salary in the new firm."
   },
   "impersonation": {
     "banner": "You are logged in as {{name}}.",
@@ -1009,7 +1025,8 @@
     "cancelSubmit": "Cancel entry",
     "filterAll": "All workers",
     "filterAny": "With adjustments",
-    "filterCancelled": "With cancelled"
+    "filterCancelled": "With cancelled",
+    "firmHint": "This worker has more than one firm this month. Choose whose payslip this goes on."
   },
   "payroll": {
     "title": "Pay calculation",
@@ -1041,7 +1058,9 @@
       "noCompanyRules": "The company’s pay rules for this month are missing. They hold the rounding step.",
       "totalsInvalid": "The monthly hours don’t fit the month (the pay rules may have changed):",
       "invalidHours": "The daily timesheet entries contradict each other.",
-      "daysWithoutHours": "No hours for {{site}} ({{from}} – {{until}})."
+      "daysWithoutHours": "No hours for {{site}} ({{from}} – {{until}}).",
+      "noSalaryInFirm": "No salary in {{firm}} for this month.",
+      "adjustmentWithoutFirm": "An adjustment isn’t on any firm’s payslip. Cancel it and add it again with its firm."
     },
     "totalsProblems": {
       "NORMAL_ABOVE_DAYS_WORKED": "more normal hours than the working days worked × normal hours per day",
@@ -1105,7 +1124,11 @@
     "filterProblems": "With problems",
     "filterNoProblems": "No problems",
     "filterAllSources": "All sources",
-    "problemsFilter": "Problems"
+    "problemsFilter": "Problems",
+    "byFirm": "By firm",
+    "byFirmHint": "A worker who moved between firms counts in both, with what each firm pays.",
+    "firmRules": "Rules of {{firm}}",
+    "payslipsTotal": "Total from all firms"
   },
   "timesheet": {
     "title": "Timesheet",
@@ -1345,7 +1368,8 @@
       "hiredOn": "Hire date",
       "leftOn": "Last working day",
       "salary": "Monthly salary",
-      "shift": "Shift"
+      "shift": "Shift",
+      "firm": "Firm"
     },
     "note": "Note",
     "noteCount": "Notes: {{count}}",
@@ -1356,5 +1380,74 @@
       "PROBLEM": "Problem: fill them in the file",
       "ABSENT": "Unexcused absence (unpaid)"
     }
+  },
+  "firms": {
+    "title": "Firms",
+    "description": "Your own companies and your subcontractors. A worker’s placement says which firm employs them.",
+    "firm": "Firm",
+    "create": "Add firm",
+    "edit": "Edit firm",
+    "close": "Close firm",
+    "reopen": "Reopen firm",
+    "name": "Name",
+    "type": "Type",
+    "typeHint": "Only for filters and totals. It doesn’t change how pay is worked out.",
+    "chooseType": "Choose a type",
+    "choose": "Choose a firm",
+    "types": {
+      "OWN": "Own company",
+      "SUBCONTRACTOR": "Subcontractor"
+    },
+    "workers": "Workers",
+    "status": "Status",
+    "active": "Active",
+    "closed": "Closed",
+    "all": "All firms",
+    "none": "No firm",
+    "allOfType": {
+      "OWN": "All own companies",
+      "SUBCONTRACTOR": "All subcontractors"
+    },
+    "empty": "No firms yet",
+    "emptyDescription": "Add your own companies and subcontractors, then switch firms on.",
+    "dialogDescription": "Firms are shared by all sites.",
+    "use": "Use firms",
+    "useHint": "When on, every new placement needs a firm, salaries are entered per firm, and a worker who moves between firms gets a payslip from each. Workers already placed keep working; those without a firm are marked until one is set.",
+    "useNeedsOne": "Add a firm first, then switch them on.",
+    "listLink": "Open the firm list",
+    "on": "Switched on",
+    "off": "Switched off",
+    "onHint": "Every new placement needs a firm.",
+    "offHint": "Workers and payroll don’t show firms yet.",
+    "settingLink": "Change in Company settings",
+    "switchOn": "Switch on",
+    "switchOff": "Switch off",
+    "missingLink": "Set it on the Workers page",
+    "confirmOn": {
+      "title": "Switch firms on?",
+      "description": "Every new placement will need a firm, and new salaries will be entered per firm.",
+      "missing": "Workers placed now without a firm: {{count}}. They keep working and are marked until one is set."
+    },
+    "confirmOff": {
+      "title": "Switch firms off?",
+      "description": "Firms will be hidden and pay in open months will no longer be split by firm. Locked months don’t change."
+    },
+    "confirmClose": {
+      "title": "Close this firm?",
+      "description": "“{{name}}” will no longer be offered for new placements. Its history stays."
+    },
+    "confirmReopen": {
+      "title": "Reopen this firm?",
+      "description": "“{{name}}” will be offered for new placements again."
+    },
+    "payRules": "Pay rules",
+    "workingDays": "Working days",
+    "payRulesTitle": "Pay rules: {{name}}",
+    "payRulesDescription": "Rules for this firm’s workers, in place of the site’s or the company’s, from the month you choose. Rounding stays the company’s.",
+    "workingDaysTitle": "Working days: {{name}}",
+    "workingDaysDescription": "Working days under this firm’s own rules.",
+    "rulesEmptyTitle": "This firm has no rules of its own",
+    "rulesEmptyDescription": "Its workers follow the rules of their site or the company. Add rules only if this firm pays differently.",
+    "missing": "Workers without a firm: {{count}}"
   }
 }

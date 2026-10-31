@@ -209,6 +209,9 @@ describe('workers', () => {
         // The company doesn't use departments, and the team has none.
         departmentId: null,
         departmentName: null,
+        firmId: null,
+        firmName: null,
+        firmType: null,
         from: '2026-09-01',
         until: null,
       },

@@ -33,7 +33,8 @@
     "codes": "Kodlar",
     "shifts": "Vardiyalar",
     "departments": "Bölümler",
-    "import": "Excel’den aktar"
+    "import": "Excel’den aktar",
+    "firms": "Firmalar"
   },
   "settings": {
     "language": "Dil",
@@ -420,7 +421,9 @@
     "placement": {
       "notFound": "Görevlendirme bulunamadı.",
       "hasDepartment": "Bu görevlendirmenin zaten bir bölümü var. Başka birine geçmek, bir günden itibaren nakildir.",
-      "departmentFromTeam": "Bu çalışan bir ekipte: bunun yerine ekibin bölümünü belirleyin."
+      "departmentFromTeam": "Bu çalışan bir ekipte: bunun yerine ekibin bölümünü belirleyin.",
+      "hasFirm": "Bu görev yerinin zaten firması var. Başka firmaya geçiş, belirli bir günden itibaren taşımadır.",
+      "noFirm": "Bu ayki görev yerinin henüz firması yok. Önce belirleyin."
     },
     "monthlyHours": {
       "notInMonth": "İşçi bu ay bu şantiyede çalışmadı.",
@@ -430,7 +433,8 @@
     "adjustment": {
       "notInMonth": "İşçi bu ay çalışmadı.",
       "notFound": "Böyle bir kayıt yok.",
-      "alreadyCancelled": "Bu kayıt zaten iptal edildi."
+      "alreadyCancelled": "Bu kayıt zaten iptal edildi.",
+      "firmNotInMonth": "İşçinin bu ay o firmada görev yeri yok."
     },
     "hours": {
       "otherSource": "İşçinin bu ay için günlük puantajı var. Bir ayın saatleri yalnızca tek bir kaynaktan gelir.",
@@ -496,7 +500,15 @@
       "hireAfterExit": "Çıkış tarihi, giriş tarihinden “{{value}}” önce: işçi aydaki ilk gününden çıkış tarihine kadar yerleştirilir.",
       "exitFromCode": "Çıkış tarihi yok: son çalışma günü “{{value}}” yazan günden önceki gündür.",
       "overwritesEdits": "Uygulamada elle değiştirilen günlerin üzerine dosyadaki değerler yazılacak.",
-      "blankAsAbsent": "Boş hücreler mazeretsiz devamsızlık olarak okundu."
+      "blankAsAbsent": "Boş hücreler mazeretsiz devamsızlık olarak okundu.",
+      "firmNotFound": "Uygulamada “{{value}}” firması yok. Önce ekleyin."
+    },
+    "firm": {
+      "notFound": "Böyle bir firma yok.",
+      "nameTaken": "Bu adla bir firma zaten var.",
+      "inactive": "Bu firma kapalı.",
+      "hasWorkers": "Bu firmada şimdi veya ileri bir günden itibaren işçi var. Önce onları taşıyın.",
+      "noneActive": "Firmaları açmadan önce bir firma ekleyin."
     }
   },
   "payRules": {
@@ -817,7 +829,11 @@
     "departmentOfTeam": "Ekibin bölümü",
     "employeeNumber": "Sicil no",
     "employeeNumberHint": "Şirketin kendi numarası, örneğin puantajdaki. Excel aktarımı işçiyi bununla bulur.",
-    "employeeNumberShort": "Sicil {{number}}"
+    "employeeNumberShort": "Sicil {{number}}",
+    "setFirm": "Firma belirle",
+    "setFirmHint": "Bu görev yerinin henüz firması yok. Aylarından biri kilitliyse işçiyi belirli bir günden itibaren firmaya taşıyın.",
+    "firmHint": "Başka firmaya geçiş, aşağıdaki günden itibaren bu firmadan çıkış ve yenisine giriştir.",
+    "salaryFirmHint": "Firma değiştiren işçinin yeni firmada ücreti olmalıdır."
   },
   "impersonation": {
     "banner": "{{name}} olarak giriş yaptınız.",
@@ -1009,7 +1025,8 @@
     "cancelSubmit": "Kaydı iptal et",
     "filterAll": "Tüm işçiler",
     "filterAny": "Düzeltmesi olan",
-    "filterCancelled": "İptal edileni olan"
+    "filterCancelled": "İptal edileni olan",
+    "firmHint": "Bu ay işçinin birden fazla firması var. Hangi firmanın bordrosuna gireceğini seçin."
   },
   "payroll": {
     "title": "Maaş hesabı",
@@ -1041,7 +1058,9 @@
       "noCompanyRules": "Şirketin bu ay için ödeme kuralları yok. Yuvarlama adımı bu kurallarda.",
       "totalsInvalid": "Aylık saatler aya uymuyor (ödeme kuralları değişmiş olabilir):",
       "invalidHours": "Günlük puantaj kayıtları birbiriyle çelişiyor.",
-      "daysWithoutHours": "{{site}} için saat yok ({{from}} – {{until}})."
+      "daysWithoutHours": "{{site}} için saat yok ({{from}} – {{until}}).",
+      "noSalaryInFirm": "Bu ay için {{firm}} firmasında ücret yok.",
+      "adjustmentWithoutFirm": "Bir düzeltme hiçbir firmanın bordrosuna girmiyor. İptal edip firmasıyla yeniden ekleyin."
     },
     "totalsProblems": {
       "NORMAL_ABOVE_DAYS_WORKED": "normal saatler çalışılan iş günü × günlük normalden fazla",
@@ -1105,7 +1124,11 @@
     "filterProblems": "Sorunlu",
     "filterNoProblems": "Sorunsuz",
     "filterAllSources": "Tüm kaynaklar",
-    "problemsFilter": "Sorunlar"
+    "problemsFilter": "Sorunlar",
+    "byFirm": "Firmalara göre",
+    "byFirmHint": "Firmalar arasında geçen işçi, her firmanın ödediği tutarla ikisinde de sayılır.",
+    "firmRules": "{{firm}} kuralları",
+    "payslipsTotal": "Tüm firmalardan toplam"
   },
   "timesheet": {
     "title": "Puantaj",
@@ -1345,7 +1368,8 @@
       "hiredOn": "Giriş tarihi",
       "leftOn": "Son çalışma günü",
       "salary": "Aylık ücret",
-      "shift": "Vardiya"
+      "shift": "Vardiya",
+      "firm": "Firma"
     },
     "note": "Not",
     "noteCount": "Not: {{count}}",
@@ -1356,5 +1380,74 @@
       "PROBLEM": "Sorun: dosyada doldurulsun",
       "ABSENT": "Mazeretsiz devamsızlık (ücretsiz)"
     }
+  },
+  "firms": {
+    "title": "Firmalar",
+    "description": "Kendi firmalarınız ve taşeronlarınız. İşçinin görev yeri, onu hangi firmanın istihdam ettiğini gösterir.",
+    "firm": "Firma",
+    "create": "Firma ekle",
+    "edit": "Firmayı düzenle",
+    "close": "Firmayı kapat",
+    "reopen": "Firmayı yeniden aç",
+    "name": "Ad",
+    "type": "Tür",
+    "typeHint": "Yalnızca filtre ve toplamlar için. Ücret hesabını değiştirmez.",
+    "chooseType": "Tür seçin",
+    "choose": "Firma seçin",
+    "types": {
+      "OWN": "Kendi firmamız",
+      "SUBCONTRACTOR": "Taşeron"
+    },
+    "workers": "İşçiler",
+    "status": "Durum",
+    "active": "Aktif",
+    "closed": "Kapalı",
+    "all": "Tüm firmalar",
+    "none": "Firmasız",
+    "allOfType": {
+      "OWN": "Tüm kendi firmalarımız",
+      "SUBCONTRACTOR": "Tüm taşeronlar"
+    },
+    "empty": "Henüz firma yok",
+    "emptyDescription": "Kendi firmalarınızı ve taşeronlarınızı ekleyin, sonra firmaları açın.",
+    "dialogDescription": "Firmalar tüm şantiyeler için ortaktır.",
+    "use": "Firmaları kullan",
+    "useHint": "Açıkken her yeni görev yeri için firma gerekir, ücretler firmaya göre girilir ve firmalar arasında geçen işçi her birinden ayrı bordro alır. Görevdeki işçiler çalışmaya devam eder; firması olmayanlar işaretlenir.",
+    "useNeedsOne": "Önce bir firma ekleyin, sonra açın.",
+    "listLink": "Firma listesini aç",
+    "on": "Açık",
+    "off": "Kapalı",
+    "onHint": "Her yeni görev yeri için firma gerekir.",
+    "offHint": "İşçilerde ve bordroda firmalar henüz görünmüyor.",
+    "settingLink": "Şirket ayarlarından değiştir",
+    "switchOn": "Aç",
+    "switchOff": "Kapat",
+    "missingLink": "İşçiler sayfasından belirleyin",
+    "confirmOn": {
+      "title": "Firmalar açılsın mı?",
+      "description": "Her yeni görev yeri için firma gerekecek, yeni ücretler firmaya göre girilecek.",
+      "missing": "Şu an firmasız görevli işçiler: {{count}}. Çalışmaya devam ederler ve firma belirlenene kadar işaretli kalırlar."
+    },
+    "confirmOff": {
+      "title": "Firmalar kapatılsın mı?",
+      "description": "Firmalar gizlenecek ve açık aylarda ücret firmaya göre bölünmeyecek. Kilitli aylar değişmez."
+    },
+    "confirmClose": {
+      "title": "Bu firma kapatılsın mı?",
+      "description": "“{{name}}” yeni görev yerleri için sunulmayacak. Geçmişi korunur."
+    },
+    "confirmReopen": {
+      "title": "Bu firma yeniden açılsın mı?",
+      "description": "“{{name}}” yeni görev yerleri için yeniden sunulacak."
+    },
+    "payRules": "Ücret kuralları",
+    "workingDays": "Çalışma günleri",
+    "payRulesTitle": "Ücret kuralları: {{name}}",
+    "payRulesDescription": "Seçtiğiniz aydan itibaren bu firmanın işçileri için şantiye veya şirket kuralları yerine geçer. Yuvarlama şirketin olarak kalır.",
+    "workingDaysTitle": "Çalışma günleri: {{name}}",
+    "workingDaysDescription": "Bu firmanın kendi kurallarına göre çalışma günleri.",
+    "rulesEmptyTitle": "Bu firmanın kendi kuralları yok",
+    "rulesEmptyDescription": "İşçileri şantiye veya şirket kurallarına uyar. Yalnızca bu firma farklı ödüyorsa kural ekleyin.",
+    "missing": "Firmasız işçiler: {{count}}"
   }
 }

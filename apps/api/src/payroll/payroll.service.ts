@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type MonthlyHours as MonthlyHoursRow } from '@prisma/client';
+import { Prisma, type FirmType, type MonthlyHours as MonthlyHoursRow } from '@prisma/client';
 import {
   calculatePay,
   checkTotals,
@@ -21,7 +21,7 @@ import { inMonth, isoDay, monthSpan, todayIn } from '../common/dates';
 import { seesPlacement } from '../organisation/access';
 import { subtreeIds } from '../organisation/departments.service';
 import { placementDaysIn, shiftPartsOf, type ShiftPart } from '../organisation/worker-shifts';
-import { SALARY_ORDER } from '../organisation/workers.service';
+import { SALARY_ORDER, salaryForFirm } from '../organisation/workers.service';
 import { lockCompanyMonths } from '../pay-rules/months';
 import { PayRulesService, type MonthRules, type StoredPayRules } from '../pay-rules/pay-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -30,7 +30,10 @@ import { toTotals } from './monthly-hours.service';
 
 /** Why a worker's month can't be paid yet. Missing or contradictory data is never guessed. */
 export type PayrollProblem =
-  | { code: 'noSalary' }
+  /** firmName: the firm without a salary, while the company uses firms */
+  | { code: 'noSalary'; firmName?: string }
+  /** An adjustment names no firm, or one without a payslip this month, so it fits no payslip (AGENTS.md: Firms) */
+  | { code: 'adjustmentWithoutFirm' }
   | { code: 'noHours' }
   /** Hours come from more than one of daily entries, an Excel import and monthly totals: one source per worker-month */
   | { code: 'twoSources' }
@@ -73,8 +76,12 @@ const placeKey = (siteId: string, teamId: string | null) => (teamId ? `${siteId}
  * rule set's rules with the shift's normal hours.
  */
 export interface PayrollPartView {
-  /** Site whose own rules apply, or null: the company default */
+  /** Site whose own rules apply, or null: the company default or a firm's */
   ruleSetSiteName: string | null;
+  /** Firm whose own rules apply; absent otherwise */
+  ruleSetFirmName?: string;
+  /** The firm whose payslip the part is on; absent while the company doesn't use firms */
+  firm?: FirmRef | null;
   /** The part's shift, or null: the rule set's normal hours. Absent in months locked before shifts. */
   shift?: { name: string; normalHoursPerDay: string } | null;
   /** First and last day of the part. Absent in months locked before shifts. */
@@ -92,6 +99,24 @@ export interface PayOutView extends Omit<PayOut, 'adjustments'> {
   adjustments: (PayOutAdjustment & { note: string | null })[];
 }
 
+/** A firm as a pay result names it. */
+export interface FirmRef {
+  id: string;
+  name: string;
+  type: FirmType;
+}
+
+/**
+ * What one firm pays the worker for the month (AGENTS.md: Firms), rounded on its own. Its
+ * parts are the worker's parts with this firm. Without firms, the worker's one payslip.
+ */
+export interface PayslipView {
+  firm: FirmRef | null;
+  salary: { fromYear: number; fromMonth: number; monthlySalary: string };
+  payOut: PayOutView;
+  total: string;
+}
+
 export interface PayrollWorkerView {
   worker: { id: string; employeeNumber: string | null; lastName: string; firstName: string; patronymic: string | null; position: string | null };
   /**
@@ -102,6 +127,9 @@ export interface PayrollWorkerView {
   department?: { id: string; name: string } | null;
   /** Sites of the worker's placements in the month, in placement order; absent in months locked before this was saved */
   siteNames?: string[];
+  /** Firms of the worker's placements in the month; absent while the company doesn't use firms and in months locked before them */
+  firms?: FirmRef[];
+  /** The salary of the firm of the last placement in the month */
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
   /** Where the hours came from (IMPORT: an Excel import, AGENTS.md: Excel import), or null when there are none */
   source: 'DAILY' | 'IMPORT' | 'TOTALS' | null;
@@ -109,9 +137,11 @@ export interface PayrollWorkerView {
   editedDays?: number;
   /** Empty while there are problems */
   parts: PayrollPartView[];
-  /** Earned pay of the parts, adjustments and rounding; null while there are problems */
+  /** Earned pay of the parts, adjustments and rounding; null while there are problems, and with more than one payslip */
   payOut: PayOutView | null;
-  /** The amount to pay out (payOut.total); null while there are problems. Below zero: the worker owes it. */
+  /** One per firm paying the worker this month; empty while there are problems, absent in months locked before firms */
+  payslips?: PayslipView[];
+  /** The amount to pay out (the payslips' totals together); null while there are problems. Below zero: the worker owes it. */
   total: string | null;
   problems: PayrollProblem[];
 }
@@ -152,6 +182,20 @@ export interface DepartmentTotalView {
   total: string;
 }
 
+/**
+ * A firm's workers and pay in the month (AGENTS.md: Firms). A worker who moved between firms
+ * counts in both, each with what that firm pays them.
+ */
+export interface FirmTotalView {
+  /** null: workers with a placement without a firm */
+  firm: FirmRef | null;
+  workers: number;
+  /** Workers that can't be paid yet, so not in the total */
+  withProblems: number;
+  /** Sum of the payslips of this firm */
+  total: string;
+}
+
 export interface PayrollMonthView {
   year: number;
   month: number;
@@ -164,6 +208,8 @@ export interface PayrollMonthView {
   workers: PayrollWorkerView[];
   /** Totals per department with workers this month, a department's including its sub-departments */
   departments: DepartmentTotalView[];
+  /** Totals per firm with workers this month */
+  firms: FirmTotalView[];
   /** Every lock of the month, oldest first */
   locks: LockView[];
 }
@@ -175,6 +221,7 @@ const PLACEMENT_INCLUDE = {
   worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, position: true } },
   site: { select: { name: true } },
   department: { select: { id: true, name: true } },
+  firm: { select: { id: true, name: true, type: true } },
   travelRoute: { select: { name: true, amountPerDay: true } },
 } as const satisfies Prisma.AssignmentInclude;
 
@@ -190,10 +237,10 @@ type PartEntry = Prisma.TimesheetEntryGetPayload<{
 /**
  * Works out every worker's pay for a month with @puantaj/payroll, from salaries, hours
  * (daily entries or monthly totals), pay rules and travel pay. Split by placement
- * (AGENTS.md: Pay model): the worker's placements are grouped by the rule set of their
- * site, and each group is paid under its own rules. Split by shift (AGENTS.md: Shifts):
+ * (AGENTS.md: Pay model): the worker's placements are grouped by their firm and rule set
+ * (AGENTS.md: Firms), and each group is paid under its own rules at its firm's salary. Split by shift (AGENTS.md: Shifts):
  * each group is split again where the worker's shift changes, each part with its shift's
- * normal hours. The parts and the worker's adjustments make the amount to pay out,
+ * normal hours. Per firm, the parts and the adjustments make the amount that firm pays out,
  * rounded once with the company's step.
  */
 @Injectable()
@@ -233,7 +280,7 @@ export class PayrollService {
     // A locked month shows what was locked; only who may see whom is worked out now.
     const workers = locked
       ? snapshots.at(-1)!.workers.filter((w) => visible.has(w.workerId)).map((w) => detailOf(w.detail))
-      : await this.calculate(this.prisma, companyId, ym, sees);
+      : await this.calculate(this.prisma, companyId, ym, sees, auth.company.firms);
 
     return {
       year: ym.year,
@@ -243,6 +290,7 @@ export class PayrollService {
       total: sumTotals(workers),
       workers,
       departments: await this.departmentTotals(companyId, workers),
+      firms: firmTotals(workers),
       locks: snapshots.map((snap, i) => {
         const unlock = unlocks.find((u) => (u.data as { lockNumber?: number }).lockNumber === snap.lockNumber);
         return {
@@ -277,7 +325,7 @@ export class PayrollService {
         const before = await tx.payrollPeriod.findUnique({ where: key });
         if (before?.status === 'LOCKED') throw conflict('period.alreadyLocked');
 
-        const workers = await this.calculate(tx, companyId, ym, () => true);
+        const workers = await this.calculate(tx, companyId, ym, () => true, auth.company.firms);
         const unpaid = workers.filter((w) => w.problems.length > 0).length;
         if (unpaid > 0) throw conflict('period.hasProblems', { workers: unpaid });
 
@@ -380,7 +428,13 @@ export class PayrollService {
   }
 
   /** Every visible worker's pay for the month, worked out now. */
-  private async calculate(db: Db, companyId: string, { year, month }: YearMonth, sees: Sees): Promise<PayrollWorkerView[]> {
+  private async calculate(
+    db: Db,
+    companyId: string,
+    { year, month }: YearMonth,
+    sees: Sees,
+    firmsOn: boolean,
+  ): Promise<PayrollWorkerView[]> {
     const { first, last } = monthSpan(year, month);
     const rows = await db.assignment.findMany({
       where: { AND: [{ companyId }, inMonth(year, month)] },
@@ -430,16 +484,24 @@ export class PayrollService {
     ]);
     const roundingStep = companyRules?.rules?.settings.payRoundingStep ?? null;
 
-    const monthRules = new Map<string, Promise<{ ruleSetId: string | null; siteId: string | null; month: MonthRules | null }>>();
-    const rulesAt = (siteId: string) => {
-      let found = monthRules.get(siteId);
+    /** While the company doesn't use firms, placements count as having none. */
+    const firmOf = (p: Placement): FirmRef | null => (firmsOn ? p.firm : null);
+    const monthRules = new Map<
+      string,
+      Promise<{ ruleSetId: string | null; siteId: string | null; firmId: string | null; month: MonthRules | null }>
+    >();
+    const rulesOf = (p: Placement) => {
+      const firmId = firmOf(p)?.id ?? null;
+      const key = `${p.siteId}/${firmId}`;
+      let found = monthRules.get(key);
       if (!found) {
-        found = this.rules.ruleSetForSite(companyId, siteId, db).then(async (set) => ({
+        found = this.rules.ruleSetForPlacement(companyId, { siteId: p.siteId, firmId }, year, month, db).then(async (set) => ({
           ruleSetId: set?.id ?? null,
           siteId: set?.siteId ?? null,
+          firmId: set?.firmId ?? null,
           month: set ? await this.rules.month(companyId, set.id, year, month, db) : null,
         }));
-        monthRules.set(siteId, found);
+        monthRules.set(key, found);
       }
       return found;
     };
@@ -447,13 +509,17 @@ export class PayrollService {
     const workers: PayrollWorkerView[] = [];
     for (const workerId of workerIds) {
       const own = placements.filter((p) => p.workerId === workerId);
-      const salary = salaries.find((s) => s.workerId === workerId) ?? null;
+      const ownSalaries = salaries.filter((s) => s.workerId === workerId);
+      const salaryOf = (firm: FirmRef | null) => salaryForFirm(ownSalaries, firm?.id ?? null, firmsOn);
+      const ownFirms = [...new Map(own.map((p) => [firmOf(p)?.id ?? null, firmOf(p)])).values()];
+      const salary = salaryOf(firmOf(own.at(-1)!));
       const ownEntries = entries.filter((e) => own.some((p) => p.id === e.assignmentId));
       const view: PayrollWorkerView = {
         worker: own[0].worker,
         // Placements are in the order of their first day.
         department: own.at(-1)!.department,
         siteNames: [...new Set(own.map((p) => p.site.name))],
+        ...(firmsOn ? { firms: ownFirms.filter((f) => f !== null) } : {}),
         salary: salary && {
           fromYear: salary.fromYear,
           fromMonth: salary.fromMonth,
@@ -478,7 +544,9 @@ export class PayrollService {
       else view.problems.push({ code: 'noHours' });
       const edited = editedDays.filter((d) => d.workerId === workerId).length;
       if (edited > 0) view.editedDays = edited;
-      if (!salary) view.problems.push({ code: 'noSalary' });
+      for (const firm of ownFirms) {
+        if (!salaryOf(firm)) view.problems.push(firm ? { code: 'noSalary', firmName: firm.name } : { code: 'noSalary' });
+      }
       if (view.source === 'TOTALS') {
         for (const p of own) {
           for (const part of parts) {
@@ -490,46 +558,69 @@ export class PayrollService {
         }
       }
 
-      // Group the placements by the rule set of their site.
-      const groups = new Map<string, { rules: Awaited<ReturnType<typeof rulesAt>>; placements: Placement[] }>();
+      // Group the placements by their firm and rule set.
+      const groups = new Map<string, { firm: FirmRef | null; rules: Awaited<ReturnType<typeof rulesOf>>; placements: Placement[] }>();
       const withoutRules: string[] = [];
       for (const p of own) {
-        const r = await rulesAt(p.siteId);
+        const r = await rulesOf(p);
         if (!r.ruleSetId || !r.month?.rules) {
           withoutRules.push(p.site.name);
           continue;
         }
-        const group = groups.get(r.ruleSetId);
+        const firm = firmOf(p);
+        const key = `${firm?.id ?? ''}/${r.ruleSetId}`;
+        const group = groups.get(key);
         if (group) group.placements.push(p);
-        else groups.set(r.ruleSetId, { rules: r, placements: [p] });
+        else groups.set(key, { firm, rules: r, placements: [p] });
       }
       if (withoutRules.length > 0) view.problems.push({ code: 'noRules', siteNames: [...new Set(withoutRules)] });
       else if (roundingStep === null) view.problems.push({ code: 'noCompanyRules' });
-      if (view.problems.length > 0 || !salary) continue;
+      if (view.problems.length > 0) continue;
 
-      for (const { rules, placements: inGroup } of groups.values()) {
+      for (const { firm, rules, placements: inGroup } of groups.values()) {
         for (const shiftPart of parts) {
           const inPart = inGroup.filter((p) => placementDaysIn(shiftPart, p));
           if (inPart.length === 0) continue;
-          const part = payPart(view, salary, rules.siteId, rules.month!, shiftPart, inPart, ownEntries, travelAmounts);
+          const part = payPart(view, salaryOf(firm)!, rules, firm, firmsOn, rules.month!, shiftPart, inPart, ownEntries, travelAmounts);
           if (part) view.parts.push(part);
         }
       }
+      // Each adjustment goes to the payslip of its firm; with one payslip, one naming no firm goes there too.
+      const ownAdjustments = adjustments.filter((a) => a.workerId === workerId);
+      const adjustmentsOf = (firm: FirmRef | null) =>
+        firmsOn
+          ? ownAdjustments.filter((a) => a.firmId === (firm?.id ?? null) || (a.firmId === null && ownFirms.length === 1))
+          : ownAdjustments;
+      if (ownFirms.reduce((n, firm) => n + adjustmentsOf(firm).length, 0) !== ownAdjustments.length) {
+        view.problems.push({ code: 'adjustmentWithoutFirm' });
+      }
       if (view.problems.length > 0) view.parts = [];
       else {
-        // Parts in the order of their days.
+        // Parts in the order of their days, payslips in the order of their first part.
         view.parts.sort((a, b) => a.days!.from.localeCompare(b.days!.from));
-        const ownAdjustments = adjustments.filter((a) => a.workerId === workerId);
-        const out = payOut(
-          view.parts.map((p) => p.result),
-          ownAdjustments.map((a) => ({ id: a.id, type: a.type, amount: a.amount.toString() })),
-          roundingStep!,
-        );
-        view.payOut = {
-          ...out,
-          adjustments: out.adjustments.map((a) => ({ ...a, note: ownAdjustments.find((o) => o.id === a.id)!.note })),
-        };
-        view.total = out.total;
+        const firstDay = (firm: FirmRef | null) => view.parts.find((p) => (p.firm?.id ?? null) === (firm?.id ?? null))!.days!.from;
+        view.payslips = [...ownFirms]
+          .sort((a, b) => firstDay(a).localeCompare(firstDay(b)))
+          .map((firm) => {
+            const ofFirm = adjustmentsOf(firm);
+            const out = payOut(
+              view.parts.filter((p) => (p.firm?.id ?? null) === (firm?.id ?? null)).map((p) => p.result),
+              ofFirm.map((a) => ({ id: a.id, type: a.type, amount: a.amount.toString() })),
+              roundingStep!,
+            );
+            const paid = salaryOf(firm)!;
+            return {
+              firm,
+              salary: { fromYear: paid.fromYear, fromMonth: paid.fromMonth, monthlySalary: paid.monthlySalary.toString() },
+              payOut: {
+                ...out,
+                adjustments: out.adjustments.map((a) => ({ ...a, note: ofFirm.find((o) => o.id === a.id)!.note })),
+              },
+              total: out.total,
+            };
+          });
+        view.payOut = view.payslips.length === 1 ? view.payslips[0].payOut : null;
+        view.total = view.payslips.reduce((sum, p) => sum.plus(p.total), new Prisma.Decimal(0)).toFixed(2);
       }
     }
 
@@ -552,7 +643,9 @@ export class PayrollService {
 function payPart(
   view: PayrollWorkerView,
   salary: { monthlySalary: Prisma.Decimal },
-  ruleSetSiteId: string | null,
+  ruleSet: { siteId: string | null; firmId: string | null },
+  firm: FirmRef | null,
+  firmsOn: boolean,
   m: MonthRules,
   shiftPart: ShiftPart,
   inPart: readonly Placement[],
@@ -617,7 +710,9 @@ function payPart(
     return null;
   }
   return {
-    ruleSetSiteName: ruleSetSiteId ? inPart.find((p) => p.siteId === ruleSetSiteId)?.site.name ?? null : null,
+    ruleSetSiteName: ruleSet.siteId ? inPart.find((p) => p.siteId === ruleSet.siteId)?.site.name ?? null : null,
+    ...(ruleSet.firmId && firm ? { ruleSetFirmName: firm.name } : {}),
+    ...(firmsOn ? { firm } : {}),
     shift: shiftPart.shiftInfo && { name: shiftPart.shiftInfo.name, normalHoursPerDay: shiftPart.shiftInfo.normalHoursPerDay },
     days,
     rulesFrom: { year: m.rules!.fromYear, month: m.rules!.fromMonth },
@@ -668,6 +763,30 @@ function travel(
     return { kind: 'MONTHLY_AMOUNT', amount: sum.toFixed(2) };
   }
   return null;
+}
+
+/** Totals per firm, from what each worker's payslips say; workers without a firm last. */
+function firmTotals(workers: readonly PayrollWorkerView[]): FirmTotalView[] {
+  const totals = new Map<string, FirmTotalView>();
+  const add = (firm: FirmRef | null, withProblems: boolean, amount: string) => {
+    const key = firm?.id ?? '';
+    const row = totals.get(key) ?? { firm, workers: 0, withProblems: 0, total: '0.00' };
+    row.workers++;
+    if (withProblems) row.withProblems++;
+    row.total = new Prisma.Decimal(row.total).plus(amount).toFixed(2);
+    totals.set(key, row);
+  };
+  for (const w of workers) {
+    if (!w.firms) continue;
+    if (w.payslips) for (const slip of w.payslips) add(slip.firm, false, slip.total);
+    else if (w.firms.length > 0) for (const firm of w.firms) add(firm, true, '0');
+    else add(null, true, '0');
+  }
+  const collator = new Intl.Collator('en');
+  return [...totals.values()].sort((a, b) => {
+    if (!a.firm || !b.firm) return a.firm ? -1 : 1;
+    return collator.compare(a.firm.name, b.firm.name);
+  });
 }
 
 /** Sum of the totals of the workers that can be paid. */

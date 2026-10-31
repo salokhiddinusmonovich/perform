@@ -24,6 +24,7 @@ export const IMPORT_FIELDS = [
   'phone',
   'site',
   'department',
+  'firm',
   'hiredOn',
   'leftOn',
   'salary',
@@ -32,8 +33,8 @@ export const IMPORT_FIELDS = [
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 
 /**
- * Columns the workers step needs. The department is needed too while the company uses
- * departments; the API adds it.
+ * Columns the workers step needs. The department and the firm are needed too while the
+ * company uses them; the API adds them.
  */
 export const WORKER_IMPORT_REQUIRED = [
   'employeeNumber',

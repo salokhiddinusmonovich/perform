@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ABSENCE_RULE_TYPES,
+  firmPayRulesSchema,
   NEW_PAY_RULES,
   payRulesSchema,
   TRAVEL_PAY_MODES,
@@ -12,8 +13,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { MoreHorizontal, Pencil, Scale, Trash2 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
-import { Controller, useForm, type FieldError } from 'react-hook-form';
+import { Controller, useForm, type FieldError, type Resolver } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
@@ -41,11 +43,13 @@ import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { canManageCompany, canViewPayRules, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
+import { useFirms } from '@/lib/organisation';
 
 interface Version {
   fromYear: number;
   fromMonth: number;
-  rules: PayRules;
+  /** A firm's rules have no rounding step: it is company-wide. */
+  rules: Omit<PayRules, 'payRoundingStep'> & { payRoundingStep?: string };
   setBy: { fullName: string };
   setAt: string;
 }
@@ -80,16 +84,31 @@ export function PayRulesPage() {
   );
 }
 
-/** What the form edits: a new version from a month the admin picks, or an existing version. */
-type Editing = { from: YearMonth; fixedFrom: boolean; initial: PayRulesInput | typeof NEW_PAY_RULES };
+/** A firm's own rules (AGENTS.md: Firms). Without them, its workers follow the site's or the company's. */
+export function FirmPayRulesPage() {
+  const { t } = useTranslation();
+  const { firmId } = useParams<{ firmId: string }>();
+  const firm = useFirms().data?.find((f) => f.id === firmId);
+  return (
+    <>
+      <PageHeader title={t('firms.payRulesTitle', { name: firm?.name ?? '' })} description={t('firms.payRulesDescription')} />
+      <RequireAccess allowed={canViewPayRules}>{(me) => <PayRulesView me={me} firmId={firmId!} />}</RequireAccess>
+    </>
+  );
+}
 
-function PayRulesView({ me }: { me: Me }) {
+/** What the form edits: a new version from a month the admin picks, or an existing version. */
+type Editing = { from: YearMonth; fixedFrom: boolean; initial: Omit<PayRulesInput, 'payRoundingStep'> & { payRoundingStep?: string } | typeof NEW_PAY_RULES };
+
+/** The company default rules, or with firmId that firm's own. */
+function PayRulesView({ me, firmId = null }: { me: Me; firmId?: string | null }) {
   const { t } = useTranslation();
   const format = useFormat();
   const queryClient = useQueryClient();
   const canChange = canManageCompany(me);
   const currency = me.activeCompany!.currency; // guaranteed by canViewPayRules
-  const versions = useQuery({ queryKey: PAY_RULES_KEY, queryFn: () => api.get<Version[]>('/pay-rules') });
+  const base = firmId ? `/firms/${firmId}/pay-rules` : '/pay-rules';
+  const versions = useQuery({ queryKey: [...PAY_RULES_KEY, firmId], queryFn: () => api.get<Version[]>(base) });
   const [editing, setEditing] = useState<Editing | null>(null);
   const [deleting, setDeleting] = useState<Version | null>(null);
 
@@ -186,6 +205,7 @@ function PayRulesView({ me }: { me: Me }) {
       <PayRulesForm
         editing={editing}
         versions={list}
+        firmId={firmId}
         currency={currency}
         readOnly={!canChange}
         onDone={async (saved) => {
@@ -204,8 +224,14 @@ function PayRulesView({ me }: { me: Me }) {
       <Card>
         <EmptyState
           icon={Scale}
-          title={t('payRules.emptyTitle')}
-          description={canChange ? t('payRules.emptyDescription') : t('payRules.emptyDescriptionReadOnly')}
+          title={firmId ? t('firms.rulesEmptyTitle') : t('payRules.emptyTitle')}
+          description={
+            firmId
+              ? t('firms.rulesEmptyDescription')
+              : canChange
+                ? t('payRules.emptyDescription')
+                : t('payRules.emptyDescriptionReadOnly')
+          }
           action={
             canChange && (
               <Button onClick={() => setEditing({ from: thisMonth(), fixedFrom: false, initial: NEW_PAY_RULES })}>
@@ -280,7 +306,7 @@ function PayRulesView({ me }: { me: Me }) {
         destructive
         onConfirm={async () => {
           if (!deleting) return;
-          await api.delete(`/pay-rules/${deleting.fromYear}/${deleting.fromMonth}`);
+          await api.delete(`${base}/${deleting.fromYear}/${deleting.fromMonth}`);
           toast.success(t('common.saved'));
           await refresh();
         }}
@@ -289,7 +315,7 @@ function PayRulesView({ me }: { me: Me }) {
   );
 }
 
-function RulesSummary({ rules, currency }: { rules: PayRules; currency: string }) {
+function RulesSummary({ rules, currency }: { rules: Version['rules']; currency: string }) {
   const { t } = useTranslation();
   const format = useFormat();
   const hours = (value: string) => t('payRules.hours', { value: format.number(value) });
@@ -316,7 +342,7 @@ function RulesSummary({ rules, currency }: { rules: PayRules; currency: string }
       ];
     }),
     [t('payRules.travelPay'), t(`payRules.travelMode.${rules.travelPayMode}`)],
-    [t('payRules.rounding'), format.money(rules.payRoundingStep, currency)],
+    ...(rules.payRoundingStep ? [[t('payRules.rounding'), format.money(rules.payRoundingStep, currency)] as [string, string]] : []),
   ];
 
   return (
@@ -334,12 +360,14 @@ function RulesSummary({ rules, currency }: { rules: PayRules; currency: string }
 function PayRulesForm({
   editing,
   versions,
+  firmId,
   currency,
   readOnly,
   onDone,
 }: {
   editing: Editing;
   versions: Version[];
+  firmId: string | null;
   currency: string;
   readOnly: boolean;
   onDone: (saved: boolean) => void;
@@ -349,8 +377,9 @@ function PayRulesForm({
   const [from, setFrom] = useState<YearMonth>(editing.from);
   const [formError, setFormError] = useState<string>();
   const form = useForm<PayRulesInput, unknown, PayRules>({
-    resolver: zodResolver(payRulesSchema),
-    defaultValues: editing.initial,
+    // A firm's rules have no rounding step; the form leaves its field out for them.
+    resolver: zodResolver(firmId ? firmPayRulesSchema : payRulesSchema) as unknown as Resolver<PayRulesInput, unknown, PayRules>,
+    defaultValues: editing.initial as PayRulesInput,
     disabled: readOnly,
   });
   const { errors } = form.formState;
@@ -359,7 +388,8 @@ function PayRulesForm({
     !editing.fixedFrom && versions.some((v) => v.fromYear === from.year && v.fromMonth === from.month);
 
   const save = useMutation({
-    mutationFn: (values: PayRules) => api.put(`/pay-rules/${from.year}/${from.month}`, values),
+    mutationFn: (values: PayRules) =>
+      api.put(`${firmId ? `/firms/${firmId}/pay-rules` : '/pay-rules'}/${from.year}/${from.month}`, values),
     onSuccess: () => onDone(true),
     onError: (error) => {
       if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
@@ -527,18 +557,20 @@ function PayRulesForm({
             />
           </Section>
 
-          <Section title={t('payRules.rounding')}>
-            <div className="max-w-xs">
-              <Field
-                id="payRoundingStep"
-                label={t('payRules.roundingStep', { currency })}
-                error={errors.payRoundingStep}
-                hint={t('payRules.roundingHint')}
-              >
-                {decimal('payRoundingStep', errors.payRoundingStep)}
-              </Field>
-            </div>
-          </Section>
+          {!firmId && (
+            <Section title={t('payRules.rounding')}>
+              <div className="max-w-xs">
+                <Field
+                  id="payRoundingStep"
+                  label={t('payRules.roundingStep', { currency })}
+                  error={errors.payRoundingStep}
+                  hint={t('payRules.roundingHint')}
+                >
+                  {decimal('payRoundingStep', errors.payRoundingStep)}
+                </Field>
+              </div>
+            </Section>
+          )}
 
           {readOnly ? (
             <div className="flex justify-end">

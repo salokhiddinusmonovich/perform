@@ -3,8 +3,11 @@ import {
   createWorkerSchema,
   departmentSchema,
   departmentSettingsSchema,
+  firmSchema,
+  firmSettingsSchema,
   leaveSchema,
   placementDepartmentSchema,
+  placementFirmSchema,
   placementSchema,
   salarySchema,
   shiftSchema,
@@ -12,6 +15,7 @@ import {
   staffSchema,
   teamSchema,
   updateDepartmentSchema,
+  updateFirmSchema,
   updateSiteSchema,
   updateShiftSchema,
   updateTeamSchema,
@@ -21,14 +25,18 @@ import {
   type CreateWorker,
   type Department,
   type DepartmentSettings,
+  type Firm,
+  type FirmSettings,
   type Leave,
   type Placement,
   type PlacementDepartment,
+  type PlacementFirm,
   type Salary,
   type Shift,
   type Site,
   type Team,
   type UpdateDepartment,
+  type UpdateFirm,
   type UpdateSite,
   type UpdateShift,
   type UpdateTeam,
@@ -39,6 +47,7 @@ import {
 import { CompanyAuth, ForModule, Roles, type CompanyAuthContext } from '../auth/auth.context';
 import { ZodPipe } from '../common/zod.pipe';
 import { DepartmentsService, type DepartmentView } from './departments.service';
+import { FirmsService, type FirmView } from './firms.service';
 import { ShiftsService, type ShiftView, type WorkerShiftView } from './shifts.service';
 import { SitesService, type SiteView, type StaffView } from './sites.service';
 import { WorkersService, type SalaryView, type WorkerView } from './workers.service';
@@ -214,6 +223,22 @@ export class WorkersController {
     return this.workers.fillDepartment(auth, id, placementId, body.departmentId);
   }
 
+  /**
+   * Fills in the firm of a placement that has none, e.g. from before the company used firms.
+   * A firm set once is changed only by a new placement from a day.
+   */
+  @Put(':id/placements/:placementId/firm')
+  @Roles('OWNER', 'ADMIN', 'PROJECT_MANAGER')
+  @HttpCode(204)
+  placementFirm(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('placementId', ParseUUIDPipe) placementId: string,
+    @Body(new ZodPipe(placementFirmSchema)) body: PlacementFirm,
+  ): Promise<void> {
+    return this.workers.fillFirm(auth, id, placementId, body.firmId);
+  }
+
   /** Salary history. Timekeepers and foremen never see salaries. */
   @Get(':id/salaries')
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER')
@@ -350,6 +375,49 @@ export class DepartmentsController {
     @Body(new ZodPipe(updateDepartmentSchema)) body: UpdateDepartment,
   ): Promise<void> {
     return this.departments.update(auth, id, body);
+  }
+}
+
+/**
+ * The company's firms (AGENTS.md: Firms). Everyone sees them (they carry no pay); owners and
+ * admins manage them and switch them on or off.
+ */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER', 'TIMEKEEPER', 'FOREMAN')
+@Controller('firms')
+export class FirmsController {
+  constructor(private readonly firms: FirmsService) {}
+
+  @Get()
+  list(@CompanyAuth() auth: CompanyAuthContext): Promise<FirmView[]> {
+    return this.firms.list(auth);
+  }
+
+  @Post()
+  @Roles('OWNER', 'ADMIN')
+  create(@CompanyAuth() auth: CompanyAuthContext, @Body(new ZodPipe(firmSchema)) body: Firm): Promise<{ id: string }> {
+    return this.firms.create(auth, body);
+  }
+
+  @Put('settings')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  settings(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Body(new ZodPipe(firmSettingsSchema)) body: FirmSettings,
+  ): Promise<void> {
+    return this.firms.setEnabled(auth, body.enabled);
+  }
+
+  @Patch(':id')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  update(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(updateFirmSchema)) body: UpdateFirm,
+  ): Promise<void> {
+    return this.firms.update(auth, id, body);
   }
 }
 

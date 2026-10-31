@@ -33,7 +33,8 @@
     "codes": "Kodlar",
     "shifts": "Smenalar",
     "departments": "Boʻlimlar",
-    "import": "Excel’dan import"
+    "import": "Excel’dan import",
+    "firms": "Firmalar"
   },
   "settings": {
     "language": "Til",
@@ -420,7 +421,9 @@
     "placement": {
       "notFound": "Joylashuv topilmadi.",
       "hasDepartment": "Bu joylashuvning boʻlimi allaqachon bor. Boshqasiga oʻtish — biror kundan boshlab koʻchirish.",
-      "departmentFromTeam": "Bu ishchi brigadada: oʻrniga brigadaning boʻlimini belgilang."
+      "departmentFromTeam": "Bu ishchi brigadada: oʻrniga brigadaning boʻlimini belgilang.",
+      "hasFirm": "Bu joylashuvda firma allaqachon bor. Boshqasiga oʻtish — maʼlum kundan koʻchirish.",
+      "noFirm": "Bu oydagi joylashuvda hali firma yoʻq. Avval uni belgilang."
     },
     "monthlyHours": {
       "notInMonth": "Ishchi bu oyda ushbu obyektda ishlamagan.",
@@ -430,7 +433,8 @@
     "adjustment": {
       "notInMonth": "Ishchi bu oyda ishlamagan.",
       "notFound": "Bunday yozuv yoʻq.",
-      "alreadyCancelled": "Bu yozuv allaqachon bekor qilingan."
+      "alreadyCancelled": "Bu yozuv allaqachon bekor qilingan.",
+      "firmNotInMonth": "Bu oyda ishchining shu firmada joylashuvi yoʻq."
     },
     "hours": {
       "otherSource": "Bu oy uchun ishchining kunlik tabeli bor. Bir oyda soatlar faqat bitta manbadan olinadi.",
@@ -496,7 +500,15 @@
       "hireAfterExit": "Ishdan boʻshash sanasi ishga kirish sanasi “{{value}}”dan oldin: ishchi oydagi birinchi kunidan boʻshash sanasigacha joylashtiriladi.",
       "exitFromCode": "Ishdan boʻshash sanasi yoʻq: oxirgi ish kuni “{{value}}” yozilgan kundan oldingi kun.",
       "overwritesEdits": "Ilovada qoʻlda oʻzgartirilgan kunlar ustidan fayldagi qiymatlar yoziladi.",
-      "blankAsAbsent": "Boʻsh kataklar sababsiz kelmaslik deb oʻqildi."
+      "blankAsAbsent": "Boʻsh kataklar sababsiz kelmaslik deb oʻqildi.",
+      "firmNotFound": "Dasturda “{{value}}” firmasi yoʻq. Avval uni qoʻshing."
+    },
+    "firm": {
+      "notFound": "Bunday firma yoʻq.",
+      "nameTaken": "Bu nomli firma allaqachon bor.",
+      "inactive": "Bu firma yopilgan.",
+      "hasWorkers": "Bu firmada hozir yoki keyingi kundan ishchilar bor. Avval ularni koʻchiring.",
+      "noneActive": "Firmalarni yoqishdan oldin firma qoʻshing."
     }
   },
   "payRules": {
@@ -817,7 +829,11 @@
     "departmentOfTeam": "Brigadaning boʻlimi",
     "employeeNumber": "Tabel raqami",
     "employeeNumberHint": "Kompaniyaning oʻz raqami, masalan tabeldagi. Excel importi ishchini shu raqam boʻyicha topadi.",
-    "employeeNumberShort": "№ {{number}}"
+    "employeeNumberShort": "№ {{number}}",
+    "setFirm": "Firmani belgilash",
+    "setFirmHint": "Bu joylashuvda hali firma yoʻq. Agar uning biror oyi yopilgan boʻlsa, ishchini maʼlum kundan firmaga koʻchiring.",
+    "firmHint": "Boshqa firmaga oʻtish — quyidagi kundan shu firmadan chiqib, yangisiga ishga kirish.",
+    "salaryFirmHint": "Firmadan firmaga oʻtgan ishchiga yangi firmada oylik kerak."
   },
   "impersonation": {
     "banner": "Siz {{name}} nomidan kirgansiz.",
@@ -1009,7 +1025,8 @@
     "cancelSubmit": "Yozuvni bekor qilish",
     "filterAll": "Barcha ishchilar",
     "filterAny": "Qoʻshimchasi bor",
-    "filterCancelled": "Bekor qilingani bor"
+    "filterCancelled": "Bekor qilingani bor",
+    "firmHint": "Bu oyda ishchining bir nechta firmasi bor. Qaysi firma hisob-varagʻiga tushishini tanlang."
   },
   "payroll": {
     "title": "Ish haqi hisobi",
@@ -1041,7 +1058,9 @@
       "noCompanyRules": "Kompaniyaning shu oy uchun toʻlov qoidalari yoʻq. Yaxlitlash qadami ularda.",
       "totalsInvalid": "Oylik soatlar oyga mos kelmaydi (balki toʻlov qoidalari oʻzgargandir):",
       "invalidHours": "Kunlik tabel yozuvlari bir-biriga zid.",
-      "daysWithoutHours": "{{site}} uchun soatlar yoʻq ({{from}} – {{until}})."
+      "daysWithoutHours": "{{site}} uchun soatlar yoʻq ({{from}} – {{until}}).",
+      "noSalaryInFirm": "Bu oy uchun {{firm}} firmasida oylik yoʻq.",
+      "adjustmentWithoutFirm": "Tuzatma hech qaysi firma hisob-varagʻiga tushmayapti. Uni bekor qilib, firmasi bilan qayta qoʻshing."
     },
     "totalsProblems": {
       "NORMAL_ABOVE_DAYS_WORKED": "normal soatlar ishlangan ish kunlari × kunlik normadan koʻp",
@@ -1105,7 +1124,11 @@
     "filterProblems": "Muammosi bor",
     "filterNoProblems": "Muammosiz",
     "filterAllSources": "Barcha manbalar",
-    "problemsFilter": "Muammolar"
+    "problemsFilter": "Muammolar",
+    "byFirm": "Firmalar boʻyicha",
+    "byFirmHint": "Firmadan firmaga oʻtgan ishchi ikkalasida ham, har bir firma toʻlagan summa bilan hisoblanadi.",
+    "firmRules": "{{firm}} qoidalari",
+    "payslipsTotal": "Barcha firmalardan jami"
   },
   "timesheet": {
     "title": "Tabel",
@@ -1345,7 +1368,8 @@
       "hiredOn": "Ishga kirgan sana",
       "leftOn": "Oxirgi ish kuni",
       "salary": "Oylik maosh",
-      "shift": "Smena"
+      "shift": "Smena",
+      "firm": "Firma"
     },
     "note": "Izoh",
     "noteCount": "Izohlar: {{count}}",
@@ -1356,5 +1380,74 @@
       "PROBLEM": "Muammo: faylda toʻldirilsin",
       "ABSENT": "Sababsiz kelmaslik (toʻlanmaydi)"
     }
+  },
+  "firms": {
+    "title": "Firmalar",
+    "description": "Oʻz firmalaringiz va subpudratchilaringiz. Ishchining joylashuvi uni qaysi firma ishga olganini koʻrsatadi.",
+    "firm": "Firma",
+    "create": "Firma qoʻshish",
+    "edit": "Firmani tahrirlash",
+    "close": "Firmani yopish",
+    "reopen": "Firmani qayta ochish",
+    "name": "Nomi",
+    "type": "Turi",
+    "typeHint": "Faqat filtr va jami summalar uchun. Oylik hisobiga taʼsir qilmaydi.",
+    "chooseType": "Turini tanlang",
+    "choose": "Firmani tanlang",
+    "types": {
+      "OWN": "Oʻz firmamiz",
+      "SUBCONTRACTOR": "Subpudratchi"
+    },
+    "workers": "Ishchilar",
+    "status": "Holati",
+    "active": "Faol",
+    "closed": "Yopilgan",
+    "all": "Barcha firmalar",
+    "none": "Firmasiz",
+    "allOfType": {
+      "OWN": "Barcha oʻz firmalarimiz",
+      "SUBCONTRACTOR": "Barcha subpudratchilar"
+    },
+    "empty": "Hali firmalar yoʻq",
+    "emptyDescription": "Oʻz firmalaringiz va subpudratchilarni qoʻshing, soʻng firmalarni yoqing.",
+    "dialogDescription": "Firmalar barcha obyektlar uchun umumiy.",
+    "use": "Firmalardan foydalanish",
+    "useHint": "Yoqilganda har bir yangi joylashuvga firma kerak boʻladi, oylik firma boʻyicha kiritiladi, firmadan firmaga oʻtgan ishchiga har biridan alohida hisob-varaq chiqadi. Joylashgan ishchilar ishlashda davom etadi; firmasi yoʻqlari belgilanadi.",
+    "useNeedsOne": "Avval firma qoʻshing, soʻng yoqing.",
+    "listLink": "Firmalar roʻyxatini ochish",
+    "on": "Yoqilgan",
+    "off": "Oʻchirilgan",
+    "onHint": "Har bir yangi joylashuvga firma kerak.",
+    "offHint": "Ishchilar va oylikda firmalar hali koʻrinmaydi.",
+    "settingLink": "Kompaniya sozlamalarida oʻzgartirish",
+    "switchOn": "Yoqish",
+    "switchOff": "Oʻchirish",
+    "missingLink": "Ishchilar sahifasida belgilang",
+    "confirmOn": {
+      "title": "Firmalarni yoqasizmi?",
+      "description": "Har bir yangi joylashuvga firma kerak boʻladi, yangi oyliklar firma boʻyicha kiritiladi.",
+      "missing": "Hozir firmasiz joylashgan ishchilar: {{count}}. Ular ishlashda davom etadi va firma belgilanguncha ajratib koʻrsatiladi."
+    },
+    "confirmOff": {
+      "title": "Firmalarni oʻchirasizmi?",
+      "description": "Firmalar yashiriladi va ochiq oylarda oylik firma boʻyicha boʻlinmaydi. Yopilgan oylar oʻzgarmaydi."
+    },
+    "confirmClose": {
+      "title": "Bu firmani yopasizmi?",
+      "description": "“{{name}}” yangi joylashuvlar uchun taklif qilinmaydi. Tarixi saqlanadi."
+    },
+    "confirmReopen": {
+      "title": "Bu firmani qayta ochasizmi?",
+      "description": "“{{name}}” yana yangi joylashuvlar uchun taklif qilinadi."
+    },
+    "payRules": "Oylik qoidalari",
+    "workingDays": "Ish kunlari",
+    "payRulesTitle": "Oylik qoidalari: {{name}}",
+    "payRulesDescription": "Tanlangan oydan boshlab bu firma ishchilari uchun obyekt yoki kompaniya qoidalari oʻrniga amal qiladi. Yaxlitlash kompaniyaniki boʻlib qoladi.",
+    "workingDaysTitle": "Ish kunlari: {{name}}",
+    "workingDaysDescription": "Bu firmaning oʻz qoidalari boʻyicha ish kunlari.",
+    "rulesEmptyTitle": "Bu firmaning oʻz qoidalari yoʻq",
+    "rulesEmptyDescription": "Ishchilari obyekt yoki kompaniya qoidalariga amal qiladi. Faqat bu firma boshqacha toʻlasa, qoida qoʻshing.",
+    "missing": "Firmasiz ishchilar: {{count}}"
   }
 }

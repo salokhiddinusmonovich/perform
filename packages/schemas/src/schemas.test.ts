@@ -180,6 +180,7 @@ describe('holidaySchema', () => {
 describe('adjustmentSchema', () => {
   it('takes a positive amount as typed, with the type giving the sign', () => {
     expect(adjustmentSchema.parse({ type: 'ADVANCE', amount: '1 500 000,50', note: ' ' })).toEqual({
+      firmId: null,
       type: 'ADVANCE',
       amount: '1500000.5',
       note: null,
@@ -309,6 +310,7 @@ describe('departments', () => {
       siteId: id,
       teamId: null,
       departmentId: null,
+      firmId: null,
       from: '2026-09-01',
     });
   });

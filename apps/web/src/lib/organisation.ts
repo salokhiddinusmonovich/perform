@@ -1,4 +1,4 @@
-import type { EmploymentType, Role } from '@puantaj/schemas';
+import type { EmploymentType, FirmType, Role } from '@puantaj/schemas';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 
@@ -52,6 +52,10 @@ export interface WorkerItem {
     /** null: none set (from before the company used departments) */
     departmentId: string | null;
     departmentName: string | null;
+    /** null: none set (from before the company used firms) */
+    firmId: string | null;
+    firmName: string | null;
+    firmType: FirmType | null;
     from: string;
     until: string | null;
   } | null;
@@ -66,19 +70,21 @@ export interface WorkerItem {
     passportNumber: string | null;
     phone: string | null;
   } | null;
-  /** The latest salary (it may start in a later month). null when there is none yet, or for timekeepers and foremen. */
+  /** The latest salary of the latest placement's firm (it may start in a later month). null when there is none yet, or for timekeepers and foremen. */
   salary: Pick<SalaryItem, 'fromYear' | 'fromMonth' | 'monthlySalary'> | null;
 }
 
 /** A salary from a month on, newest first in a worker's history. */
 export interface SalaryItem {
   id: string;
+  /** The firm it is paid by; null: from before the company used firms */
+  firm: { id: string; name: string } | null;
   fromYear: number;
   fromMonth: number;
   /** Decimal string, e.g. "7500000" */
   monthlySalary: string;
   reason: string | null;
-  /** A newer salary from the same month corrected this one, so it never applies. */
+  /** A newer salary from the same month (and firm) corrected this one, so it never applies. */
   corrected: boolean;
   setBy: { fullName: string };
   setAt: string;
@@ -118,6 +124,14 @@ export interface DepartmentItem {
   isActive: boolean;
 }
 
+/** A company firm (AGENTS.md: Firms): its own legal entity or a subcontractor. */
+export interface FirmItem {
+  id: string;
+  name: string;
+  type: FirmType;
+  isActive: boolean;
+}
+
 /** A department in tree order: its depth (0 = top level) and its path from the top. */
 export interface DepartmentNode extends DepartmentItem {
   depth: number;
@@ -153,6 +167,12 @@ export const DEPARTMENTS_KEY = ['departments'] as const;
 
 export function useDepartments({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({ queryKey: DEPARTMENTS_KEY, queryFn: () => api.get<DepartmentItem[]>('/departments'), enabled });
+}
+
+export const FIRMS_KEY = ['firms'] as const;
+
+export function useFirms({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery({ queryKey: FIRMS_KEY, queryFn: () => api.get<FirmItem[]>('/firms'), enabled });
 }
 
 /** Departments in tree order: each one followed by its sub-departments, siblings by name (the API's order). */
@@ -206,6 +226,7 @@ export function useRefreshOrganisation() {
       queryClient.invalidateQueries({ queryKey: SITES_KEY }),
       queryClient.invalidateQueries({ queryKey: WORKERS_KEY }),
       queryClient.invalidateQueries({ queryKey: DEPARTMENTS_KEY }),
+      queryClient.invalidateQueries({ queryKey: FIRMS_KEY }),
     ]);
 }
 

@@ -4,6 +4,7 @@ import {
   EMPLOYMENT_TYPES,
   leaveSchema,
   placementDepartmentSchema,
+  placementFirmSchema,
   placementSchema,
   salarySchema,
   workerSchema,
@@ -16,6 +17,8 @@ import {
   type Placement,
   type PlacementDepartment,
   type PlacementDepartmentInput,
+  type PlacementFirm,
+  type PlacementFirmInput,
   type PlacementInput,
   type Salary,
   type SalaryInput,
@@ -29,7 +32,7 @@ import {
 } from '@puantaj/schemas';
 import { useMutation } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowRightLeft, Building2, LogOut, MoreHorizontal, Pencil, SunMoon, Trash2, UserPlus, Wallet } from 'lucide-react';
+import { ArrowRightLeft, Briefcase, Building2, LogOut, MoreHorizontal, Pencil, SunMoon, Trash2, UserPlus, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm, type Control, type FieldError, type FieldErrors, type FieldPath, type FieldValues } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -44,6 +47,7 @@ import {
   inDepartmentFilter,
   type DepartmentFilterValue,
 } from '@/components/department-select';
+import { FirmFilter, FirmSelect, inFirmFilter, type FirmFilterValue } from '@/components/firm-select';
 import { ErrorState } from '@/components/error-state';
 import { Field, fieldControlProps, FormActions, FormError, MonthField } from '@/components/form';
 import { LoadingState } from '@/components/loading-state';
@@ -75,6 +79,7 @@ import {
   seesPersonalData,
   useMe,
   usesDepartments,
+  usesFirms,
   type Me,
 } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
@@ -82,6 +87,7 @@ import { today } from '@/lib/format';
 import {
   departmentTree,
   useDepartments,
+  useFirms,
   useRefreshOrganisation,
   useSalaries,
   useShifts,
@@ -90,6 +96,7 @@ import {
   useWorkerShifts,
   workerName,
   type DepartmentItem,
+  type FirmItem,
   type ShiftItem,
   type SiteItem,
   type WorkerItem,
@@ -126,7 +133,7 @@ export function WorkersPage() {
   );
 }
 
-type Action = { kind: 'edit' | 'move' | 'leave' | 'salary' | 'shift' | 'department'; worker: WorkerItem };
+type Action = { kind: 'edit' | 'move' | 'leave' | 'salary' | 'shift' | 'department' | 'firm'; worker: WorkerItem };
 
 function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; onAddingChange: (open: boolean) => void }) {
   const { t } = useTranslation();
@@ -138,6 +145,10 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
   const showDepartments = usesDepartments(me);
   // The forms offer departments only while the company uses them.
   const departmentChoices = showDepartments ? (departments.data ?? []) : null;
+  const showFirms = usesFirms(me);
+  const firms = useFirms({ enabled: showFirms });
+  // The same for firms.
+  const firmChoices = showFirms ? (firms.data ?? []) : null;
   const paths = useMemo(
     () => new Map(departmentTree(departments.data ?? []).map((d) => [d.id, d.path])),
     [departments.data],
@@ -150,6 +161,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
   const [siteFilter, setSiteFilter] = useState(ALL_SITES);
   const [status, setStatus] = useState<Status>('working');
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilterValue>(ALL);
+  const [firmFilter, setFirmFilter] = useState<FirmFilterValue>(ALL);
   const [action, setAction] = useState<Action | null>(null);
   const [settingShifts, setSettingShifts] = useState(false);
 
@@ -159,9 +171,11 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         (w) =>
           (siteFilter === ALL_SITES || w.placement?.siteId === siteFilter) &&
           (!showDepartments || inDepartmentFilter(departmentFilter, w.placement?.departmentId, departments.data ?? [])) &&
+          (!showFirms ||
+            inFirmFilter(firmFilter, w.placement?.firmId ? [{ id: w.placement.firmId, type: w.placement.firmType! }] : [])) &&
           (status === 'all' || (status === 'left') === hasLeft(w)),
       ),
-    [workers.data, siteFilter, status, showDepartments, departmentFilter, departments.data],
+    [workers.data, siteFilter, status, showDepartments, departmentFilter, departments.data, showFirms, firmFilter],
   );
 
   const columns = useMemo<ColumnDef<WorkerItem, unknown>[]>(
@@ -212,6 +226,20 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
                 const p = row.original.placement;
                 if (p?.departmentId) return <div className="min-w-32">{paths.get(p.departmentId) ?? p.departmentName}</div>;
                 return hasLeft(row.original) ? '—' : <StatusBadge tone="warning">{t('departments.none')}</StatusBadge>;
+              },
+            } satisfies ColumnDef<WorkerItem, unknown>,
+          ]
+        : []),
+      ...(showFirms
+        ? [
+            {
+              id: 'firm',
+              accessorFn: (w) => w.placement?.firmName ?? '',
+              header: t('firms.firm'),
+              cell: ({ row }) => {
+                const p = row.original.placement;
+                if (p?.firmName) return <div className="min-w-32">{p.firmName}</div>;
+                return hasLeft(row.original) ? '—' : <StatusBadge tone="warning">{t('firms.none')}</StatusBadge>;
               },
             } satisfies ColumnDef<WorkerItem, unknown>,
           ]
@@ -306,6 +334,12 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
                         {t('workers.setDepartment')}
                       </DropdownMenuItem>
                     )}
+                    {showFirms && row.original.placement && !row.original.placement.firmId && (
+                      <DropdownMenuItem onSelect={() => setAction({ kind: 'firm', worker: row.original })}>
+                        <Briefcase aria-hidden />
+                        {t('workers.setFirm')}
+                      </DropdownMenuItem>
+                    )}
                   </>
                 )}
                 {pay && (
@@ -323,7 +357,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
           ),
       },
     ],
-    [t, format, manage, personal, pay, currency, showDepartments, paths],
+    [t, format, manage, personal, pay, currency, showDepartments, paths, showFirms],
   );
 
   const activeSites = (sites.data ?? []).filter((s) => s.isActive);
@@ -352,6 +386,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
             w.placement?.siteName,
             w.placement?.teamName,
             showDepartments && w.placement?.departmentId ? paths.get(w.placement.departmentId) : null,
+            showFirms ? w.placement?.firmName : null,
             w.shift?.name,
           ]
             .filter(Boolean)
@@ -367,6 +402,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
             {showDepartments && (
               <DepartmentFilter departments={departments.data ?? []} value={departmentFilter} onChange={setDepartmentFilter} />
             )}
+            {showFirms && <FirmFilter firms={firms.data ?? []} value={firmFilter} onChange={setFirmFilter} />}
             <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
               <SelectTrigger className="w-full sm:w-40" aria-label={t('workers.status')}>
                 <SelectValue />
@@ -390,7 +426,13 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
       />
 
       {adding && (
-        <AddWorkerDialog sites={activeSites} departments={departmentChoices} onClose={() => onAddingChange(false)} onSaved={done} />
+        <AddWorkerDialog
+          sites={activeSites}
+          departments={departmentChoices}
+          firms={firmChoices}
+          onClose={() => onAddingChange(false)}
+          onSaved={done}
+        />
       )}
       {action?.kind === 'edit' && (
         <EditWorkerDialog worker={action.worker} personal={personal} onClose={() => setAction(null)} onSaved={done} />
@@ -400,6 +442,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
           worker={action.worker}
           sites={activeSites}
           departments={departmentChoices}
+          firms={firmChoices}
           onClose={() => setAction(null)}
           onSaved={done}
         />
@@ -412,6 +455,9 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
           onClose={() => setAction(null)}
           onSaved={done}
         />
+      )}
+      {action?.kind === 'firm' && (
+        <PlacementFirmDialog worker={action.worker} firms={firms.data ?? []} onClose={() => setAction(null)} onSaved={done} />
       )}
       {action?.kind === 'shift' && (
         <WorkerShiftDialog
@@ -432,6 +478,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
         <SalaryDialog
           worker={action.worker}
           currency={currency}
+          firms={firmChoices}
           canAdd={canAddSalaries(me)}
           onClose={() => setAction(null)}
           onSaved={done}
@@ -477,11 +524,13 @@ function toWorkerInput(w: WorkerItem): WorkerInput {
 function AddWorkerDialog({
   sites,
   departments,
+  firms,
   onClose,
   onSaved,
 }: {
   sites: SiteItem[];
   departments: DepartmentItem[] | null;
+  firms: FirmItem[] | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -491,7 +540,7 @@ function AddWorkerDialog({
     resolver: zodResolver(createWorkerSchema),
     defaultValues: {
       worker: EMPTY_WORKER,
-      placement: { siteId: sites.length === 1 ? sites[0].id : '', teamId: '', departmentId: '', from: today() },
+      placement: { siteId: sites.length === 1 ? sites[0].id : '', teamId: '', departmentId: '', firmId: firms?.filter((f) => f.isActive).length === 1 ? firms.find((f) => f.isActive)!.id : '', from: today() },
     },
   });
 
@@ -528,6 +577,7 @@ function AddWorkerDialog({
               errors={form.formState.errors.placement}
               sites={sites}
               departments={departments}
+              firms={firms}
               fromLabel={t('workers.firstDay')}
             />
           </section>
@@ -592,12 +642,14 @@ function MoveDialog({
   worker,
   sites,
   departments,
+  firms,
   onClose,
   onSaved,
 }: {
   worker: WorkerItem;
   sites: SiteItem[];
   departments: DepartmentItem[] | null;
+  firms: FirmItem[] | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -609,6 +661,7 @@ function MoveDialog({
       siteId: worker.placement?.siteId ?? '',
       teamId: worker.placement?.teamId ?? '',
       departmentId: worker.placement?.departmentId ?? '',
+      firmId: worker.placement?.firmId ?? '',
       from: today(),
     },
   });
@@ -646,6 +699,8 @@ function MoveDialog({
             errors={form.formState.errors}
             sites={sites}
             departments={departments}
+            firms={firms}
+            keepFirm={worker.placement?.firmId}
             fromLabel={t('workers.firstDayThere')}
           />
           <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
@@ -791,6 +846,72 @@ function PlacementDepartmentDialog({
   );
 }
 
+/**
+ * Fills in the firm of a worker's placement that has none (from before the company used
+ * firms). If a month of the placement is locked, the API refuses: moving to the firm from a
+ * day does it instead.
+ */
+function PlacementFirmDialog({
+  worker,
+  firms,
+  onClose,
+  onSaved,
+}: {
+  worker: WorkerItem;
+  firms: FirmItem[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useTranslation();
+  const placement = worker.placement!;
+  const [formError, setFormError] = useState<string>();
+  const form = useForm<PlacementFirmInput, unknown, PlacementFirm>({
+    resolver: zodResolver(placementFirmSchema),
+    defaultValues: { firmId: '' },
+  });
+
+  const save = useMutation({
+    mutationFn: (values: PlacementFirm) => api.put(`/workers/${worker.id}/placements/${placement.id}/firm`, values),
+    onSuccess: onSaved,
+    onError: (error) => {
+      if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('workers.setFirm')}</DialogTitle>
+          <DialogDescription>
+            {workerName(worker)} · {t('workers.setFirmHint')}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          noValidate
+          onSubmit={form.handleSubmit((values) => {
+            setFormError(undefined);
+            save.mutate(values);
+          })}
+        >
+          <FormError message={formError} />
+          <Controller
+            control={form.control}
+            name="firmId"
+            render={({ field, fieldState }) => (
+              <Field id="pf-firm" label={t('firms.firm')} error={fieldState.error}>
+                <FirmSelect id="pf-firm" firms={firms} value={field.value ?? ''} onChange={field.onChange} invalid={!!fieldState.error} />
+              </Field>
+            )}
+          />
+          <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** The month after the current one: a new salary usually starts there. */
 function nextMonth(): YearMonth {
   const [year, month] = today().split('-').map(Number);
@@ -801,12 +922,15 @@ function nextMonth(): YearMonth {
 function SalaryDialog({
   worker,
   currency,
+  firms,
   canAdd,
   onClose,
   onSaved,
 }: {
   worker: WorkerItem;
   currency: string;
+  /** The company's firms while it uses them; null: firms are off */
+  firms: FirmItem[] | null;
   canAdd: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -818,10 +942,13 @@ function SalaryDialog({
   const [from, setFrom] = useState<YearMonth>(nextMonth);
   const form = useForm<SalaryInput, unknown, Salary>({
     resolver: zodResolver(salarySchema),
-    defaultValues: { fromYear: from.year, fromMonth: from.month, monthlySalary: '', reason: '' },
+    defaultValues: { firmId: worker.placement?.firmId ?? '', fromYear: from.year, fromMonth: from.month, monthlySalary: '', reason: '' },
   });
   const { errors } = form.formState;
-  const corrects = history.data?.some((s) => !s.corrected && s.fromYear === from.year && s.fromMonth === from.month);
+  const firmId = form.watch('firmId') || null;
+  const corrects = history.data?.some(
+    (s) => !s.corrected && s.fromYear === from.year && s.fromMonth === from.month && (!firms || (s.firm?.id ?? null) === firmId),
+  );
 
   const save = useMutation({
     mutationFn: (values: Salary) => api.post(`/workers/${worker.id}/salaries`, values),
@@ -856,6 +983,24 @@ function SalaryDialog({
             })}
           >
             <FormError message={formError} />
+            {firms && (
+              <Controller
+                control={form.control}
+                name="firmId"
+                render={({ field }) => (
+                  <Field id="s-firm" label={t('firms.firm')} error={errors.firmId} hint={t('workers.salaryFirmHint')}>
+                    <FirmSelect
+                      id="s-firm"
+                      firms={firms}
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      keep={worker.placement?.firmId}
+                      invalid={!!errors.firmId}
+                    />
+                  </Field>
+                )}
+              />
+            )}
             <MonthField
               legend={t('workers.salaryFromMonth')}
               value={from}
@@ -909,6 +1054,7 @@ function SalaryDialog({
                     </span>
                     {s.corrected && <StatusBadge tone="neutral">{t('common.corrected')}</StatusBadge>}
                   </span>
+                  {firms && s.firm && <span className="text-muted-foreground">{s.firm.name}</span>}
                   {s.reason && <span className="text-muted-foreground">{s.reason}</span>}
                   <span className="text-muted-foreground">
                     {s.setBy.fullName} · {format.date(s.setAt)}
@@ -1035,6 +1181,8 @@ function PlacementFields<T extends FieldValues>({
   errors,
   sites,
   departments,
+  firms,
+  keepFirm,
   fromLabel,
 }: {
   control: Control<T>;
@@ -1043,6 +1191,10 @@ function PlacementFields<T extends FieldValues>({
   sites: SiteItem[];
   /** The company's departments while it uses them; null: departments are off */
   departments: DepartmentItem[] | null;
+  /** The company's firms while it uses them; null: firms are off */
+  firms: FirmItem[] | null;
+  /** The firm the worker is in now, offered even if it was closed since */
+  keepFirm?: string | null;
   fromLabel: string;
 }) {
   const { t } = useTranslation();
@@ -1127,6 +1279,24 @@ function PlacementFields<T extends FieldValues>({
           </>
         )}
       />
+      {firms && (
+        <Controller
+          control={control}
+          name={name('firmId')}
+          render={({ field }) => (
+            <Field id="p-firm" label={t('firms.firm')} error={errors?.firmId} hint={t('workers.firmHint')}>
+              <FirmSelect
+                id="p-firm"
+                firms={firms}
+                value={(field.value as string | null) ?? ''}
+                onChange={field.onChange}
+                keep={keepFirm}
+                invalid={!!errors?.firmId}
+              />
+            </Field>
+          )}
+        />
+      )}
       <Controller
         control={control}
         name={name('from')}

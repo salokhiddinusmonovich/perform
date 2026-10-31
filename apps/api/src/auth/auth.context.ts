@@ -27,6 +27,8 @@ export interface ActiveCompany {
   modules: CompanyModule[];
   /** The company uses departments (AGENTS.md: Departments): placements need one, and they are shown. */
   departments: boolean;
+  /** The company uses firms (AGENTS.md: Firms): placements need one, and salaries and payslips go per firm. */
+  firms: boolean;
   /** Sites a project manager or timekeeper works on (MemberSite); null for other roles. */
   siteIds: string[] | null;
   /** Teams a foreman leads (MemberTeam); null for other roles. */

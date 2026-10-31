@@ -19,10 +19,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { isLanguage } from '@/i18n';
 import { api } from '@/lib/api';
-import { canManageCompany, ME_KEY, usesDepartments, type Me } from '@/lib/auth';
+import { canManageCompany, ME_KEY, usesDepartments, usesFirms, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
 import { localeOf, today } from '@/lib/format';
-import { stillPlaced, useDepartments, useWorkers } from '@/lib/organisation';
+import { stillPlaced, useDepartments, useFirms, useWorkers } from '@/lib/organisation';
 
 const COMPANY_KEY = ['company', 'settings'] as const;
 const CURRENCIES = ['UZS', 'USD', 'EUR', 'TRY', 'RUB', 'KZT'];
@@ -38,6 +38,7 @@ export function CompanySettingsPage() {
           <div className="space-y-6">
             <CompanySettingsForm />
             <DepartmentsSetting me={me} />
+            <FirmsSetting me={me} />
           </div>
         )}
       </RequireAccess>
@@ -150,36 +151,74 @@ function CompanySettingsForm() {
  * needs, so both ways are confirmed first. It needs an active department to switch on.
  */
 function DepartmentsSetting({ me }: { me: Me }) {
-  const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const departments = useDepartments();
   const workers = useWorkers();
+  return (
+    <ListSetting
+      kind="departments"
+      enabled={usesDepartments(me)}
+      pending={departments.isPending}
+      hasActive={(departments.data ?? []).some((d) => d.isActive)}
+      missing={stillPlaced(workers.data ?? [], today()).filter((w) => !w.placement.departmentId).length}
+    />
+  );
+}
+
+/** Whether the company uses firms (AGENTS.md: Firms), like departments. It needs an active firm to switch on. */
+function FirmsSetting({ me }: { me: Me }) {
+  const firms = useFirms();
+  const workers = useWorkers();
+  return (
+    <ListSetting
+      kind="firms"
+      enabled={usesFirms(me)}
+      pending={firms.isPending}
+      hasActive={(firms.data ?? []).some((f) => f.isActive)}
+      missing={stillPlaced(workers.data ?? [], today()).filter((w) => !w.placement.firmId).length}
+    />
+  );
+}
+
+/** Switching on or off a list every new placement then needs. `kind` names its API route, page and translations. */
+function ListSetting({
+  kind,
+  enabled,
+  pending,
+  hasActive,
+  missing,
+}: {
+  kind: 'departments' | 'firms';
+  enabled: boolean;
+  pending: boolean;
+  hasActive: boolean;
+  /** Workers placed now without one */
+  missing: number;
+}) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
-  const enabled = usesDepartments(me);
-  const hasActive = (departments.data ?? []).some((d) => d.isActive);
-  const missing = stillPlaced(workers.data ?? [], today()).filter((w) => !w.placement.departmentId).length;
 
   return (
     <Card className="max-w-2xl">
       <CardContent className="space-y-3">
         <div className="flex items-start gap-3">
           <Checkbox
-            id="use-departments"
+            id={`use-${kind}`}
             className="mt-0.5"
             checked={enabled}
-            disabled={departments.isPending || (!enabled && !hasActive)}
+            disabled={pending || (!enabled && !hasActive)}
             onCheckedChange={() => setConfirming(true)}
           />
           <div className="space-y-1">
-            <Label htmlFor="use-departments" className="cursor-pointer">
-              {t('departments.use')}
+            <Label htmlFor={`use-${kind}`} className="cursor-pointer">
+              {t(`${kind}.use`)}
             </Label>
-            <p className="text-sm text-muted-foreground">{t('departments.useHint')}</p>
-            {!enabled && !departments.isPending && !hasActive && (
-              <p className="text-sm text-muted-foreground">{t('departments.useNeedsOne')}</p>
+            <p className="text-sm text-muted-foreground">{t(`${kind}.useHint`)}</p>
+            {!enabled && !pending && !hasActive && (
+              <p className="text-sm text-muted-foreground">{t(`${kind}.useNeedsOne`)}</p>
             )}
-            <Link to="/departments" className="inline-flex min-h-10 items-center text-sm underline underline-offset-4">
-              {t('departments.listLink')}
+            <Link to={`/${kind}`} className="inline-flex min-h-10 items-center text-sm underline underline-offset-4">
+              {t(`${kind}.listLink`)}
             </Link>
           </div>
         </div>
@@ -187,17 +226,17 @@ function DepartmentsSetting({ me }: { me: Me }) {
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={enabled ? t('departments.confirmOff.title') : t('departments.confirmOn.title')}
+        title={enabled ? t(`${kind}.confirmOff.title`) : t(`${kind}.confirmOn.title`)}
         description={
           enabled
-            ? t('departments.confirmOff.description')
-            : `${t('departments.confirmOn.description')}${missing > 0 ? ` ${t('departments.confirmOn.missing', { count: missing })}` : ''}`
+            ? t(`${kind}.confirmOff.description`)
+            : `${t(`${kind}.confirmOn.description`)}${missing > 0 ? ` ${t(`${kind}.confirmOn.missing`, { count: missing })}` : ''}`
         }
-        confirmLabel={enabled ? t('departments.switchOff') : t('departments.switchOn')}
+        confirmLabel={enabled ? t(`${kind}.switchOff`) : t(`${kind}.switchOn`)}
         onConfirm={async () => {
-          await api.put('/departments/settings', { enabled: !enabled });
+          await api.put(`/${kind}/settings`, { enabled: !enabled });
           toast.success(t('common.saved'));
-          // Forms, lists and the menu show departments by "me".
+          // Forms, lists and the menu show them by "me".
           await queryClient.invalidateQueries({ queryKey: ME_KEY });
         }}
       />

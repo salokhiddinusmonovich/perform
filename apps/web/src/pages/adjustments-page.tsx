@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { DataTable } from '@/components/data-table';
 import { DepartmentFilter, inDepartmentFilter, type DepartmentFilterValue } from '@/components/department-select';
+import { FirmSelect } from '@/components/firm-select';
 import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
 import { ALL_SITES, SiteFilter } from '@/components/list-filters';
 import { MonthSwitcher } from '@/components/month-switcher';
@@ -241,7 +242,7 @@ function WorkerAdjustmentsDialog({
   const [cancelling, setCancelling] = useState<AdjustmentItem | null>(null);
   const form = useForm<AdjustmentInput, unknown, Adjustment>({
     resolver: zodResolver(adjustmentSchema),
-    defaultValues: { amount: '', note: '' },
+    defaultValues: { firmId: '', amount: '', note: '' },
   });
   const { errors } = form.formState;
 
@@ -250,7 +251,7 @@ function WorkerAdjustmentsDialog({
     onSuccess: async (_, values) => {
       toast.success(t('adjustments.added'));
       // Ready for the next one of the same type.
-      form.reset({ type: values.type, amount: '', note: '' });
+      form.reset({ firmId: values.firmId ?? '', type: values.type, amount: '', note: '' });
       await onChanged();
     },
     onError: (error) => {
@@ -277,6 +278,24 @@ function WorkerAdjustmentsDialog({
             })}
           >
             <FormError message={formError} />
+            {/* With one firm the adjustment goes to its payslip; with several, someone chooses. */}
+            {row.firms.length > 1 && (
+              <Controller
+                control={form.control}
+                name="firmId"
+                render={({ field }) => (
+                  <Field id="adj-firm" label={t('firms.firm')} error={errors.firmId} hint={t('adjustments.firmHint')}>
+                    <FirmSelect
+                      id="adj-firm"
+                      firms={row.firms.map((f) => ({ ...f, isActive: true }))}
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      invalid={!!errors.firmId}
+                    />
+                  </Field>
+                )}
+              />
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               <Controller
                 control={form.control}
@@ -323,6 +342,7 @@ function WorkerAdjustmentsDialog({
                     <span className={a.cancelled ? 'text-muted-foreground line-through' : 'font-medium'}>
                       {t(`adjustments.types.${a.type}`)}
                     </span>
+                    {a.firm && <span className="text-muted-foreground">{a.firm.name}</span>}
                     {a.note && <span className="text-muted-foreground">{a.note}</span>}
                     <span className="text-muted-foreground">
                       {a.setBy.fullName} · {format.date(a.setAt)}

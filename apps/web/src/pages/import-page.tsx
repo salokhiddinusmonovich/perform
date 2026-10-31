@@ -107,7 +107,8 @@ function ImportView({ me }: { me: Me }) {
   };
 
   const departments = me.activeCompany?.departments ?? false;
-  const fields = IMPORT_FIELDS.filter((f) => f !== 'department' || departments);
+  const firms = me.activeCompany?.firms ?? false;
+  const fields = IMPORT_FIELDS.filter((f) => (f !== 'department' || departments) && (f !== 'firm' || firms));
   const ready = preview !== null && !changed && !check.isPending;
 
   return (

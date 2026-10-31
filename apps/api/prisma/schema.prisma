@@ -31,6 +31,9 @@ model Company {
   /// Departments are used (AGENTS.md: Departments): every new placement needs one, and
   /// they are shown. Off: hidden, and nothing needs one. Owners and admins switch it.
   departmentsEnabled Boolean   @default(false)
+  /// Firms are used (AGENTS.md: Firms): every new placement needs one, and salaries and
+  /// payslips go per firm. Off: hidden, and pay ignores them. Owners and admins switch it.
+  firmsEnabled       Boolean   @default(false)
   createdAt          DateTime  @default(now())
 
   /// Its plan per month (no rows only for companies from before plans: no limits, Payroll only)
@@ -49,6 +52,7 @@ model Company {
   timesheetSettings TimesheetSettings?
   shifts            Shift[]
   departments       Department[]
+  firms             Firm[]
   timesheetImports  TimesheetImport[]
   importedDayEdits  ImportedDayEdit[]
   importMapping     ImportMapping?
@@ -335,6 +339,33 @@ model Department {
   @@index([companyId])
 }
 
+enum FirmType {
+  /// One of the company's own legal entities
+  OWN
+  SUBCONTRACTOR
+}
+
+/// An employer inside the company (AGENTS.md: Firms): its own legal entity or a subcontractor.
+/// Not a tenant: nothing is separated between firms. The type never changes how pay is worked
+/// out. Names are unique in the company, ignoring case (a unique index in the migration).
+model Firm {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  name      String
+  type      FirmType
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  assignments Assignment[]
+  salaries    Salary[]
+  adjustments Adjustment[]
+  ruleSets    PayrollRuleSet[]
+
+  @@unique([id, companyId])
+  @@index([companyId])
+}
+
 model Team {
   id           String  @id @default(uuid()) @db.Uuid
   companyId    String  @db.Uuid
@@ -464,6 +495,9 @@ model Assignment {
   /// (composite foreign key). The API requires it for new placements while the company
   /// uses departments; placements from before stay null until it is filled in.
   departmentId  String?   @db.Uuid
+  /// The placement's employer (AGENTS.md: Firms). The API requires it for new placements while
+  /// the company uses firms; placements from before stay null until it is filled in.
+  firmId        String?   @db.Uuid
   /// Used when travel pay is PER_DAY_WORKED; null = no travel pay
   travelRouteId String?   @db.Uuid
   hiredOn       DateTime  @db.Date
@@ -476,6 +510,7 @@ model Assignment {
   department     Department?      @relation(fields: [departmentId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
   /// Checked only when the placement has both a team and a department (MATCH SIMPLE)
   teamDepartment Team?            @relation("PlacementTeamDepartment", fields: [teamId, departmentId, companyId], references: [id, departmentId, companyId], onDelete: NoAction, onUpdate: NoAction)
+  firm           Firm?            @relation(fields: [firmId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
   travelRoute    TravelRoute?     @relation(fields: [travelRouteId, companyId], references: [id, companyId], onDelete: NoAction)
   entries        TimesheetEntry[]
   monthlyHours   MonthlyHours[]
@@ -486,6 +521,7 @@ model Assignment {
   @@index([siteId, hiredOn])
   @@index([workerId])
   @@index([departmentId])
+  @@index([firmId])
 }
 
 /// A worker's monthly salary from a month on. It belongs to the worker, not to a
@@ -493,10 +529,14 @@ model Assignment {
 /// accountant never edits): a raise or a correction is a newer row. A month's salary is
 /// the row with the latest from-month on or before it, the newest (highest seq) if
 /// several share that month. Ranges are CHECK constraints in the migration.
+/// While the company uses firms, a salary belongs to the worker and a firm (AGENTS.md: Firms)
+/// and this reads per firm; one without a firm counts until the firm has its own.
 model Salary {
   id            String   @id @default(uuid()) @db.Uuid
   companyId     String   @db.Uuid
   workerId      String   @db.Uuid
+  /// null: from before the company used firms
+  firmId        String?  @db.Uuid
   fromYear      Int
   /// 1-based
   fromMonth     Int
@@ -507,9 +547,11 @@ model Salary {
   setAt         DateTime @default(now())
 
   worker Worker @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+  firm   Firm?  @relation(fields: [firmId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
   setBy  User   @relation(fields: [setById], references: [id], onDelete: NoAction)
 
   @@index([workerId, fromYear, fromMonth])
+  @@index([firmId])
   @@index([companyId])
 }
 
@@ -553,23 +595,27 @@ enum TravelPayMode {
   MONTHLY_AMOUNT
 }
 
-/// Where pay rules apply: the company default (siteId = null) or one site, whose
-/// rules override the default. The rules themselves are versioned by month
+/// Where pay rules apply: the company default (siteId and firmId null), one site or one
+/// firm (never both; CHECK constraint). A placement uses its firm's, else its site's, else
+/// the default (AGENTS.md: Firms). The rules themselves are versioned by month
 /// (PayrollRules); working-days overrides belong to the rule set.
 model PayrollRuleSet {
   id        String   @id @default(uuid()) @db.Uuid
   companyId String   @db.Uuid
   siteId    String?  @db.Uuid
+  firmId    String?  @db.Uuid
   createdAt DateTime @default(now())
 
   company              Company               @relation(fields: [companyId], references: [id], onDelete: NoAction)
   site                 Site?                 @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  firm                 Firm?                 @relation(fields: [firmId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
   versions             PayrollRules[]
   workingDaysOverrides WorkingDaysOverride[]
 
   /// One rule set per site. PostgreSQL treats NULLs as distinct, so "one company default
-  /// (siteId = null)" is a partial unique index added by hand in its migration.
+  /// (siteId and firmId null)" is a partial unique index added by hand in its migration.
   @@unique([companyId, siteId])
+  @@unique([companyId, firmId])
   @@unique([id, companyId])
 }
 
@@ -934,6 +980,9 @@ model Adjustment {
   id        String         @id @default(uuid()) @db.Uuid
   companyId String         @db.Uuid
   workerId  String         @db.Uuid
+  /// The payslip it belongs to (AGENTS.md: Firms). The API requires it when the worker has
+  /// more than one firm in the month; null: no firm named.
+  firmId    String?        @db.Uuid
   year      Int
   /// 1-based
   month     Int
@@ -945,6 +994,7 @@ model Adjustment {
   setAt     DateTime       @default(now())
 
   worker Worker            @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+  firm   Firm?             @relation(fields: [firmId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
   setBy  User              @relation(fields: [setById], references: [id], onDelete: NoAction)
   cancel AdjustmentCancel?
 

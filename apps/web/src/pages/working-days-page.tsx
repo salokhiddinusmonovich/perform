@@ -10,7 +10,7 @@ import { Pencil } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { DataTable } from '@/components/data-table';
 import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
@@ -28,6 +28,7 @@ import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { canViewPayRules } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
+import { useFirms } from '@/lib/organisation';
 
 interface Override {
   workingDays: number | null;
@@ -52,7 +53,7 @@ interface WorkingDaysYear {
   months: MonthRow[];
 }
 
-const workingDaysKey = (year: number) => ['working-days', year] as const;
+const workingDaysKey = (year: number, firmId: string | null) => ['working-days', firmId, year] as const;
 
 export function WorkingDaysPage() {
   const { t } = useTranslation();
@@ -64,15 +65,29 @@ export function WorkingDaysPage() {
   );
 }
 
-function WorkingDaysView() {
+/** The working days of a firm's own rules (AGENTS.md: Firms). */
+export function FirmWorkingDaysPage() {
+  const { t } = useTranslation();
+  const { firmId } = useParams<{ firmId: string }>();
+  const firm = useFirms().data?.find((f) => f.id === firmId);
+  return (
+    <>
+      <PageHeader title={t('firms.workingDaysTitle', { name: firm?.name ?? '' })} description={t('firms.workingDaysDescription')} />
+      <RequireAccess allowed={canViewPayRules}>{() => <WorkingDaysView firmId={firmId!} />}</RequireAccess>
+    </>
+  );
+}
+
+/** Working days of the company default rules, or with firmId of that firm's own. */
+function WorkingDaysView({ firmId = null }: { firmId?: string | null }) {
   const { t } = useTranslation();
   const format = useFormat();
   const queryClient = useQueryClient();
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [editing, setEditing] = useState<MonthRow | null>(null);
   const data = useQuery({
-    queryKey: workingDaysKey(year),
-    queryFn: () => api.get<WorkingDaysYear>(`/working-days?year=${year}`),
+    queryKey: workingDaysKey(year, firmId),
+    queryFn: () => api.get<WorkingDaysYear>(`${firmId ? `/firms/${firmId}` : ''}/working-days?year=${year}`),
   });
 
   const columns = useMemo<ColumnDef<MonthRow, unknown>[]>(
@@ -100,7 +115,7 @@ function WorkingDaysView() {
         enableSorting: false,
         cell: ({ row }) =>
           row.original.effective === null ? (
-            <Link to="/settings/pay-rules" className="text-sm text-muted-foreground underline underline-offset-4">
+            <Link to={firmId ? `/firms/${firmId}/pay-rules` : '/settings/pay-rules'} className="text-sm text-muted-foreground underline underline-offset-4">
               {t('workingDays.noRules')}
             </Link>
           ) : (
@@ -151,7 +166,7 @@ function WorkingDaysView() {
           ),
       },
     ],
-    [t, format, year],
+    [t, format, year, firmId],
   );
 
   return (
@@ -169,6 +184,7 @@ function WorkingDaysView() {
         // A fresh form for each month opened
         key={editing ? `${year}-${editing.month}` : 'closed'}
         year={year}
+        firmId={firmId}
         row={editing}
         onClose={() => setEditing(null)}
         onSaved={async () => {
@@ -183,11 +199,13 @@ function WorkingDaysView() {
 
 function OverrideDialog({
   year,
+  firmId,
   row,
   onClose,
   onSaved,
 }: {
   year: number;
+  firmId: string | null;
   row: MonthRow | null;
   onClose: () => void;
   onSaved: () => void;
@@ -203,7 +221,8 @@ function OverrideDialog({
   const useCalculated = form.watch('workingDays') === null;
 
   const save = useMutation({
-    mutationFn: (values: WorkingDaysOverride) => api.post(`/working-days/${year}/${row!.month}`, values),
+    mutationFn: (values: WorkingDaysOverride) =>
+      api.post(`${firmId ? `/firms/${firmId}` : ''}/working-days/${year}/${row!.month}`, values),
     onSuccess: onSaved,
     onError: (error) => {
       if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));

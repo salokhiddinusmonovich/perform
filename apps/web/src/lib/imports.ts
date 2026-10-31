@@ -20,7 +20,7 @@ export interface ImportWorkerChange {
   row: number;
   employeeNumber: string;
   name: string;
-  field: 'site' | 'department' | 'leftOn' | 'salary';
+  field: 'site' | 'department' | 'firm' | 'leftOn' | 'salary';
   file: string | null;
   app: string | null;
 }

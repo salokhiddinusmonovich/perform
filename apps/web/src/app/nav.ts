@@ -1,5 +1,6 @@
 import {
   Building,
+  Briefcase,
   Building2,
   CalendarCheck,
   CalendarDays,
@@ -30,6 +31,7 @@ import {
   inCompany,
   isPlatformAdmin,
   seesDepartments,
+  seesFirms,
   seesPay,
   type Me,
 } from '@/lib/auth';
@@ -59,6 +61,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { path: '/sites', labelKey: 'nav.sites', icon: MapPin, visible: inCompany },
       { path: '/departments', labelKey: 'nav.departments', icon: Network, visible: seesDepartments },
+      { path: '/firms', labelKey: 'nav.firms', icon: Briefcase, visible: seesFirms },
       { path: '/workers', labelKey: 'nav.workers', icon: HardHat, visible: inCompany },
       { path: '/timesheet', labelKey: 'nav.timesheet', icon: ClipboardList, visible: hasTimesheet },
     ],

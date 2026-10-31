@@ -1,10 +1,12 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query } from '@nestjs/common';
 import {
+  firmPayRulesSchema,
   holidaySchema,
   payRulesSchema,
   workingDaysOverrideSchema,
   yearMonthSchema,
   yearQuerySchema,
+  type FirmPayRules,
   type Holiday,
   type PayRules,
   type WorkingDaysOverride,
@@ -48,6 +50,71 @@ export class PayRulesController {
   @HttpCode(204)
   remove(@CompanyAuth() auth: CompanyAuthContext, @Param(new ZodPipe(yearMonthSchema)) from: YearMonth): Promise<void> {
     return this.rules.remove(auth, from);
+  }
+}
+
+/**
+ * A firm's own pay rules and working days (AGENTS.md: Firms), the same way as the company
+ * default's but without a rounding step. Without rules, its placements use the site's or the default.
+ */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+@Controller('firms/:firmId')
+export class FirmRulesController {
+  constructor(
+    private readonly rules: PayRulesService,
+    private readonly workingDays: WorkingDaysService,
+  ) {}
+
+  @Get('pay-rules')
+  list(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('firmId', ParseUUIDPipe) firmId: string,
+  ): Promise<PayRulesVersionView<FirmPayRules>[]> {
+    return this.rules.listFirm(auth.company.id, firmId);
+  }
+
+  @Put('pay-rules/:year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  set(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('firmId', ParseUUIDPipe) firmId: string,
+    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
+    @Body(new ZodPipe(firmPayRulesSchema)) body: FirmPayRules,
+  ): Promise<void> {
+    return this.rules.setFirm(auth, firmId, from, body);
+  }
+
+  @Delete('pay-rules/:year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  remove(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('firmId', ParseUUIDPipe) firmId: string,
+    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
+  ): Promise<void> {
+    return this.rules.removeFirm(auth, firmId, from);
+  }
+
+  @Get('working-days')
+  workingDaysOfYear(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('firmId', ParseUUIDPipe) firmId: string,
+    @Query(new ZodPipe(yearQuerySchema)) { year }: YearQuery,
+  ): Promise<WorkingDaysYearView> {
+    return this.workingDays.year(auth.company.id, year, firmId);
+  }
+
+  @Post('working-days/:year/:month')
+  @HttpCode(204)
+  override(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('firmId', ParseUUIDPipe) firmId: string,
+    @Param(new ZodPipe(yearMonthSchema)) month: YearMonth,
+    @Body(new ZodPipe(workingDaysOverrideSchema)) body: WorkingDaysOverride,
+  ): Promise<void> {
+    return this.workingDays.override(auth, month, body, firmId);
   }
 }
 

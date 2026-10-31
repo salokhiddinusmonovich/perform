@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { EmploymentType, Prisma } from '@prisma/client';
+import type { EmploymentType, FirmType, Prisma } from '@prisma/client';
 import type { CreateWorker, Placement, Salary, Worker } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
@@ -9,6 +9,7 @@ import { assertMonthsOpen, monthIndex } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertManagesSite, seesPay, seesPersonalData, seesPlacement } from './access';
 import { findDepartment } from './departments.service';
+import { findFirm } from './firms.service';
 import { withinWorkerLimit } from './worker-limit';
 import { shiftInfo, type ShiftInfo } from './worker-shifts';
 
@@ -21,6 +22,10 @@ export interface PlacementView {
   /** The placement's department (AGENTS.md: Departments); null: none set */
   departmentId: string | null;
   departmentName: string | null;
+  /** The placement's employer (AGENTS.md: Firms); null: none set */
+  firmId: string | null;
+  firmName: string | null;
+  firmType: FirmType | null;
   /** First day at this site */
   from: string;
   /** Last day, or null while the worker is still there */
@@ -40,11 +45,13 @@ export interface PersonalDataView {
 /** A salary from a month on. Never sent to timekeepers or foremen (AGENTS.md: Roles). */
 export interface SalaryView {
   id: string;
+  /** The firm it is paid by (AGENTS.md: Firms); null: from before the company used firms */
+  firm: { id: string; name: string } | null;
   fromYear: number;
   fromMonth: number;
   monthlySalary: string;
   reason: string | null;
-  /** A newer salary from the same month corrected this one, so it never applies. */
+  /** A newer salary from the same month (and firm) corrected this one, so it never applies. */
   corrected: boolean;
   setBy: { fullName: string };
   setAt: Date;
@@ -66,7 +73,7 @@ export interface WorkerView {
   /** null when the caller doesn't see personal data */
   personal: PersonalDataView | null;
   /**
-   * The latest salary (by from-month; it may start in a later month). null when there
+   * The latest salary of the latest placement's firm (by from-month; it may start in a later month). null when there
    * is none yet or the caller doesn't see pay.
    */
   salary: Pick<SalaryView, 'fromYear' | 'fromMonth' | 'monthlySalary'> | null;
@@ -78,6 +85,7 @@ const PLACEMENT_INCLUDE = {
   site: { select: { name: true } },
   team: { select: { name: true } },
   department: { select: { name: true } },
+  firm: { select: { name: true, type: true } },
 } as const satisfies Prisma.AssignmentInclude;
 
 /** Newest first: by from-month, then the one added last. The first row of a month is the one that counts. */
@@ -90,11 +98,26 @@ export const SALARY_ORDER = [
 /** Placements newest first: the first is the latest, which moves and leaving act on. */
 const WORKER_INCLUDE = {
   assignments: { orderBy: { hiredOn: 'desc' }, include: PLACEMENT_INCLUDE },
-  salaries: { orderBy: SALARY_ORDER, take: 1 },
+  salaries: { orderBy: SALARY_ORDER },
   shifts: { orderBy: { fromDay: 'desc' }, include: { shift: true } },
 } as const satisfies Prisma.WorkerInclude;
 
 type WorkerRow = Prisma.WorkerGetPayload<{ include: typeof WORKER_INCLUDE }>;
+
+/**
+ * The salary that counts for a firm among a worker's salaries (newest first, SALARY_ORDER, up
+ * to the month in question): the firm's own, else the newest without a firm (AGENTS.md:
+ * Firms). A placement without a firm reads only those. While the company doesn't use firms
+ * they don't matter, so the newest counts.
+ */
+export function salaryForFirm<S extends { firmId: string | null }>(
+  rows: readonly S[],
+  firmId: string | null,
+  firmsOn: boolean,
+): S | null {
+  if (!firmsOn) return rows[0] ?? null;
+  return rows.find((r) => r.firmId === firmId) ?? rows.find((r) => r.firmId === null) ?? null;
+}
 
 const PERSONAL_FIELDS = ['pinfl', 'birthDate', 'nationality', 'passportSeries', 'passportNumber', 'phone'] as const;
 
@@ -141,17 +164,18 @@ export class WorkersService {
     const { worker: details, placement } = input;
     assertManagesSite(auth, placement.siteId);
     const departmentId = await this.checkPlace(tx, auth, placement, 'placement.');
+    const firmId = await this.checkFirm(tx, auth, placement, 'placement.');
     await this.assertUniqueFree(tx, companyId, details, null);
     await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
     const { worker, assignment } = await withinWorkerLimit(tx, companyId, null, placement.from, async () => {
       const worker = await tx.worker.create({ data: { companyId, ...toColumns(details) } });
-      const assignment = await tx.assignment.create({ data: placementColumns(companyId, worker.id, placement, departmentId) });
+      const assignment = await tx.assignment.create({ data: placementColumns(companyId, worker.id, placement, departmentId, firmId) });
       return { worker, assignment };
     });
     await this.record(tx, auth, 'worker.create', worker.id, {
       name: fullName(details),
       employeeNumber: details.employeeNumber,
-      placement: { assignmentId: assignment.id, ...placement, departmentId },
+      placement: { assignmentId: assignment.id, ...placement, departmentId, firmId },
       personalData: PERSONAL_FIELDS.filter((f) => details[f] !== null),
     });
     return { id: worker.id };
@@ -180,33 +204,38 @@ export class WorkersService {
    * after leaving. A current placement ends the day before.
    */
   async place(auth: CompanyAuthContext, id: string, placement: Placement): Promise<void> {
-    const companyId = auth.company.id;
-    await this.prisma.$transaction(async (tx) => {
-      const worker = await this.find(tx, auth, id);
-      const current = worker.assignments[0];
-      assertManagesSite(auth, current.siteId);
-      assertManagesSite(auth, placement.siteId);
-      const departmentId = await this.checkPlace(tx, auth, placement, '');
+    await this.prisma.$transaction((tx) => this.placeIn(tx, auth, id, placement));
+  }
 
-      const stillThere = current.leftOn === null || isoDay(current.leftOn) >= placement.from;
-      const created = await withinWorkerLimit(tx, companyId, id, placement.from, async () => {
-        if (stillThere) {
-          if (placement.from <= isoDay(current.hiredOn)) {
-            throw badRequest('validation', { issues: [{ path: 'from', message: 'validation.placementBeforeCurrent' }] });
-          }
-          const lastDay = previousDay(placement.from);
-          await this.endPlacement(tx, companyId, current.id, lastDay);
-        } else {
-          await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
+  /** place() inside the caller's transaction. */
+  async placeIn(tx: Tx, auth: CompanyAuthContext, id: string, placement: Placement): Promise<void> {
+    const companyId = auth.company.id;
+    const worker = await this.find(tx, auth, id);
+    const current = worker.assignments[0];
+    assertManagesSite(auth, current.siteId);
+    assertManagesSite(auth, placement.siteId);
+    const departmentId = await this.checkPlace(tx, auth, placement, '');
+    const firmId = await this.checkFirm(tx, auth, placement, '');
+
+    const stillThere = current.leftOn === null || isoDay(current.leftOn) >= placement.from;
+    const created = await withinWorkerLimit(tx, companyId, id, placement.from, async () => {
+      if (stillThere) {
+        if (placement.from <= isoDay(current.hiredOn)) {
+          throw badRequest('validation', { issues: [{ path: 'from', message: 'validation.placementBeforeCurrent' }] });
         }
-        return tx.assignment.create({ data: placementColumns(companyId, id, placement, departmentId) });
-      });
-      await this.record(tx, auth, 'worker.place', id, {
-        assignmentId: created.id,
-        ...placement,
-        departmentId,
-        endedAssignmentId: stillThere ? current.id : null,
-      });
+        const lastDay = previousDay(placement.from);
+        await this.endPlacement(tx, companyId, current.id, lastDay);
+      } else {
+        await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
+      }
+      return tx.assignment.create({ data: placementColumns(companyId, id, placement, departmentId, firmId) });
+    });
+    await this.record(tx, auth, 'worker.place', id, {
+      assignmentId: created.id,
+      ...placement,
+      departmentId,
+      firmId,
+      endedAssignmentId: stillThere ? current.id : null,
     });
   }
 
@@ -230,6 +259,37 @@ export class WorkersService {
         assignmentId: placementId,
         departmentId,
         departmentName: department.name,
+      });
+    });
+  }
+
+  /**
+   * Fills in the firm of a placement that has none (from before the company used firms). The
+   * firm decides the rules, salary and payslip of the placement's days, so none of its months
+   * may be locked; a placement reaching into a locked month moves to the firm by a new
+   * placement from a day instead.
+   */
+  async fillFirm(auth: CompanyAuthContext, id: string, placementId: string, firmId: string): Promise<void> {
+    const companyId = auth.company.id;
+    await this.prisma.$transaction(async (tx) => {
+      const worker = await this.find(tx, auth, id);
+      const placement = worker.assignments.find((p) => p.id === placementId);
+      if (!placement) throw notFound('placement.notFound');
+      assertManagesSite(auth, placement.siteId);
+      if (placement.firmId) throw conflict('placement.hasFirm');
+      const firm = await findFirm(tx, companyId, firmId);
+      const last = placement.leftOn && monthOfDay(isoDay(placement.leftOn));
+      await assertMonthsOpen(
+        tx,
+        companyId,
+        monthOfDay(isoDay(placement.hiredOn)),
+        last && { year: last.year, month: last.month + 1 },
+      );
+      await tx.assignment.update({ where: { id: placementId }, data: { firmId } });
+      await this.record(tx, auth, 'worker.placementFirm', id, {
+        assignmentId: placementId,
+        firmId,
+        firmName: firm.name,
       });
     });
   }
@@ -265,15 +325,18 @@ export class WorkersService {
     const rows = await this.prisma.salary.findMany({
       where: { workerId: id, companyId: auth.company.id },
       orderBy: SALARY_ORDER,
-      include: { setBy: { select: { fullName: true } } },
+      include: { setBy: { select: { fullName: true } }, firm: { select: { id: true, name: true } } },
     });
     return rows.map((r, i) => ({
       id: r.id,
+      firm: r.firm,
       fromYear: r.fromYear,
       fromMonth: r.fromMonth,
       monthlySalary: r.monthlySalary.toString(),
       reason: r.reason,
-      corrected: i > 0 && rows[i - 1].fromYear === r.fromYear && rows[i - 1].fromMonth === r.fromMonth,
+      corrected: rows
+        .slice(0, i)
+        .some((o) => o.firmId === r.firmId && o.fromYear === r.fromYear && o.fromMonth === r.fromMonth),
       setBy: { fullName: r.setBy.fullName },
       setAt: r.setAt,
     }));
@@ -282,6 +345,8 @@ export class WorkersService {
   /**
    * Adds a salary from a month on. It covers the months until the next later salary, so
    * none of those may be locked. A salary from a month that already has one corrects it.
+   * While the company uses firms all this is per firm, so a worker can have another salary
+   * in a new firm for the same month (AGENTS.md: Firms).
    */
   async addSalary(auth: CompanyAuthContext, id: string, input: Salary): Promise<{ id: string }> {
     return this.prisma.$transaction((tx) => this.addSalaryIn(tx, auth, id, input));
@@ -291,8 +356,16 @@ export class WorkersService {
   async addSalaryIn(tx: Tx, auth: CompanyAuthContext, id: string, input: Salary): Promise<{ id: string }> {
     const companyId = auth.company.id;
     await this.find(tx, auth, id);
+    const firmId = auth.company.firms ? input.firmId : null;
+    if (auth.company.firms) {
+      if (!firmId) throw badRequest('validation', { issues: [{ path: 'firmId', message: 'validation.required' }] });
+      await findFirm(tx, companyId, firmId);
+    }
     const start = monthIndex(input.fromYear, input.fromMonth);
-    const rows = await tx.salary.findMany({ where: { workerId: id, companyId }, orderBy: SALARY_ORDER });
+    const rows = await tx.salary.findMany({
+      where: { workerId: id, companyId, ...(auth.company.firms ? { firmId } : {}) },
+      orderBy: SALARY_ORDER,
+    });
     const inForce = rows.find((r) => monthIndex(r.fromYear, r.fromMonth) <= start) ?? null;
     const next = rows.filter((r) => monthIndex(r.fromYear, r.fromMonth) > start).at(-1) ?? null;
     await assertMonthsOpen(
@@ -304,10 +377,11 @@ export class WorkersService {
     if (inForce && inForce.monthlySalary.toString() === input.monthlySalary) throw conflict('salary.unchanged');
 
     const row = await tx.salary.create({
-      data: { companyId, workerId: id, ...input, setById: auth.user.id },
+      data: { companyId, workerId: id, ...input, firmId, setById: auth.user.id },
     });
     await this.record(tx, auth, 'salary.add', id, {
       salaryId: row.id,
+      firmId,
       fromYear: input.fromYear,
       fromMonth: input.fromMonth,
       from: inForce ? inForce.monthlySalary.toString() : null,
@@ -360,6 +434,18 @@ export class WorkersService {
     return null;
   }
 
+  /**
+   * The placement's firm: the one chosen, which must be active, and required while the company
+   * uses firms. While it doesn't, placements have none.
+   */
+  private async checkFirm(tx: Tx, auth: CompanyAuthContext, placement: Placement, at: '' | 'placement.'): Promise<string | null> {
+    if (!auth.company.firms) return null;
+    if (!placement.firmId) {
+      throw badRequest('validation', { issues: [{ path: `${at}firmId`, message: 'validation.required' }] });
+    }
+    return (await findFirm(tx, auth.company.id, placement.firmId)).id;
+  }
+
   /** The PINFL and the employee number must not be another worker's in the company. */
   private async assertUniqueFree(tx: Tx, companyId: string, details: Worker, exceptId: string | null) {
     const not = exceptId ? { id: exceptId } : undefined;
@@ -394,6 +480,7 @@ export class WorkersService {
 
   private view(auth: CompanyAuthContext, w: WorkerRow): WorkerView {
     const p = w.assignments[0];
+    const salary = salaryForFirm(w.salaries, p?.firmId ?? null, auth.company.firms);
     return {
       id: w.id,
       employeeNumber: w.employeeNumber,
@@ -411,6 +498,9 @@ export class WorkersService {
             teamName: p.team?.name ?? null,
             departmentId: p.departmentId,
             departmentName: p.department?.name ?? null,
+            firmId: p.firmId,
+            firmName: p.firm?.name ?? null,
+            firmType: p.firm?.type ?? null,
             from: isoDay(p.hiredOn),
             until: p.leftOn ? isoDay(p.leftOn) : null,
           }
@@ -427,11 +517,11 @@ export class WorkersService {
           }
         : null,
       salary:
-        seesPay(auth) && w.salaries[0]
+        seesPay(auth) && salary
           ? {
-              fromYear: w.salaries[0].fromYear,
-              fromMonth: w.salaries[0].fromMonth,
-              monthlySalary: w.salaries[0].monthlySalary.toString(),
+              fromYear: salary.fromYear,
+              fromMonth: salary.fromMonth,
+              monthlySalary: salary.monthlySalary.toString(),
             }
           : null,
     };
@@ -469,8 +559,8 @@ function toInput(w: WorkerRow): Worker {
   };
 }
 
-function placementColumns(companyId: string, workerId: string, p: Placement, departmentId: string | null) {
-  return { companyId, workerId, siteId: p.siteId, teamId: p.teamId, departmentId, hiredOn: dayToDate(p.from) };
+function placementColumns(companyId: string, workerId: string, p: Placement, departmentId: string | null, firmId: string | null) {
+  return { companyId, workerId, siteId: p.siteId, teamId: p.teamId, departmentId, firmId, hiredOn: dayToDate(p.from) };
 }
 
 function shiftToday(auth: CompanyAuthContext, w: WorkerRow): ShiftInfo | null {
