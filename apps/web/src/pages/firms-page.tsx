@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { FIRM_TYPES, firmSchema, type Firm, type FirmInput, type FirmType } from '@puantaj/schemas';
 import { useMutation } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { CalendarCheck, MoreHorizontal, Pencil, Plus, Power, Scale } from 'lucide-react';
+import { MoreHorizontal, Pencil, Plus, Power, Scale } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
 import { Field, fieldControlProps, FormActions, FormError } from '@/components/form';
 import { PageHeader } from '@/components/page-header';
+import { RuleSetUseDialog } from '@/components/rule-set-use-dialog';
 import { RequireAccess } from '@/components/require-access';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
@@ -69,6 +70,7 @@ function FirmsView({ me, creating, onCreatingChange }: { me: Me; creating: boole
   const refresh = useRefreshOrganisation();
   const [editing, setEditing] = useState<FirmItem | null>(null);
   const [toggling, setToggling] = useState<FirmItem | null>(null);
+  const [rulesOf, setRulesOf] = useState<FirmItem | null>(null);
   const [typeFilter, setTypeFilter] = useState<FirmType | typeof ALL_TYPES>(ALL_TYPES);
   const manages = canManageCompany(me);
   const seesRules = canViewPayRules(me);
@@ -136,20 +138,10 @@ function FirmsView({ me, creating, onCreatingChange }: { me: Me; creating: boole
                       </DropdownMenuItem>
                     )}
                     {seesRules && (
-                      <>
-                        <DropdownMenuItem asChild>
-                          <Link to={`/firms/${row.original.id}/pay-rules`}>
-                            <Scale aria-hidden />
-                            {t('firms.payRules')}
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link to={`/firms/${row.original.id}/working-days`}>
-                            <CalendarCheck aria-hidden />
-                            {t('firms.workingDays')}
-                          </Link>
-                        </DropdownMenuItem>
-                      </>
+                      <DropdownMenuItem onSelect={() => setRulesOf(row.original)}>
+                        <Scale aria-hidden />
+                        {t('nav.payRules')}
+                      </DropdownMenuItem>
                     )}
                     {manages && (
                       <DropdownMenuItem onSelect={() => setToggling(row.original)}>
@@ -230,6 +222,14 @@ function FirmsView({ me, creating, onCreatingChange }: { me: Me; creating: boole
             toast.success(t('common.saved'));
             await refresh();
           }}
+        />
+      )}
+      {rulesOf && (
+        <RuleSetUseDialog
+          owner={{ kind: 'firms', id: rulesOf.id }}
+          name={rulesOf.name}
+          canChange={manages}
+          onClose={() => setRulesOf(null)}
         />
       )}
       <ConfirmDialog

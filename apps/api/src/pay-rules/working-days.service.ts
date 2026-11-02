@@ -4,7 +4,6 @@ import type { WorkingDaysOverride } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict } from '../common/api-error';
-import { findFirm } from '../organisation/firms.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertMonthsOpen } from './months';
 import { PayRulesService } from './pay-rules.service';
@@ -36,7 +35,7 @@ export interface WorkingDaysYearView {
 }
 
 /**
- * Working days per month of the company default rule set or a firm's: calculated from its
+ * Working days per month of the company default rule set or a named one: calculated from its
  * rest weekdays and the holidays, with overrides by an owner, admin or accountant. Overrides
  * are only ever added (the accountant can't edit); the newest counts.
  */
@@ -48,9 +47,8 @@ export class WorkingDaysService {
     private readonly audit: AuditService,
   ) {}
 
-  async year(companyId: string, year: number, firmId: string | null = null): Promise<WorkingDaysYearView> {
-    if (firmId) await findFirm(this.prisma, companyId, firmId, firmId);
-    const set = firmId ? await this.rules.firmRuleSet(companyId, firmId) : await this.rules.defaultRuleSet(companyId);
+  async year(companyId: string, year: number, ruleSetId: string | null = null): Promise<WorkingDaysYearView> {
+    const set = ruleSetId ? await this.rules.namedRuleSet(companyId, ruleSetId) : await this.rules.defaultRuleSet(companyId);
     const [holidays, locked, overrides] = await Promise.all([
       this.prisma.holiday.findMany({
         where: { companyId, date: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year + 1, 0, 1)) } },
@@ -88,13 +86,12 @@ export class WorkingDaysService {
     auth: CompanyAuthContext,
     { year, month }: { year: number; month: number },
     input: WorkingDaysOverride,
-    firmId: string | null = null,
+    ruleSetId: string | null = null,
   ): Promise<void> {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
       await assertMonthsOpen(tx, companyId, { year, month });
-      if (firmId) await findFirm(tx, companyId, firmId, firmId);
-      const set = firmId ? await this.rules.firmRuleSet(companyId, firmId, tx) : await this.rules.defaultRuleSet(companyId, tx);
+      const set = ruleSetId ? await this.rules.namedRuleSet(companyId, ruleSetId, tx) : await this.rules.defaultRuleSet(companyId, tx);
       const current = set && (await this.rules.month(companyId, set.id, year, month, tx));
       if (!set || !current?.calendar || !current.workingDays) throw conflict('payRules.notSet');
       if (input.workingDays !== null && input.workingDays > current.calendar.length) {
@@ -121,7 +118,7 @@ export class WorkingDaysService {
           entityType: 'WorkingDaysOverride',
           entityId: row.id,
           data: {
-            firmId,
+            ruleSetId: set.id,
             year,
             month,
             calculated: current.workingDays.calculated,

@@ -34,7 +34,8 @@
     "shifts": "Shifts",
     "departments": "Departments",
     "import": "Excel import",
-    "firms": "Firms"
+    "firms": "Firms",
+    "ruleSets": "Rule sets"
   },
   "settings": {
     "language": "Language",
@@ -509,6 +510,14 @@
       "inactive": "This firm is closed.",
       "hasWorkers": "Workers are placed in this firm, now or from a later day. Move them first.",
       "noneActive": "Add a firm before switching firms on."
+    },
+    "ruleSet": {
+      "notFound": "This rule set doesn’t exist.",
+      "nameTaken": "A rule set with this name already exists.",
+      "inactive": "This rule set is switched off.",
+      "inUse": "A site or firm uses this rule set. Move them to another one first.",
+      "noRulesForMonth": "This rule set has no rules for that month. Set them up first.",
+      "useNotFound": "This choice no longer exists."
     }
   },
   "payRules": {
@@ -1070,7 +1079,6 @@
       "HOLIDAY_HOURS_ABOVE_HOLIDAYS": "too many holiday hours"
     },
     "defaultRules": "Under the company’s rules",
-    "siteRules": "Under the rules of {{site}}",
     "hourlyRate": "Hourly rate = {{salary}} ÷ ({{days}} working days × {{hours}} h) = {{rate}}",
     "workingDaysOverridden": "(working days set by hand; calculated: {{calculated}})",
     "hourKinds": {
@@ -1127,8 +1135,8 @@
     "problemsFilter": "Problems",
     "byFirm": "By firm",
     "byFirmHint": "A worker who moved between firms counts in both, with what each firm pays.",
-    "firmRules": "Rules of {{firm}}",
-    "payslipsTotal": "Total from all firms"
+    "payslipsTotal": "Total from all firms",
+    "ruleSetRules": "Under the rules of “{{name}}”"
   },
   "timesheet": {
     "title": "Timesheet",
@@ -1440,14 +1448,51 @@
       "title": "Reopen this firm?",
       "description": "“{{name}}” will be offered for new placements again."
     },
-    "payRules": "Pay rules",
-    "workingDays": "Working days",
-    "payRulesTitle": "Pay rules: {{name}}",
-    "payRulesDescription": "Rules for this firm’s workers, in place of the site’s or the company’s, from the month you choose. Rounding stays the company’s.",
-    "workingDaysTitle": "Working days: {{name}}",
-    "workingDaysDescription": "Working days under this firm’s own rules.",
-    "rulesEmptyTitle": "This firm has no rules of its own",
-    "rulesEmptyDescription": "Its workers follow the rules of their site or the company. Add rules only if this firm pays differently.",
     "missing": "Workers without a firm: {{count}}"
+  },
+  "ruleSets": {
+    "title": "Rule sets",
+    "description": "Pay rules that several sites and firms share. A firm’s set comes before its site’s, and a site’s before the company’s rules.",
+    "create": "Add rule set",
+    "rename": "Rename",
+    "deactivate": "Switch off",
+    "reactivate": "Switch on again",
+    "name": "Name",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Switched off",
+    "ruleSet": "Rule set",
+    "usedByColumn": "Used by",
+    "noRules": "No rules",
+    "empty": "No rule sets yet",
+    "emptyDescription": "Add one if some sites or firms pay differently. The others stay on the company’s rules.",
+    "dialogDescription": "Use a name everyone understands, such as “6-day week”.",
+    "payRulesTitle": "Pay rules: {{name}}",
+    "workingDaysTitle": "Working days: {{name}}",
+    "workingDaysDescription": "Working days under this rule set. A change reaches everyone using it.",
+    "usedBy": "Used by: {{names}}. A change reaches all of them. Rounding stays the company’s.",
+    "notUsed": "Nobody uses it yet. Rounding stays the company’s.",
+    "rulesEmptyTitle": "This rule set has no rules yet",
+    "rulesEmptyDescription": "Set up its rules so sites and firms can choose it.",
+    "useTitle": "Pay rules: {{name}}",
+    "useDescription": "Which rule set applies from the month you choose. Earlier months keep their rules.",
+    "noneFirm": "No set of its own: the site’s or company’s rules",
+    "noneSite": "No set of its own: the company’s rules",
+    "fromMonth": "From {{month}}",
+    "removeUse": "Remove the choice from {{month}}",
+    "manageLink": "Manage rule sets",
+    "confirmRemoveUse": {
+      "title": "Remove this choice?",
+      "description": "The choice for “{{name}}” from {{month}} will be removed. Those months go back to the choice before it.",
+      "confirm": "Remove"
+    },
+    "confirmDeactivate": {
+      "title": "Switch this rule set off?",
+      "description": "“{{name}}” will no longer be offered. Past months don’t change."
+    },
+    "confirmReactivate": {
+      "title": "Switch this rule set on again?",
+      "description": "“{{name}}” will be offered again."
+    }
   }
 }

@@ -34,7 +34,8 @@
     "shifts": "Vardiyalar",
     "departments": "Bölümler",
     "import": "Excel’den aktar",
-    "firms": "Firmalar"
+    "firms": "Firmalar",
+    "ruleSets": "Kural setleri"
   },
   "settings": {
     "language": "Dil",
@@ -509,6 +510,14 @@
       "inactive": "Bu firma kapalı.",
       "hasWorkers": "Bu firmada şimdi veya ileri bir günden itibaren işçi var. Önce onları taşıyın.",
       "noneActive": "Firmaları açmadan önce bir firma ekleyin."
+    },
+    "ruleSet": {
+      "notFound": "Böyle bir kural seti yok.",
+      "nameTaken": "Bu adla bir kural seti zaten var.",
+      "inactive": "Bu kural seti kapalı.",
+      "inUse": "Bu kural setini bir şantiye veya firma kullanıyor. Önce onları başka bir sete geçirin.",
+      "noRulesForMonth": "Bu sette o ay için kural yok. Önce kuralları girin.",
+      "useNotFound": "Bu seçim artık yok."
     }
   },
   "payRules": {
@@ -1070,7 +1079,6 @@
       "HOLIDAY_HOURS_ABOVE_HOLIDAYS": "tatil günü saatleri çok fazla"
     },
     "defaultRules": "Şirket kurallarına göre",
-    "siteRules": "{{site}} kurallarına göre",
     "hourlyRate": "Saatlik ücret = {{salary}} ÷ ({{days}} iş günü × {{hours}} sa) = {{rate}}",
     "workingDaysOverridden": "(iş günleri elle değiştirildi, hesaplanan: {{calculated}})",
     "hourKinds": {
@@ -1127,8 +1135,8 @@
     "problemsFilter": "Sorunlar",
     "byFirm": "Firmalara göre",
     "byFirmHint": "Firmalar arasında geçen işçi, her firmanın ödediği tutarla ikisinde de sayılır.",
-    "firmRules": "{{firm}} kuralları",
-    "payslipsTotal": "Tüm firmalardan toplam"
+    "payslipsTotal": "Tüm firmalardan toplam",
+    "ruleSetRules": "“{{name}}” kurallarına göre"
   },
   "timesheet": {
     "title": "Puantaj",
@@ -1440,14 +1448,51 @@
       "title": "Bu firma yeniden açılsın mı?",
       "description": "“{{name}}” yeni görev yerleri için yeniden sunulacak."
     },
-    "payRules": "Ücret kuralları",
-    "workingDays": "Çalışma günleri",
-    "payRulesTitle": "Ücret kuralları: {{name}}",
-    "payRulesDescription": "Seçtiğiniz aydan itibaren bu firmanın işçileri için şantiye veya şirket kuralları yerine geçer. Yuvarlama şirketin olarak kalır.",
-    "workingDaysTitle": "Çalışma günleri: {{name}}",
-    "workingDaysDescription": "Bu firmanın kendi kurallarına göre çalışma günleri.",
-    "rulesEmptyTitle": "Bu firmanın kendi kuralları yok",
-    "rulesEmptyDescription": "İşçileri şantiye veya şirket kurallarına uyar. Yalnızca bu firma farklı ödüyorsa kural ekleyin.",
     "missing": "Firmasız işçiler: {{count}}"
+  },
+  "ruleSets": {
+    "title": "Kural setleri",
+    "description": "Birden çok şantiye ve firmanın birlikte kullandığı ücret kuralları. Firmanın seti şantiyeninkinden, şantiyenin seti şirket kurallarından önce gelir.",
+    "create": "Set ekle",
+    "rename": "Yeniden adlandır",
+    "deactivate": "Kapat",
+    "reactivate": "Yeniden aç",
+    "name": "Ad",
+    "status": "Durum",
+    "active": "Aktif",
+    "inactive": "Kapalı",
+    "ruleSet": "Kural seti",
+    "usedByColumn": "Kullananlar",
+    "noRules": "Kural yok",
+    "empty": "Henüz set yok",
+    "emptyDescription": "Bazı şantiye veya firmalar farklı ödüyorsa bir set ekleyin. Diğerleri şirket kurallarıyla devam eder.",
+    "dialogDescription": "Herkesin anlayacağı bir ad verin, örneğin “6 günlük hafta”.",
+    "payRulesTitle": "Ücret kuralları: {{name}}",
+    "workingDaysTitle": "İş günleri: {{name}}",
+    "workingDaysDescription": "Bu kural setine göre iş günleri. Değişiklik seti kullanan herkesi etkiler.",
+    "usedBy": "Kullananlar: {{names}}. Değişiklik hepsini etkiler. Yuvarlama şirketin ayarı olarak kalır.",
+    "notUsed": "Henüz kimse kullanmıyor. Yuvarlama şirketin ayarı olarak kalır.",
+    "rulesEmptyTitle": "Bu sette henüz kural yok",
+    "rulesEmptyDescription": "Şantiye ve firmaların seçebilmesi için önce kuralları girin.",
+    "useTitle": "Ücret kuralları: {{name}}",
+    "useDescription": "Seçilen aydan itibaren hangi kural setinin geçerli olacağı. Önceki aylar kendi kurallarında kalır.",
+    "noneFirm": "Kendi seti yok: şantiye veya şirket kuralları",
+    "noneSite": "Kendi seti yok: şirket kuralları",
+    "fromMonth": "{{month}} itibarıyla",
+    "removeUse": "{{month}} seçimini kaldır",
+    "manageLink": "Kural setlerini yönet",
+    "confirmRemoveUse": {
+      "title": "Seçim kaldırılsın mı?",
+      "description": "“{{name}}” için {{month}} seçimi kaldırılacak. Bu aylar önceki seçime döner.",
+      "confirm": "Kaldır"
+    },
+    "confirmDeactivate": {
+      "title": "Set kapatılsın mı?",
+      "description": "“{{name}}” artık seçim için sunulmayacak. Geçmiş aylar değişmez."
+    },
+    "confirmReactivate": {
+      "title": "Set yeniden açılsın mı?",
+      "description": "“{{name}}” yeniden seçim için sunulacak."
+    }
   }
 }

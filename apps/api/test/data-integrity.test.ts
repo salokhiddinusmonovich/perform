@@ -161,11 +161,17 @@ describe('payroll rule sets', () => {
     await prisma.payrollRuleSet.create({ data: { companyId: company.id } });
     await expect(prisma.payrollRuleSet.create({ data: { companyId: company.id } })).rejects.toMatchObject(UNIQUE_VIOLATION);
 
-    await prisma.payrollRuleSet.create({ data: { companyId: company.id, siteId: siteA.id } });
-    await prisma.payrollRuleSet.create({ data: { companyId: company.id, siteId: siteB.id } });
-    await expect(
-      prisma.payrollRuleSet.create({ data: { companyId: company.id, siteId: siteA.id } }),
-    ).rejects.toMatchObject(UNIQUE_VIOLATION);
+    // Named sets are unique in the company, ignoring case.
+    const named = await prisma.payrollRuleSet.create({ data: { companyId: company.id, name: 'Shared' } });
+    await expect(prisma.payrollRuleSet.create({ data: { companyId: company.id, name: 'SHARED' } })).rejects.toMatchObject(UNIQUE_VIOLATION);
+
+    // One choice per site and month, and a choice belongs to one site or one firm.
+    const user = await createUser(prisma);
+    const use = { companyId: company.id, ruleSetId: named.id, fromYear: 2026, fromMonth: 9, setById: user.id };
+    await prisma.ruleSetUse.create({ data: { ...use, siteId: siteA.id } });
+    await prisma.ruleSetUse.create({ data: { ...use, siteId: siteB.id } });
+    await expect(prisma.ruleSetUse.create({ data: { ...use, siteId: siteA.id } })).rejects.toMatchObject(UNIQUE_VIOLATION);
+    await expect(prisma.ruleSetUse.create({ data: use })).rejects.toThrow();
 
     // Another company has its own default.
     await prisma.payrollRuleSet.create({ data: { companyId: other.id } });
@@ -253,7 +259,9 @@ describe('rows never mix two companies', () => {
       prisma.team.create({ data: { companyId: a.company.id, siteId: otherSite.id, name: 'Team X' } }),
     ).rejects.toMatchObject(STILL_REFERENCED);
     await expect(
-      prisma.payrollRuleSet.create({ data: { companyId: a.company.id, siteId: otherSite.id } }),
+      prisma.ruleSetUse.create({
+        data: { companyId: a.company.id, siteId: otherSite.id, fromYear: 2026, fromMonth: 9, setById: (await createUser(prisma)).id },
+      }),
     ).rejects.toMatchObject(STILL_REFERENCED);
 
     const user = await createUser(prisma);

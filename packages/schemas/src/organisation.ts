@@ -164,6 +164,23 @@ export const updateFirmSchema = firmSchema
   .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
 export type UpdateFirm = z.output<typeof updateFirmSchema>;
 
+/** A named rule set that sites and firms share (AGENTS.md: Pay rule sets). */
+export const ruleSetSchema = z.object({ name: requiredName(120) });
+export type RuleSetInput = z.input<typeof ruleSetSchema>;
+export type RuleSet = z.output<typeof ruleSetSchema>;
+
+/** Renaming or (de)activating a named rule set. */
+export const updateRuleSetSchema = ruleSetSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
+export type UpdateRuleSet = z.output<typeof updateRuleSetSchema>;
+
+/** The rule set a site or firm uses from a month; null: none of its own. */
+export const ruleSetUseSchema = z.object({ ruleSetId: z.uuid({ error: 'validation.invalid' }).nullable() });
+export type RuleSetUseInput = z.input<typeof ruleSetUseSchema>;
+export type RuleSetUse = z.output<typeof ruleSetUseSchema>;
+
 /** Whether the company uses firms (every new placement then needs one). */
 export const firmSettingsSchema = z.object({ enabled: z.boolean() });
 export type FirmSettingsInput = z.input<typeof firmSettingsSchema>;

@@ -67,12 +67,12 @@ async function member(companyId: string, role: Role) {
 }
 
 /**
- * Own pay rules for a site (8-hour days), written directly: there is no site rules API
- * yet. Like every site rule set, it has no rounding step.
+ * A named rule set (8-hour days) chosen by a site, written directly: these tests are about
+ * pay, not the rule set API. Like every named set, it has no rounding step.
  */
-async function siteRules(companyId: string, siteId: string) {
+async function siteRules(companyId: string, siteId: string, name: string) {
   const user = await createUser(ctx.prisma);
-  const set = await ctx.prisma.payrollRuleSet.create({ data: { companyId, siteId } });
+  const set = await ctx.prisma.payrollRuleSet.create({ data: { companyId, name } });
   await ctx.prisma.payrollRules.create({
     data: {
       companyId,
@@ -92,6 +92,7 @@ async function siteRules(companyId: string, siteId: string) {
       setById: user.id,
     },
   });
+  await ctx.prisma.ruleSetUse.create({ data: { companyId, siteId, ruleSetId: set.id, fromYear: 2026, fromMonth: 1, setById: user.id } });
 }
 
 /** A daily timesheet entry, written directly: these tests are about pay, not hour entry. */
@@ -190,7 +191,7 @@ describe('payroll', () => {
     });
     expect(w.parts).toHaveLength(1);
     expect(w.parts[0]).toMatchObject({
-      ruleSetSiteName: null,
+      ruleSetName: null,
       rulesFrom: { year: 2026, month: 9 },
       placementIds: [placementA],
       places: { [placementA]: { siteName: 'Site A', from: '2026-09-01', until: null } },
@@ -216,7 +217,7 @@ describe('payroll', () => {
     await agent.post(`/api/workers/${workerId}/placements`).send({ siteId: siteB, from: '2026-09-16' }).expect(204);
     const placementB = (await agent.get(`/api/workers/${workerId}`).expect(200)).body.placement.id as string;
     // Site B's own rules: 8-hour days.
-    await siteRules(c.id, siteB);
+    await siteRules(c.id, siteB, 'Site B');
 
     await agent.post(`/api/monthly-hours/2026/9/${placementA}`).send({ ...FULL_MONTH, normalHours: '100', workdaysWorked: 12 }).expect(201);
     // Placement B has no hours yet: missing data is never guessed.
@@ -228,8 +229,8 @@ describe('payroll', () => {
     await agent.post(`/api/monthly-hours/2026/9/${placementB}`).send({ ...FULL_MONTH, normalHours: '96', workdaysWorked: 12 }).expect(201);
     const [w] = (await agent.get('/api/payroll/2026/9').expect(200)).body.workers;
     // A: 100 h × 7 500 000 ÷ (25 × 9) = 3 333 333.33. B: 96 h × 7 500 000 ÷ (25 × 8) = 3 600 000.
-    expect(w.parts.map((p: { ruleSetSiteName: string | null; result: { total: string; hourlyRate: { rounded: string } } }) => [
-      p.ruleSetSiteName,
+    expect(w.parts.map((p: { ruleSetName: string | null; result: { total: string; hourlyRate: { rounded: string } } }) => [
+      p.ruleSetName,
       p.result.hourlyRate.rounded,
       p.result.total,
     ])).toEqual([
@@ -429,7 +430,7 @@ describe('adjustments', () => {
 
   it('needs the company rules for the rounding step even when a site has its own rules', async () => {
     const { company: c, agent, siteB } = await company();
-    await siteRules(c.id, siteB);
+    await siteRules(c.id, siteB, 'Site B');
     const onB = await hire(agent, siteB, 'Bsite');
     await agent.post(`/api/workers/${onB}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '6000000' }).expect(201);
     const placement = (await agent.get(`/api/workers/${onB}`).expect(200)).body.placement.id;

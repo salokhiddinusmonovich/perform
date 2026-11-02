@@ -1,14 +1,20 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import {
-  firmPayRulesSchema,
   holidaySchema,
   payRulesSchema,
+  ruleSetPayRulesSchema,
+  ruleSetSchema,
+  ruleSetUseSchema,
+  updateRuleSetSchema,
   workingDaysOverrideSchema,
   yearMonthSchema,
   yearQuerySchema,
-  type FirmPayRules,
   type Holiday,
   type PayRules,
+  type RuleSet,
+  type RuleSetPayRules,
+  type RuleSetUse,
+  type UpdateRuleSet,
   type WorkingDaysOverride,
   type YearMonth,
   type YearQuery,
@@ -16,7 +22,7 @@ import {
 import { CompanyAuth, ForModule, Roles, type CompanyAuthContext } from '../auth/auth.context';
 import { ZodPipe } from '../common/zod.pipe';
 import { HolidaysService, type HolidayYearView } from './holidays.service';
-import { PayRulesService, type PayRulesVersionView } from './pay-rules.service';
+import { PayRulesService, type PayRulesVersionView, type RuleSetUseView, type RuleSetView } from './pay-rules.service';
 import { WorkingDaysService, type WorkingDaysYearView } from './working-days.service';
 
 // Owners and admins change pay rules and holidays; accountants see them (AGENTS.md: Roles).
@@ -54,39 +60,153 @@ export class PayRulesController {
 }
 
 /**
- * A firm's own pay rules and working days (AGENTS.md: Firms), the same way as the company
- * default's but without a rounding step. Without rules, its placements use the site's or the default.
+ * Named rule sets sites and firms share (AGENTS.md: Pay rule sets), with their rules and working
+ * days, the same way as the company default's but without a rounding step.
  */
 @ForModule('PAYROLL')
 @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
-@Controller('firms/:firmId')
-export class FirmRulesController {
+@Controller('rule-sets')
+export class RuleSetsController {
   constructor(
     private readonly rules: PayRulesService,
     private readonly workingDays: WorkingDaysService,
   ) {}
 
-  @Get('pay-rules')
-  list(
-    @CompanyAuth() auth: CompanyAuthContext,
-    @Param('firmId', ParseUUIDPipe) firmId: string,
-  ): Promise<PayRulesVersionView<FirmPayRules>[]> {
-    return this.rules.listFirm(auth.company.id, firmId);
+  @Get()
+  listSets(@CompanyAuth() auth: CompanyAuthContext): Promise<RuleSetView[]> {
+    return this.rules.listRuleSets(auth);
   }
 
-  @Put('pay-rules/:year/:month')
+  @Post()
+  @Roles('OWNER', 'ADMIN')
+  create(@CompanyAuth() auth: CompanyAuthContext, @Body(new ZodPipe(ruleSetSchema)) body: RuleSet) {
+    return this.rules.createRuleSet(auth, body);
+  }
+
+  @Patch(':id')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  update(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(updateRuleSetSchema)) body: UpdateRuleSet,
+  ): Promise<void> {
+    return this.rules.updateRuleSet(auth, id, body);
+  }
+
+  @Get(':id/pay-rules')
+  list(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PayRulesVersionView<RuleSetPayRules>[]> {
+    return this.rules.listNamed(auth.company.id, id);
+  }
+
+  @Put(':id/pay-rules/:year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  set(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
+    @Body(new ZodPipe(ruleSetPayRulesSchema)) body: RuleSetPayRules,
+  ): Promise<void> {
+    return this.rules.setNamed(auth, id, from, body);
+  }
+
+  @Delete(':id/pay-rules/:year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  remove(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
+  ): Promise<void> {
+    return this.rules.removeNamed(auth, id, from);
+  }
+
+  @Get(':id/working-days')
+  workingDaysOfYear(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query(new ZodPipe(yearQuerySchema)) { year }: YearQuery,
+  ): Promise<WorkingDaysYearView> {
+    return this.workingDays.year(auth.company.id, year, id);
+  }
+
+  @Post(':id/working-days/:year/:month')
+  @HttpCode(204)
+  override(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param(new ZodPipe(yearMonthSchema)) month: YearMonth,
+    @Body(new ZodPipe(workingDaysOverrideSchema)) body: WorkingDaysOverride,
+  ): Promise<void> {
+    return this.workingDays.override(auth, month, body, id);
+  }
+}
+
+/** The rule set a site uses, from a month on. */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+@Controller('sites/:siteId/rule-set')
+export class SiteRuleSetController {
+  constructor(private readonly rules: PayRulesService) {}
+
+  @Get()
+  list(@CompanyAuth() auth: CompanyAuthContext, @Param('siteId', ParseUUIDPipe) siteId: string): Promise<RuleSetUseView[]> {
+    return this.rules.listUses(auth.company.id, { siteId });
+  }
+
+  @Put(':year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  set(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('siteId', ParseUUIDPipe) siteId: string,
+    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
+    @Body(new ZodPipe(ruleSetUseSchema)) body: RuleSetUse,
+  ): Promise<void> {
+    return this.rules.setUse(auth, { siteId }, from, body.ruleSetId);
+  }
+
+  @Delete(':year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  remove(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('siteId', ParseUUIDPipe) siteId: string,
+    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
+  ): Promise<void> {
+    return this.rules.removeUse(auth, { siteId }, from);
+  }
+}
+
+/** The rule set a firm uses, from a month on. */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+@Controller('firms/:firmId/rule-set')
+export class FirmRuleSetController {
+  constructor(private readonly rules: PayRulesService) {}
+
+  @Get()
+  list(@CompanyAuth() auth: CompanyAuthContext, @Param('firmId', ParseUUIDPipe) firmId: string): Promise<RuleSetUseView[]> {
+    return this.rules.listUses(auth.company.id, { firmId });
+  }
+
+  @Put(':year/:month')
   @Roles('OWNER', 'ADMIN')
   @HttpCode(204)
   set(
     @CompanyAuth() auth: CompanyAuthContext,
     @Param('firmId', ParseUUIDPipe) firmId: string,
     @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
-    @Body(new ZodPipe(firmPayRulesSchema)) body: FirmPayRules,
+    @Body(new ZodPipe(ruleSetUseSchema)) body: RuleSetUse,
   ): Promise<void> {
-    return this.rules.setFirm(auth, firmId, from, body);
+    return this.rules.setUse(auth, { firmId }, from, body.ruleSetId);
   }
 
-  @Delete('pay-rules/:year/:month')
+  @Delete(':year/:month')
   @Roles('OWNER', 'ADMIN')
   @HttpCode(204)
   remove(
@@ -94,27 +214,7 @@ export class FirmRulesController {
     @Param('firmId', ParseUUIDPipe) firmId: string,
     @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
   ): Promise<void> {
-    return this.rules.removeFirm(auth, firmId, from);
-  }
-
-  @Get('working-days')
-  workingDaysOfYear(
-    @CompanyAuth() auth: CompanyAuthContext,
-    @Param('firmId', ParseUUIDPipe) firmId: string,
-    @Query(new ZodPipe(yearQuerySchema)) { year }: YearQuery,
-  ): Promise<WorkingDaysYearView> {
-    return this.workingDays.year(auth.company.id, year, firmId);
-  }
-
-  @Post('working-days/:year/:month')
-  @HttpCode(204)
-  override(
-    @CompanyAuth() auth: CompanyAuthContext,
-    @Param('firmId', ParseUUIDPipe) firmId: string,
-    @Param(new ZodPipe(yearMonthSchema)) month: YearMonth,
-    @Body(new ZodPipe(workingDaysOverrideSchema)) body: WorkingDaysOverride,
-  ): Promise<void> {
-    return this.workingDays.override(auth, month, body, firmId);
+    return this.rules.removeUse(auth, { firmId }, from);
   }
 }
 

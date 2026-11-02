@@ -110,9 +110,8 @@ describe('firms', () => {
     await a.agent.patch(`/api/firms/${b.own}`).send({ name: 'Stolen' }).expect(404);
     await hire(a.agent, { siteId: a.site, firmId: b.own }).expect(404);
     await salary(b.agent, worker, a.own, '5000000').expect(404);
-    await a.agent.get(`/api/firms/${b.own}/pay-rules`).expect(404);
-    await a.agent.put(`/api/firms/${b.own}/pay-rules/2026/9`).send(RULES).expect(404);
-    await a.agent.get(`/api/firms/${b.own}/working-days?year=2026`).expect(404);
+    await a.agent.get(`/api/firms/${b.own}/rule-set`).expect(404);
+    await a.agent.put(`/api/firms/${b.own}/rule-set/2026/9`).send({ ruleSetId: null }).expect(404);
     await expect(
       ctx.prisma.assignment.updateMany({ where: { workerId: worker }, data: { firmId: a.own } }),
     ).rejects.toMatchObject({ code: 'P2003' });
@@ -313,21 +312,23 @@ describe('payroll per firm', () => {
 });
 
 describe('pay rules per firm', () => {
-  it("uses the firm's rules over the site's and the default, only from their first month", async () => {
+  it("uses the firm's set over the default, only from the month it chose it", async () => {
     const c = await company();
-    await c.agent.put(`/api/firms/${c.sub}/pay-rules/2026/10`).send({ ...RULES, normalHoursPerDay: '8' }).expect(204);
+    const set = (await c.agent.post('/api/rule-sets').send({ name: 'Subcontractors' }).expect(201)).body.id as string;
+    await c.agent.put(`/api/rule-sets/${set}/pay-rules/2026/10`).send({ ...RULES, normalHoursPerDay: '8' }).expect(204);
+    await c.agent.put(`/api/firms/${c.sub}/rule-set/2026/10`).send({ ruleSetId: set }).expect(204);
     const worker = (await hire(c.agent, { siteId: c.site, firmId: c.sub }).expect(201)).body.id as string;
     await salary(c.agent, worker, c.sub, '10000000').expect(201);
     const placement = (await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId: worker } })).id;
 
-    // September comes before the firm's rules: the company default, 9 hours.
+    // September comes before the choice: the company default, 9 hours.
     await c.agent.post(`/api/monthly-hours/2026/9/${placement}`).send(totals('2026-09-01', '2026-09-30', '225', 25)).expect(201);
     let view = (await c.agent.get('/api/payroll/2026/9').expect(200)).body.workers[0];
-    expect(view.parts[0].ruleSetFirmName).toBeUndefined();
+    expect(view.parts[0].ruleSetName).toBeNull();
     expect(view.total).toBe('10000000.00');
 
-    // October: the firm's own rules, 8 hours a day.
-    const october = (await c.agent.get(`/api/firms/${c.sub}/working-days?year=2026`).expect(200)).body.months[9];
+    // October: the set's rules, 8 hours a day.
+    const october = (await c.agent.get(`/api/rule-sets/${set}/working-days?year=2026`).expect(200)).body.months[9];
     expect(october.rulesFrom).toEqual({ year: 2026, month: 10 });
     const days = october.effective as number;
     await c.agent
@@ -336,29 +337,8 @@ describe('pay rules per firm', () => {
       .expect(201);
     view = (await c.agent.get('/api/payroll/2026/10').expect(200)).body.workers[0];
     expect(view.problems).toEqual([]);
-    expect(view.parts[0].ruleSetFirmName).toBe('Subcontractor X');
+    expect(view.parts[0].ruleSetName).toBe('Subcontractors');
     expect(view.total).toBe('10000000.00');
-  });
-
-  it('keeps the rounding step company-wide, and lets only owners and admins change firm rules', async () => {
-    const c = await company();
-    const accountant = await member(c.company.id, 'ACCOUNTANT');
-    await accountant.agent.put(`/api/firms/${c.own}/pay-rules/2026/9`).send(RULES).expect(403);
-    await c.agent.put(`/api/firms/${c.own}/pay-rules/2026/9`).send({ ...RULES, payRoundingStep: '5' }).expect(204);
-    const rows = (await accountant.agent.get(`/api/firms/${c.own}/pay-rules`).expect(200)).body;
-    expect(rows[0].rules.payRoundingStep).toBeUndefined();
-    const stored = await ctx.prisma.payrollRules.findFirstOrThrow({ where: { ruleSet: { firmId: c.own } } });
-    expect(stored.payRoundingStep).toBeNull();
-    await c.agent.delete(`/api/firms/${c.own}/pay-rules/2026/9`).expect(204);
-    expect((await c.agent.get(`/api/firms/${c.own}/pay-rules`).expect(200)).body).toEqual([]);
-  });
-
-  it('overrides the working days of the firm alone', async () => {
-    const c = await company();
-    await c.agent.put(`/api/firms/${c.own}/pay-rules/2026/9`).send(RULES).expect(204);
-    await c.agent.post(`/api/firms/${c.own}/working-days/2026/9`).send({ workingDays: 20, reason: 'Short month' }).expect(204);
-    expect((await c.agent.get(`/api/firms/${c.own}/working-days?year=2026`).expect(200)).body.months[8].effective).toBe(20);
-    expect((await c.agent.get('/api/working-days?year=2026').expect(200)).body.months[8].effective).toBe(25);
   });
 });
 

@@ -34,7 +34,8 @@
     "shifts": "Smenalar",
     "departments": "Boʻlimlar",
     "import": "Excel’dan import",
-    "firms": "Firmalar"
+    "firms": "Firmalar",
+    "ruleSets": "Qoidalar toʻplamlari"
   },
   "settings": {
     "language": "Til",
@@ -509,6 +510,14 @@
       "inactive": "Bu firma yopilgan.",
       "hasWorkers": "Bu firmada hozir yoki keyingi kundan ishchilar bor. Avval ularni koʻchiring.",
       "noneActive": "Firmalarni yoqishdan oldin firma qoʻshing."
+    },
+    "ruleSet": {
+      "notFound": "Bunday qoidalar toʻplami yoʻq.",
+      "nameTaken": "Bu nomli qoidalar toʻplami allaqachon bor.",
+      "inactive": "Bu qoidalar toʻplami oʻchirilgan.",
+      "inUse": "Bu qoidalar toʻplami obyekt yoki firmada ishlatilmoqda. Avval ularni boshqasiga oʻtkazing.",
+      "noRulesForMonth": "Bu toʻplamda shu oy uchun qoidalar yoʻq. Avval ularni kiriting.",
+      "useNotFound": "Bu tanlov endi mavjud emas."
     }
   },
   "payRules": {
@@ -1070,7 +1079,6 @@
       "HOLIDAY_HOURS_ABOVE_HOLIDAYS": "bayram kunidagi soatlar juda koʻp"
     },
     "defaultRules": "Kompaniya qoidalari boʻyicha",
-    "siteRules": "{{site}} qoidalari boʻyicha",
     "hourlyRate": "Soatlik stavka = {{salary}} ÷ ({{days}} ish kuni × {{hours}} soat) = {{rate}}",
     "workingDaysOverridden": "(ish kunlari qoʻlda oʻzgartirilgan, hisoblangani: {{calculated}})",
     "hourKinds": {
@@ -1127,8 +1135,8 @@
     "problemsFilter": "Muammolar",
     "byFirm": "Firmalar boʻyicha",
     "byFirmHint": "Firmadan firmaga oʻtgan ishchi ikkalasida ham, har bir firma toʻlagan summa bilan hisoblanadi.",
-    "firmRules": "{{firm}} qoidalari",
-    "payslipsTotal": "Barcha firmalardan jami"
+    "payslipsTotal": "Barcha firmalardan jami",
+    "ruleSetRules": "“{{name}}” qoidalari boʻyicha"
   },
   "timesheet": {
     "title": "Tabel",
@@ -1440,14 +1448,51 @@
       "title": "Bu firmani qayta ochasizmi?",
       "description": "“{{name}}” yana yangi joylashuvlar uchun taklif qilinadi."
     },
-    "payRules": "Oylik qoidalari",
-    "workingDays": "Ish kunlari",
-    "payRulesTitle": "Oylik qoidalari: {{name}}",
-    "payRulesDescription": "Tanlangan oydan boshlab bu firma ishchilari uchun obyekt yoki kompaniya qoidalari oʻrniga amal qiladi. Yaxlitlash kompaniyaniki boʻlib qoladi.",
-    "workingDaysTitle": "Ish kunlari: {{name}}",
-    "workingDaysDescription": "Bu firmaning oʻz qoidalari boʻyicha ish kunlari.",
-    "rulesEmptyTitle": "Bu firmaning oʻz qoidalari yoʻq",
-    "rulesEmptyDescription": "Ishchilari obyekt yoki kompaniya qoidalariga amal qiladi. Faqat bu firma boshqacha toʻlasa, qoida qoʻshing.",
     "missing": "Firmasiz ishchilar: {{count}}"
+  },
+  "ruleSets": {
+    "title": "Qoidalar toʻplamlari",
+    "description": "Bir nechta obyekt va firma birga ishlatadigan ish haqi qoidalari. Firma toʻplami obyektnikidan, obyektniki kompaniyanikidan ustun.",
+    "create": "Toʻplam qoʻshish",
+    "rename": "Nomini oʻzgartirish",
+    "deactivate": "Oʻchirish",
+    "reactivate": "Qayta yoqish",
+    "name": "Nomi",
+    "status": "Holati",
+    "active": "Faol",
+    "inactive": "Oʻchirilgan",
+    "ruleSet": "Qoidalar toʻplami",
+    "usedByColumn": "Kim ishlatadi",
+    "noRules": "Qoidalar yoʻq",
+    "empty": "Hali toʻplamlar yoʻq",
+    "emptyDescription": "Ayrim obyekt yoki firmalar boshqacha toʻlasa, toʻplam qoʻshing. Qolganlari kompaniya qoidalari boʻyicha ishlaydi.",
+    "dialogDescription": "Nomni hamma tushunadigan qilib yozing, masalan “6 kunlik hafta”.",
+    "payRulesTitle": "Ish haqi qoidalari: {{name}}",
+    "workingDaysTitle": "Ish kunlari: {{name}}",
+    "workingDaysDescription": "Bu qoidalar toʻplami boʻyicha ish kunlari. Oʻzgarish uni ishlatadigan hammaga taʼsir qiladi.",
+    "usedBy": "Ishlatadi: {{names}}. Oʻzgarish ularning hammasiga taʼsir qiladi. Yaxlitlash kompaniyaniki boʻlib qoladi.",
+    "notUsed": "Hali hech kim ishlatmaydi. Yaxlitlash kompaniyaniki boʻlib qoladi.",
+    "rulesEmptyTitle": "Bu toʻplamda hali qoidalar yoʻq",
+    "rulesEmptyDescription": "Obyekt yoki firma tanlashi uchun avval qoidalarni kiriting.",
+    "useTitle": "Ish haqi qoidalari: {{name}}",
+    "useDescription": "Qaysi qoidalar toʻplami tanlangan oydan boshlab qoʻllanadi. Oldingi oylar oʻz qoidalarida qoladi.",
+    "noneFirm": "Oʻz toʻplami yoʻq: obyekt yoki kompaniya qoidalari",
+    "noneSite": "Oʻz toʻplami yoʻq: kompaniya qoidalari",
+    "fromMonth": "{{month}} dan",
+    "removeUse": "{{month}} dagi tanlovni olib tashlash",
+    "manageLink": "Qoidalar toʻplamlarini boshqarish",
+    "confirmRemoveUse": {
+      "title": "Tanlov olib tashlansinmi?",
+      "description": "“{{name}}” uchun {{month}} dagi tanlov olib tashlanadi. Bu oylar oldingi tanlovga qaytadi.",
+      "confirm": "Olib tashlash"
+    },
+    "confirmDeactivate": {
+      "title": "Toʻplam oʻchirilsinmi?",
+      "description": "“{{name}}” endi tanlash uchun taklif qilinmaydi. Oldingi oylar oʻzgarmaydi."
+    },
+    "confirmReactivate": {
+      "title": "Toʻplam qayta yoqilsinmi?",
+      "description": "“{{name}}” yana tanlash uchun taklif qilinadi."
+    }
   }
 }

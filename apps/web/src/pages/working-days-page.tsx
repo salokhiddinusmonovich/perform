@@ -28,7 +28,7 @@ import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { canViewPayRules } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { useFirms } from '@/lib/organisation';
+import { useRuleSets } from '@/lib/rule-sets';
 
 interface Override {
   workingDays: number | null;
@@ -53,7 +53,7 @@ interface WorkingDaysYear {
   months: MonthRow[];
 }
 
-const workingDaysKey = (year: number, firmId: string | null) => ['working-days', firmId, year] as const;
+const workingDaysKey = (year: number, ruleSetId: string | null) => ['working-days', ruleSetId, year] as const;
 
 export function WorkingDaysPage() {
   const { t } = useTranslation();
@@ -65,29 +65,29 @@ export function WorkingDaysPage() {
   );
 }
 
-/** The working days of a firm's own rules (AGENTS.md: Firms). */
-export function FirmWorkingDaysPage() {
+/** The working days of a named rule set (AGENTS.md: Pay rule sets). */
+export function RuleSetWorkingDaysPage() {
   const { t } = useTranslation();
-  const { firmId } = useParams<{ firmId: string }>();
-  const firm = useFirms().data?.find((f) => f.id === firmId);
+  const { ruleSetId } = useParams<{ ruleSetId: string }>();
+  const set = useRuleSets().data?.find((s) => s.id === ruleSetId);
   return (
     <>
-      <PageHeader title={t('firms.workingDaysTitle', { name: firm?.name ?? '' })} description={t('firms.workingDaysDescription')} />
-      <RequireAccess allowed={canViewPayRules}>{() => <WorkingDaysView firmId={firmId!} />}</RequireAccess>
+      <PageHeader title={t('ruleSets.workingDaysTitle', { name: set?.name ?? '' })} description={t('ruleSets.workingDaysDescription')} />
+      <RequireAccess allowed={canViewPayRules}>{() => <WorkingDaysView ruleSetId={ruleSetId!} />}</RequireAccess>
     </>
   );
 }
 
-/** Working days of the company default rules, or with firmId of that firm's own. */
-function WorkingDaysView({ firmId = null }: { firmId?: string | null }) {
+/** Working days of the company default rules, or with ruleSetId of that named set. */
+function WorkingDaysView({ ruleSetId = null }: { ruleSetId?: string | null }) {
   const { t } = useTranslation();
   const format = useFormat();
   const queryClient = useQueryClient();
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [editing, setEditing] = useState<MonthRow | null>(null);
   const data = useQuery({
-    queryKey: workingDaysKey(year, firmId),
-    queryFn: () => api.get<WorkingDaysYear>(`${firmId ? `/firms/${firmId}` : ''}/working-days?year=${year}`),
+    queryKey: workingDaysKey(year, ruleSetId),
+    queryFn: () => api.get<WorkingDaysYear>(`${ruleSetId ? `/rule-sets/${ruleSetId}` : ''}/working-days?year=${year}`),
   });
 
   const columns = useMemo<ColumnDef<MonthRow, unknown>[]>(
@@ -115,7 +115,7 @@ function WorkingDaysView({ firmId = null }: { firmId?: string | null }) {
         enableSorting: false,
         cell: ({ row }) =>
           row.original.effective === null ? (
-            <Link to={firmId ? `/firms/${firmId}/pay-rules` : '/settings/pay-rules'} className="text-sm text-muted-foreground underline underline-offset-4">
+            <Link to={ruleSetId ? `/settings/rule-sets/${ruleSetId}/pay-rules` : '/settings/pay-rules'} className="text-sm text-muted-foreground underline underline-offset-4">
               {t('workingDays.noRules')}
             </Link>
           ) : (
@@ -166,7 +166,7 @@ function WorkingDaysView({ firmId = null }: { firmId?: string | null }) {
           ),
       },
     ],
-    [t, format, year, firmId],
+    [t, format, year, ruleSetId],
   );
 
   return (
@@ -184,7 +184,7 @@ function WorkingDaysView({ firmId = null }: { firmId?: string | null }) {
         // A fresh form for each month opened
         key={editing ? `${year}-${editing.month}` : 'closed'}
         year={year}
-        firmId={firmId}
+        ruleSetId={ruleSetId}
         row={editing}
         onClose={() => setEditing(null)}
         onSaved={async () => {
@@ -199,13 +199,13 @@ function WorkingDaysView({ firmId = null }: { firmId?: string | null }) {
 
 function OverrideDialog({
   year,
-  firmId,
+  ruleSetId,
   row,
   onClose,
   onSaved,
 }: {
   year: number;
-  firmId: string | null;
+  ruleSetId: string | null;
   row: MonthRow | null;
   onClose: () => void;
   onSaved: () => void;
@@ -222,7 +222,7 @@ function OverrideDialog({
 
   const save = useMutation({
     mutationFn: (values: WorkingDaysOverride) =>
-      api.post(`${firmId ? `/firms/${firmId}` : ''}/working-days/${year}/${row!.month}`, values),
+      api.post(`${ruleSetId ? `/rule-sets/${ruleSetId}` : ''}/working-days/${year}/${row!.month}`, values),
     onSuccess: onSaved,
     onError: (error) => {
       if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));

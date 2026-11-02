@@ -40,14 +40,6 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/firms-page')).FirmsPage }),
       },
       {
-        path: 'firms/:firmId/pay-rules',
-        lazy: async () => ({ Component: (await import('@/pages/pay-rules-page')).FirmPayRulesPage }),
-      },
-      {
-        path: 'firms/:firmId/working-days',
-        lazy: async () => ({ Component: (await import('@/pages/working-days-page')).FirmWorkingDaysPage }),
-      },
-      {
         path: 'workers',
         lazy: async () => ({ Component: (await import('@/pages/workers-page')).WorkersPage }),
       },
@@ -82,6 +74,18 @@ export const router = createBrowserRouter([
       {
         path: 'settings/pay-rules',
         lazy: async () => ({ Component: (await import('@/pages/pay-rules-page')).PayRulesPage }),
+      },
+      {
+        path: 'settings/rule-sets',
+        lazy: async () => ({ Component: (await import('@/pages/rule-sets-page')).RuleSetsPage }),
+      },
+      {
+        path: 'settings/rule-sets/:ruleSetId/pay-rules',
+        lazy: async () => ({ Component: (await import('@/pages/pay-rules-page')).RuleSetPayRulesPage }),
+      },
+      {
+        path: 'settings/rule-sets/:ruleSetId/working-days',
+        lazy: async () => ({ Component: (await import('@/pages/working-days-page')).RuleSetWorkingDaysPage }),
       },
       {
         path: 'settings/holidays',

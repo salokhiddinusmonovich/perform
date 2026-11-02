@@ -77,9 +77,8 @@ const placeKey = (siteId: string, teamId: string | null) => (teamId ? `${siteId}
  */
 export interface PayrollPartView {
   /** Site whose own rules apply, or null: the company default or a firm's */
-  ruleSetSiteName: string | null;
-  /** Firm whose own rules apply; absent otherwise */
-  ruleSetFirmName?: string;
+  /** Name of the rule set that applies; null: the company default */
+  ruleSetName: string | null;
   /** The firm whose payslip the part is on; absent while the company doesn't use firms */
   firm?: FirmRef | null;
   /** The part's shift, or null: the rule set's normal hours. Absent in months locked before shifts. */
@@ -488,7 +487,7 @@ export class PayrollService {
     const firmOf = (p: Placement): FirmRef | null => (firmsOn ? p.firm : null);
     const monthRules = new Map<
       string,
-      Promise<{ ruleSetId: string | null; siteId: string | null; firmId: string | null; month: MonthRules | null }>
+      Promise<{ ruleSetId: string | null; name: string | null; month: MonthRules | null }>
     >();
     const rulesOf = (p: Placement) => {
       const firmId = firmOf(p)?.id ?? null;
@@ -497,8 +496,7 @@ export class PayrollService {
       if (!found) {
         found = this.rules.ruleSetForPlacement(companyId, { siteId: p.siteId, firmId }, year, month, db).then(async (set) => ({
           ruleSetId: set?.id ?? null,
-          siteId: set?.siteId ?? null,
-          firmId: set?.firmId ?? null,
+          name: set?.name ?? null,
           month: set ? await this.rules.month(companyId, set.id, year, month, db) : null,
         }));
         monthRules.set(key, found);
@@ -643,7 +641,7 @@ export class PayrollService {
 function payPart(
   view: PayrollWorkerView,
   salary: { monthlySalary: Prisma.Decimal },
-  ruleSet: { siteId: string | null; firmId: string | null },
+  ruleSet: { name: string | null },
   firm: FirmRef | null,
   firmsOn: boolean,
   m: MonthRules,
@@ -710,8 +708,7 @@ function payPart(
     return null;
   }
   return {
-    ruleSetSiteName: ruleSet.siteId ? inPart.find((p) => p.siteId === ruleSet.siteId)?.site.name ?? null : null,
-    ...(ruleSet.firmId && firm ? { ruleSetFirmName: firm.name } : {}),
+    ruleSetName: ruleSet.name,
     ...(firmsOn ? { firm } : {}),
     shift: shiftPart.shiftInfo && { name: shiftPart.shiftInfo.name, normalHoursPerDay: shiftPart.shiftInfo.normalHoursPerDay },
     days,

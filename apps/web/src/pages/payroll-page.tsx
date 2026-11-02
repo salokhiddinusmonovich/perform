@@ -625,7 +625,7 @@ function PayslipDialog({
                     part={part}
                     currency={currency}
                     showHeading={
-                      slip.parts.length > 1 || part.ruleSetSiteName !== null || Boolean(part.ruleSetFirmName) || Boolean(part.shift)
+                      slip.parts.length > 1 || part.ruleSetName !== null || Boolean(part.shift)
                     }
                   />
                 ))}
@@ -738,11 +738,7 @@ function PartView({ part, currency, showHeading }: { part: PayrollPart; currency
       {showHeading && (
         <h3 className="text-sm font-medium">
           {[
-            part.ruleSetFirmName
-              ? t('payroll.firmRules', { firm: part.ruleSetFirmName })
-              : part.ruleSetSiteName
-                ? t('payroll.siteRules', { site: part.ruleSetSiteName })
-                : t('payroll.defaultRules'),
+            part.ruleSetName ? t('payroll.ruleSetRules', { name: part.ruleSetName }) : t('payroll.defaultRules'),
             part.days && t('monthlyHours.fromUntil', { from: format.date(part.days.from), until: format.date(part.days.until) }),
             part.shift && t('workers.shiftWithHours', { name: part.shift.name, hours: format.number(part.shift.normalHoursPerDay) }),
           ]

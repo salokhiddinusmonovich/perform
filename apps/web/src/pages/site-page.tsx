@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { teamSchema, type Team, type TeamInput } from '@puantaj/schemas';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowLeft, MoreHorizontal, Pencil, Plus, Power, Users } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal, Pencil, Plus, Power, Scale, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,7 @@ import { Field, fieldControlProps, FormActions, FormError } from '@/components/f
 import { LoadingState } from '@/components/loading-state';
 import { PageHeader } from '@/components/page-header';
 import { RequireAccess } from '@/components/require-access';
+import { RuleSetUseDialog } from '@/components/rule-set-use-dialog';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,7 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
-import { canManageCompany, inCompany, usesDepartments, type Me } from '@/lib/auth';
+import { canManageCompany, canViewPayRules, inCompany, usesDepartments, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
 import {
   departmentTree,
@@ -81,6 +82,7 @@ function SiteDetails({ me, site }: { me: Me; site: SiteItem }) {
     enabled: managesSite,
   });
   const [staffOpen, setStaffOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [addingTeam, setAddingTeam] = useState(false);
   const [editingTeam, setEditingTeam] = useState<TeamItem | null>(null);
   const [foremenOf, setForemenOf] = useState<TeamItem | null>(null);
@@ -173,6 +175,12 @@ function SiteDetails({ me, site }: { me: Me; site: SiteItem }) {
                 {t('sites.backToSites')}
               </Link>
             </Button>
+            {canViewPayRules(me) && (
+              <Button variant="outline" onClick={() => setRulesOpen(true)}>
+                <Scale aria-hidden />
+                {t('nav.payRules')}
+              </Button>
+            )}
             {managesSite && site.isActive && (
               <Button onClick={() => setAddingTeam(true)}>
                 <Plus aria-hidden />
@@ -182,6 +190,14 @@ function SiteDetails({ me, site }: { me: Me; site: SiteItem }) {
           </>
         }
       />
+      {rulesOpen && (
+        <RuleSetUseDialog
+          owner={{ kind: 'sites', id: site.id }}
+          name={site.name}
+          canChange={canManageCompany(me)}
+          onClose={() => setRulesOpen(false)}
+        />
+      )}
       {!site.isActive && (
         <p className="mb-4">
           <StatusBadge tone="neutral">{t('sites.closed')}</StatusBadge>

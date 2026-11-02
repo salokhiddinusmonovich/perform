@@ -1,9 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ABSENCE_RULE_TYPES,
-  firmPayRulesSchema,
   NEW_PAY_RULES,
   payRulesSchema,
+  ruleSetPayRulesSchema,
   TRAVEL_PAY_MODES,
   WEEKDAYS,
   type PayRules,
@@ -43,12 +43,12 @@ import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { canManageCompany, canViewPayRules, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { useFirms } from '@/lib/organisation';
+import { useRuleSets } from '@/lib/rule-sets';
 
 interface Version {
   fromYear: number;
   fromMonth: number;
-  /** A firm's rules have no rounding step: it is company-wide. */
+  /** A named set's rules have no rounding step: it is company-wide. */
   rules: Omit<PayRules, 'payRoundingStep'> & { payRoundingStep?: string };
   setBy: { fullName: string };
   setAt: string;
@@ -84,15 +84,19 @@ export function PayRulesPage() {
   );
 }
 
-/** A firm's own rules (AGENTS.md: Firms). Without them, its workers follow the site's or the company's. */
-export function FirmPayRulesPage() {
+/** A named rule set's rules (AGENTS.md: Pay rule sets). A change reaches every site and firm using it, so the page names them. */
+export function RuleSetPayRulesPage() {
   const { t } = useTranslation();
-  const { firmId } = useParams<{ firmId: string }>();
-  const firm = useFirms().data?.find((f) => f.id === firmId);
+  const { ruleSetId } = useParams<{ ruleSetId: string }>();
+  const set = useRuleSets().data?.find((s) => s.id === ruleSetId);
+  const users = set ? [...set.usedBy.sites, ...set.usedBy.firms].map((x) => x.name).join(', ') : '';
   return (
     <>
-      <PageHeader title={t('firms.payRulesTitle', { name: firm?.name ?? '' })} description={t('firms.payRulesDescription')} />
-      <RequireAccess allowed={canViewPayRules}>{(me) => <PayRulesView me={me} firmId={firmId!} />}</RequireAccess>
+      <PageHeader
+        title={t('ruleSets.payRulesTitle', { name: set?.name ?? '' })}
+        description={users ? t('ruleSets.usedBy', { names: users }) : t('ruleSets.notUsed')}
+      />
+      <RequireAccess allowed={canViewPayRules}>{(me) => <PayRulesView me={me} ruleSetId={ruleSetId!} />}</RequireAccess>
     </>
   );
 }
@@ -100,15 +104,15 @@ export function FirmPayRulesPage() {
 /** What the form edits: a new version from a month the admin picks, or an existing version. */
 type Editing = { from: YearMonth; fixedFrom: boolean; initial: Omit<PayRulesInput, 'payRoundingStep'> & { payRoundingStep?: string } | typeof NEW_PAY_RULES };
 
-/** The company default rules, or with firmId that firm's own. */
-function PayRulesView({ me, firmId = null }: { me: Me; firmId?: string | null }) {
+/** The company default rules, or with ruleSetId that named set's. */
+function PayRulesView({ me, ruleSetId = null }: { me: Me; ruleSetId?: string | null }) {
   const { t } = useTranslation();
   const format = useFormat();
   const queryClient = useQueryClient();
   const canChange = canManageCompany(me);
   const currency = me.activeCompany!.currency; // guaranteed by canViewPayRules
-  const base = firmId ? `/firms/${firmId}/pay-rules` : '/pay-rules';
-  const versions = useQuery({ queryKey: [...PAY_RULES_KEY, firmId], queryFn: () => api.get<Version[]>(base) });
+  const base = ruleSetId ? `/rule-sets/${ruleSetId}/pay-rules` : '/pay-rules';
+  const versions = useQuery({ queryKey: [...PAY_RULES_KEY, ruleSetId], queryFn: () => api.get<Version[]>(base) });
   const [editing, setEditing] = useState<Editing | null>(null);
   const [deleting, setDeleting] = useState<Version | null>(null);
 
@@ -205,7 +209,7 @@ function PayRulesView({ me, firmId = null }: { me: Me; firmId?: string | null })
       <PayRulesForm
         editing={editing}
         versions={list}
-        firmId={firmId}
+        ruleSetId={ruleSetId}
         currency={currency}
         readOnly={!canChange}
         onDone={async (saved) => {
@@ -224,10 +228,10 @@ function PayRulesView({ me, firmId = null }: { me: Me; firmId?: string | null })
       <Card>
         <EmptyState
           icon={Scale}
-          title={firmId ? t('firms.rulesEmptyTitle') : t('payRules.emptyTitle')}
+          title={ruleSetId ? t('ruleSets.rulesEmptyTitle') : t('payRules.emptyTitle')}
           description={
-            firmId
-              ? t('firms.rulesEmptyDescription')
+            ruleSetId
+              ? t('ruleSets.rulesEmptyDescription')
               : canChange
                 ? t('payRules.emptyDescription')
                 : t('payRules.emptyDescriptionReadOnly')
@@ -360,14 +364,14 @@ function RulesSummary({ rules, currency }: { rules: Version['rules']; currency: 
 function PayRulesForm({
   editing,
   versions,
-  firmId,
+  ruleSetId,
   currency,
   readOnly,
   onDone,
 }: {
   editing: Editing;
   versions: Version[];
-  firmId: string | null;
+  ruleSetId: string | null;
   currency: string;
   readOnly: boolean;
   onDone: (saved: boolean) => void;
@@ -377,8 +381,8 @@ function PayRulesForm({
   const [from, setFrom] = useState<YearMonth>(editing.from);
   const [formError, setFormError] = useState<string>();
   const form = useForm<PayRulesInput, unknown, PayRules>({
-    // A firm's rules have no rounding step; the form leaves its field out for them.
-    resolver: zodResolver(firmId ? firmPayRulesSchema : payRulesSchema) as unknown as Resolver<PayRulesInput, unknown, PayRules>,
+    // A named set's rules have no rounding step; the form leaves its field out for them.
+    resolver: zodResolver(ruleSetId ? ruleSetPayRulesSchema : payRulesSchema) as unknown as Resolver<PayRulesInput, unknown, PayRules>,
     defaultValues: editing.initial as PayRulesInput,
     disabled: readOnly,
   });
@@ -389,7 +393,7 @@ function PayRulesForm({
 
   const save = useMutation({
     mutationFn: (values: PayRules) =>
-      api.put(`${firmId ? `/firms/${firmId}/pay-rules` : '/pay-rules'}/${from.year}/${from.month}`, values),
+      api.put(`${ruleSetId ? `/rule-sets/${ruleSetId}/pay-rules` : '/pay-rules'}/${from.year}/${from.month}`, values),
     onSuccess: () => onDone(true),
     onError: (error) => {
       if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
@@ -557,7 +561,7 @@ function PayRulesForm({
             />
           </Section>
 
-          {!firmId && (
+          {!ruleSetId && (
             <Section title={t('payRules.rounding')}>
               <div className="max-w-xs">
                 <Field

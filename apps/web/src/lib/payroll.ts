@@ -90,9 +90,8 @@ export interface FirmRef {
 }
 
 export interface PayrollPart {
-  /** null: the company default rules, or the firm's when ruleSetFirmName is there */
-  ruleSetSiteName: string | null;
-  ruleSetFirmName?: string;
+  /** Name of the rule set that applies; null: the company default */
+  ruleSetName: string | null;
   /** The firm whose payslip it is on; absent while the company doesn't use firms */
   firm?: FirmRef | null;
   /** The part's shift, or null: the rules' normal hours. Absent in months locked before shifts. */

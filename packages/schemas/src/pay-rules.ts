@@ -105,10 +105,10 @@ export const payRulesSchema = z.object({
 export type PayRulesInput = z.input<typeof payRulesSchema>;
 export type PayRules = z.output<typeof payRulesSchema>;
 
-/** A firm's own rules (AGENTS.md: Firms): the rounding step stays company-wide. */
-export const firmPayRulesSchema = payRulesSchema.omit({ payRoundingStep: true });
-export type FirmPayRulesInput = z.input<typeof firmPayRulesSchema>;
-export type FirmPayRules = z.output<typeof firmPayRulesSchema>;
+/** A named rule set's rules (AGENTS.md: Pay rule sets): the rounding step stays company-wide. */
+export const ruleSetPayRulesSchema = payRulesSchema.omit({ payRoundingStep: true });
+export type RuleSetPayRulesInput = z.input<typeof ruleSetPayRulesSchema>;
+export type RuleSetPayRules = z.output<typeof ruleSetPayRulesSchema>;
 
 /**
  * What a new company's rules form starts with: only the decided defaults

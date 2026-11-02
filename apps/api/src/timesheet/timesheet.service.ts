@@ -382,7 +382,7 @@ export class TimesheetService {
   }
 
   private async calendar(companyId: string, siteId: string, year: number, month: number) {
-    const set = await this.rules.ruleSetForSite(companyId, siteId);
+    const set = await this.rules.ruleSetForSite(companyId, siteId, year, month);
     const m = set && (await this.rules.month(companyId, set.id, year, month));
     return m?.calendar?.map((d) => ({ date: d.date, kind: d.kind })) ?? null;
   }

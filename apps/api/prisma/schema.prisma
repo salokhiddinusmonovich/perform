@@ -147,6 +147,7 @@ model User {
   lockedPeriods        PayrollPeriod[]
   workingDaysOverrides WorkingDaysOverride[]
   payrollRules         PayrollRules[]
+  ruleSetUses          RuleSetUse[]
   salaries             Salary[]
   monthlyHours         MonthlyHours[]
   payrollSnapshots     PayrollSnapshot[]
@@ -306,7 +307,7 @@ model Site {
   teams       Team[]
   assignments Assignment[]
   members     MemberSite[]
-  ruleSets    PayrollRuleSet[]
+  ruleSetUses RuleSetUse[]
   entries     TimesheetEntry[]
 
   @@unique([companyId, name])
@@ -360,7 +361,7 @@ model Firm {
   assignments Assignment[]
   salaries    Salary[]
   adjustments Adjustment[]
-  ruleSets    PayrollRuleSet[]
+  ruleSetUses RuleSetUse[]
 
   @@unique([id, companyId])
   @@index([companyId])
@@ -595,28 +596,52 @@ enum TravelPayMode {
   MONTHLY_AMOUNT
 }
 
-/// Where pay rules apply: the company default (siteId and firmId null), one site or one
-/// firm (never both; CHECK constraint). A placement uses its firm's, else its site's, else
-/// the default (AGENTS.md: Firms). The rules themselves are versioned by month
-/// (PayrollRules); working-days overrides belong to the rule set.
+/// A set of pay rules: the company default (name null, one per company; a partial unique
+/// index added by hand) or a named set that sites and firms share (RuleSetUse). Names are
+/// unique in the company, ignoring case (also by hand). The rules themselves are versioned
+/// by month (PayrollRules); working-days overrides belong to the rule set. A named set is
+/// deactivated, never deleted.
 model PayrollRuleSet {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  name      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  versions             PayrollRules[]
+  workingDaysOverrides WorkingDaysOverride[]
+  uses                 RuleSetUse[]
+
+  @@unique([id, companyId])
+  @@index([companyId])
+}
+
+/// Which rule set a site or a firm uses from a month on, until its next row. ruleSetId null:
+/// none of its own from that month, so a firm's placements follow the site's and a site's
+/// the company default (AGENTS.md: Pay rule sets). Exactly one of siteId and firmId is set
+/// (CHECK constraint).
+model RuleSetUse {
   id        String   @id @default(uuid()) @db.Uuid
   companyId String   @db.Uuid
   siteId    String?  @db.Uuid
   firmId    String?  @db.Uuid
-  createdAt DateTime @default(now())
+  ruleSetId String?  @db.Uuid
+  fromYear  Int
+  /// 1-based
+  fromMonth Int
+  setById   String   @db.Uuid
+  setAt     DateTime @default(now())
 
-  company              Company               @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  site                 Site?                 @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
-  firm                 Firm?                 @relation(fields: [firmId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
-  versions             PayrollRules[]
-  workingDaysOverrides WorkingDaysOverride[]
+  site    Site?           @relation(fields: [siteId, companyId], references: [id, companyId], onDelete: NoAction)
+  firm    Firm?           @relation(fields: [firmId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  ruleSet PayrollRuleSet? @relation(fields: [ruleSetId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  setBy   User            @relation(fields: [setById], references: [id], onDelete: NoAction)
 
-  /// One rule set per site. PostgreSQL treats NULLs as distinct, so "one company default
-  /// (siteId and firmId null)" is a partial unique index added by hand in its migration.
-  @@unique([companyId, siteId])
-  @@unique([companyId, firmId])
-  @@unique([id, companyId])
+  @@unique([siteId, fromYear, fromMonth])
+  @@unique([firmId, fromYear, fromMonth])
+  @@index([companyId])
+  @@index([ruleSetId])
 }
 
 /// Pay policy (Settings) of a rule set from a month on: it applies to that month and
@@ -651,7 +676,7 @@ model PayrollRules {
   travelDayHoursPerDay Decimal?      @db.Decimal(4, 2)
   travelPayMode        TravelPayMode
   /// The amount to pay out is rounded to the nearest multiple of this (halves up).
-  /// Company-wide: set only in the company default rule set, null in site rule sets
+  /// Company-wide: set only in the company default rule set, null in named rule sets
   /// (AGENTS.md: Pay model). The API is the only writer and keeps it that way.
   payRoundingStep      Decimal?      @db.Decimal(14, 2)
   /// Who saved this version last (owners and admins may replace it). Every change is
