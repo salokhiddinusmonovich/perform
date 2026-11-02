@@ -16,6 +16,7 @@ import {
   Layers,
   Scale,
   Network,
+  Shapes,
   SunMoon,
   Tags,
   UserCog,
@@ -33,6 +34,7 @@ import {
   isPlatformAdmin,
   seesDepartments,
   seesFirms,
+  seesWorkerCategories,
   seesPay,
   type Me,
 } from '@/lib/auth';
@@ -63,6 +65,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { path: '/sites', labelKey: 'nav.sites', icon: MapPin, visible: inCompany },
       { path: '/departments', labelKey: 'nav.departments', icon: Network, visible: seesDepartments },
       { path: '/firms', labelKey: 'nav.firms', icon: Briefcase, visible: seesFirms },
+      { path: '/worker-categories', labelKey: 'nav.workerCategories', icon: Shapes, visible: seesWorkerCategories },
       { path: '/workers', labelKey: 'nav.workers', icon: HardHat, visible: inCompany },
       { path: '/timesheet', labelKey: 'nav.timesheet', icon: ClipboardList, visible: hasTimesheet },
     ],

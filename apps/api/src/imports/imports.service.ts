@@ -20,15 +20,17 @@ import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict } from '../common/api-error';
 import { dayToDate, inMonth, isoDay, monthSpan, previousDay } from '../common/dates';
 import { SALARY_ORDER, salaryForFirm, WorkersService } from '../organisation/workers.service';
+import { listCategories, type WorkerCategoryView } from '../organisation/worker-categories.service';
 import { shiftPartsOf } from '../organisation/worker-shifts';
 import { assertMonthsOpen, lockWorkerMonth, monthIndex } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
 import { openPeriod } from '../timesheet/timesheet.service';
 import {
+  categoryColumnsOf,
   cellDate,
   cellText,
   columnsOf,
-  guessEmploymentType,
+  guessOption,
   mappingFor,
   readWorkbook,
   type Cell,
@@ -53,6 +55,8 @@ export interface ImportProblem {
   name: string | null;
   code: string;
   field?: ImportField;
+  /** The worker category whose column it is (AGENTS.md: Worker categories) */
+  categoryId?: string;
   /** The file's value, as text */
   value?: string;
   days?: number[];
@@ -63,7 +67,9 @@ export interface ImportWorkerChange {
   row: number;
   employeeNumber: string;
   name: string;
-  field: 'site' | 'department' | 'firm' | 'leftOn' | 'salary';
+  field: 'site' | 'department' | 'firm' | 'leftOn' | 'salary' | 'category';
+  /** With field 'category': which one */
+  categoryId?: string;
   file: string | null;
   app: string | null;
 }
@@ -81,8 +87,8 @@ export interface ImportPreview {
   mapping: ImportMapping;
   /** The mapping is the one the company saved with its last import */
   mappingSaved: boolean;
-  /** Values found in the file for each fixed choice, folded (foldText), so each can be mapped */
-  values: { employmentType: string[] };
+  /** Values found in each worker category's column, folded (foldText), by category id, so each can be mapped to an option */
+  values: { categories: Record<string, string[]> };
   locked: boolean;
   workers: {
     rows: number;
@@ -116,6 +122,8 @@ interface Row {
   name: string | null;
   field: (f: ImportField) => Cell;
   day: (d: number) => Cell;
+  /** The cell of a worker category's column (null: none mapped) */
+  category: (id: string) => Cell;
   /** Any day cell has a value */
   hasDays: boolean;
 }
@@ -204,7 +212,7 @@ export class ImportsService {
         headerRow: null,
         headers: [],
         days: [],
-        values: { employmentType: [] },
+        values: { categories: {} },
         workers: { rows: 0, new: 0, existing: 0, problems, notes: [], changes: [] },
         hours: { workers: 0, replaces: 0, overwritesEdits: 0, problems, notes: [] },
       };
@@ -212,22 +220,25 @@ export class ImportsService {
     const { sheet } = read;
     const workers = await this.checkWorkers(this.prisma, auth, ym, sheet, read.mapping);
     const hours = await this.checkHours(this.prisma, auth, ym, sheet, read.mapping);
-    // Values not mapped yet are offered with their guess, for the user to confirm.
-    const guessed = workers.employmentTypes.flatMap((v) => {
-      const guess = guessEmploymentType(v);
-      return guess ? [[v, guess] as const] : [];
-    });
+    // Values not mapped yet are offered with their guess (the option of that name), for the user to confirm.
+    const categories = Object.fromEntries(
+      Object.entries(read.mapping.categories).map(([id, mapped]) => {
+        const options = read.categories.find((c) => c.id === id)?.options ?? [];
+        const guessed = (workers.categoryValues[id] ?? []).flatMap((v) => {
+          const option = guessOption(options, v);
+          return option ? [[v, option.id] as const] : [];
+        });
+        return [id, { ...mapped, values: { ...Object.fromEntries(guessed), ...mapped.values } }];
+      }),
+    );
     return {
       ...base,
-      mapping: {
-        ...read.mapping,
-        values: { employmentType: { ...Object.fromEntries(guessed), ...read.mapping.values.employmentType } },
-      },
+      mapping: { ...read.mapping, categories },
       sheet: sheet.name,
       headerRow: sheet.headerRow,
       headers: sheet.headers.map((h) => h.text),
       days: [...sheet.dayColumns.keys()].sort((a, b) => a - b),
-      values: { employmentType: workers.employmentTypes },
+      values: { categories: workers.categoryValues },
       workers: {
         rows: workers.rows,
         new: workers.create.length,
@@ -422,8 +433,13 @@ export class ImportsService {
       : await this.prisma.importMapping.findUnique({ where: { companyId: auth.company.id } });
     const savedMapping = saved ? importMappingSchema.safeParse(saved.mapping) : null;
     const preferred = request.mapping ?? (savedMapping?.success ? savedMapping.data : null);
-    const mapping = sheet ? mappingFor(sheet, preferred) : (preferred ?? { columns: {}, values: { employmentType: {} }, blankCells: 'PROBLEM' });
+    // Closed categories are left out: their columns aren't read.
+    const categories = (await listCategories(this.prisma, auth.company.id)).filter((c) => c.isActive);
+    const mapping = sheet
+      ? mappingFor(sheet, preferred, categories)
+      : (preferred ?? { columns: {}, categories: {}, blankCells: 'PROBLEM' as const });
     return {
+      categories,
       // Multer reads the name's UTF-8 bytes as Latin-1.
       fileName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
       sha256: createHash('sha256').update(file.buffer).digest('hex'),
@@ -438,8 +454,13 @@ export class ImportsService {
   /** The rows of the sheet that hold a worker (rows without an employee number and a name are skipped). */
   private rows(sheet: Sheet, mapping: ImportMapping): Row[] {
     const columns = columnsOf(sheet, mapping);
+    const categoryColumns = categoryColumnsOf(sheet, mapping);
     return sheet.rows.flatMap(({ row, cells }) => {
       const field = (f: ImportField): Cell => (columns[f] === undefined ? null : (cells[columns[f]] ?? null));
+      const category = (id: string): Cell => {
+        const col = categoryColumns.get(id);
+        return col === undefined ? null : (cells[col] ?? null);
+      };
       const day = (d: number): Cell => {
         const col = sheet.dayColumns.get(d);
         return col === undefined ? null : (cells[col] ?? null);
@@ -448,7 +469,7 @@ export class ImportsService {
       const name = [cellText(field('lastName')), cellText(field('firstName'))].filter(Boolean).join(' ') || null;
       if (!employeeNumber && !name) return [];
       const hasDays = [...sheet.dayColumns.keys()].some((d) => cellText(day(d)) !== null);
-      return [{ row, employeeNumber, name, field, day, hasDays }];
+      return [{ row, employeeNumber, name, field, day, category, hasDays }];
     });
   }
 
@@ -500,10 +521,23 @@ export class ImportsService {
     const changes: ImportWorkerChange[] = [];
     const notes: ImportProblem[] = [];
 
-    const employmentTypes = [
-      ...new Set(all.map((r) => cellText(r.field('employmentType'))).filter((v): v is string => v !== null).map(foldText)),
-    ].sort();
-    const typeOf = (folded: string) => mapping.values.employmentType[folded] ?? guessEmploymentType(folded);
+    // The mapped columns of active categories (mappingFor() leaves the others out).
+    const categories = (await listCategories(db, companyId)).filter((c) => c.isActive && mapping.categories[c.id] !== undefined);
+    const categoryValues = Object.fromEntries(
+      categories.map((c) => [
+        c.id,
+        [...new Set(all.map((r) => cellText(r.category(c.id))).filter((v): v is string => v !== null).map(foldText))].sort(),
+      ]),
+    );
+    /** The option a row's value stands for: as mapped, else the one of that name. option null: blank; undefined: not mapped. */
+    const optionOf = (r: Row, category: WorkerCategoryView) => {
+      const raw = cellText(r.category(category.id));
+      if (raw === null) return { raw, option: null };
+      const folded = foldText(raw);
+      const id = mapping.categories[category.id]?.values[folded];
+      const option = id !== undefined ? category.options.find((o) => o.id === id) : guessOption(category.options, folded);
+      return { raw, option: option ?? undefined };
+    };
 
     const [existing, sites, departments, firms, pinfls, codeRows] = await Promise.all([
       db.worker.findMany({
@@ -511,6 +545,7 @@ export class ImportsService {
         include: {
           assignments: { orderBy: { hiredOn: 'desc' }, include: { site: true, department: true, firm: true } },
           salaries: { orderBy: SALARY_ORDER },
+          categoryOptions: { select: { categoryId: true, optionId: true } },
         },
       }),
       db.site.findMany({ where: { companyId } }),
@@ -531,6 +566,21 @@ export class ImportsService {
         // No exit date in the file: the day before a "not employed" code after the worker started.
         const leftOn = fileLeftOn ?? (latest ? days.exitBefore(isoDay(latest.hiredOn))?.leftOn ?? null : null);
         changes.push(...this.changesOf(r, worker, ym, mapping, auth.company, leftOn));
+        for (const category of categories) {
+          const { raw, option } = optionOf(r, category);
+          const app = worker.categoryOptions.find((v) => v.categoryId === category.id)?.optionId;
+          if (raw !== null && option?.id !== app) {
+            changes.push({
+              row: r.row,
+              employeeNumber: r.employeeNumber!,
+              name: r.name ?? r.employeeNumber!,
+              field: 'category',
+              categoryId: category.id,
+              file: option?.name ?? raw,
+              app: category.options.find((o) => o.id === app)?.name ?? null,
+            });
+          }
+        }
         continue;
       }
       const rowProblems: ImportProblem[] = [];
@@ -545,16 +595,21 @@ export class ImportsService {
         return value;
       };
 
-      const typeText = text('employmentType');
-      const employmentType = typeText === null ? null : typeOf(foldText(typeText));
-      if (typeText !== null && !employmentType) add('import.valueNotMapped', { field: 'employmentType', value: typeText });
+      const chosen: Record<string, string> = {};
+      for (const category of categories) {
+        const { raw, option } = optionOf(r, category);
+        if (raw === null) continue;
+        if (!option) add('import.valueNotMapped', { categoryId: category.id, value: raw });
+        else if (!option.isActive) add('validation.optionClosed', { categoryId: category.id, value: raw });
+        else chosen[category.id] = option.id;
+      }
       const details = workerSchema.safeParse({
         employeeNumber: r.employeeNumber,
         lastName: text('lastName') ?? '',
         firstName: text('firstName') ?? '',
         patronymic: text('patronymic'),
         position: text('position'),
-        employmentType: employmentType ?? undefined,
+        categories: chosen,
         pinfl: text('pinfl'),
         birthDate: date('birthDate'),
         nationality: text('nationality'),
@@ -565,8 +620,6 @@ export class ImportsService {
       if (!details.success) {
         for (const issue of details.error.issues) {
           const field = issue.path[0] as ImportField;
-          // An unmapped employment type is reported above.
-          if (field === 'employmentType' && typeText !== null) continue;
           add(issue.message.startsWith('validation.') ? issue.message : 'validation.invalid', { field, value: text(field) ?? undefined });
         }
       } else if (details.data.pinfl) {
@@ -644,7 +697,7 @@ export class ImportsService {
         } else create.push({ worker: details.data, placements: [planned] });
       }
     }
-    return { rows: all.length, existing: existing.length, create, problems, notes, changes, employmentTypes };
+    return { rows: all.length, existing: existing.length, create, problems, notes, changes, categoryValues };
   }
 
   /** Where the file says something else than the app about a worker already in it. */

@@ -43,7 +43,7 @@ async function company() {
 async function hire(agent: Agent, siteId: string, lastName: string) {
   const res = await agent
     .post('/api/workers')
-    .send({ worker: { lastName, firstName: 'Test', employmentType: 'DIRECT' }, placement: { siteId, from: '2026-09-01' } })
+    .send({ worker: { lastName, firstName: 'Test' }, placement: { siteId, from: '2026-09-01' } })
     .expect(201);
   return res.body.id as string;
 }

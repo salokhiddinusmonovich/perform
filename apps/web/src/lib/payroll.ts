@@ -125,6 +125,8 @@ export interface PayrollWorker {
   siteNames?: string[];
   /** Firms of the worker's placements in the month; absent while the company doesn't use firms and in months locked before them */
   firms?: FirmRef[];
+  /** The worker's option in each category, by category id, as worked out (a locked month keeps its own); absent in months locked before categories */
+  categories?: Record<string, string>;
   /** The salary of the firm of the last placement in the month */
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
   source: 'DAILY' | 'IMPORT' | 'TOTALS' | null;
@@ -164,8 +166,26 @@ export interface PayrollMonth {
   departments: DepartmentTotal[];
   /** Totals per firm with workers this month */
   firms: FirmTotal[];
+  /** Totals per category option, and per two categories' options crossed */
+  categories: CategoryTotal[];
   /** Oldest first */
   locks: LockItem[];
+}
+
+/**
+ * Workers, hours and pay of one category's option, or of two categories' options crossed
+ * (AGENTS.md: Worker categories). categoryIds are in name order, optionIds in the same order
+ * (null: not set).
+ */
+export interface CategoryTotal {
+  categoryIds: string[];
+  optionIds: (string | null)[];
+  workers: number;
+  /** Not in the hours and total: they can't be paid yet */
+  withProblems: number;
+  /** Hours worked (normal, overtime, rest day and holiday) */
+  hours: string;
+  total: string;
 }
 
 /** A department's workers and pay in the month; departmentId null: workers without a department. */

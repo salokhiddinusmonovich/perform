@@ -32,7 +32,7 @@ async function member(companyId: string, role: Role) {
 const hire = (agent: Agent, placement: { siteId: string; teamId?: string | null; departmentId?: string | null }) =>
   agent
     .post('/api/workers')
-    .send({ worker: { lastName: 'Testov', firstName: 'Test', employmentType: 'DIRECT' }, placement: { ...placement, from: '2026-09-01' } });
+    .send({ worker: { lastName: 'Testov', firstName: 'Test' }, placement: { ...placement, from: '2026-09-01' } });
 
 const RULES = {
   restWeekdays: [7],
@@ -283,7 +283,7 @@ describe('what lists filter and search on', () => {
       await agent
         .post('/api/workers')
         .send({
-          worker: { employeeNumber: 'E-7', lastName: 'Testov', firstName: 'Test', employmentType: 'DIRECT' },
+          worker: { employeeNumber: 'E-7', lastName: 'Testov', firstName: 'Test' },
           placement: { siteId: site, departmentId: hse, from: '2026-09-01' },
         })
         .expect(201)

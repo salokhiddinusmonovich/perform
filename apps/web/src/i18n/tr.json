@@ -35,6 +35,7 @@
     "departments": "Bölümler",
     "import": "Excel’den aktar",
     "firms": "Firmalar",
+    "workerCategories": "Çalışan kategorileri",
     "ruleSets": "Kural setleri"
   },
   "settings": {
@@ -313,7 +314,10 @@
     "tooMany": "Çok fazla kayıt",
     "chooseWorkers": "En az bir işçi seçin",
     "departmentCycle": "Bir bölüm kendisinin veya kendi alt bölümünün altına konamaz.",
-    "departmentNotTeams": "Ekipteki bir çalışan ekibin bölümündedir."
+    "departmentNotTeams": "Ekipteki bir çalışan ekibin bölümündedir.",
+    "twoOptions": "En az iki seçenek ekleyin.",
+    "optionTwice": "Her seçeneğin kendi adı olmalı.",
+    "optionClosed": "Bu seçenek kapalı."
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -510,6 +514,13 @@
       "inactive": "Bu firma kapalı.",
       "hasWorkers": "Bu firmada şimdi veya ileri bir günden itibaren işçi var. Önce onları taşıyın.",
       "noneActive": "Firmaları açmadan önce bir firma ekleyin."
+    },
+    "workerCategory": {
+      "notFound": "Böyle bir kategori yok.",
+      "inactive": "Bu kategori kapalı.",
+      "nameTaken": "Bu adda bir kategori zaten var.",
+      "optionTaken": "Bu kategoride bu adda bir seçenek zaten var.",
+      "optionNotFound": "Böyle bir seçenek yok."
     },
     "ruleSet": {
       "notFound": "Böyle bir kural seti yok.",
@@ -761,12 +772,6 @@
     "firstName": "Adı",
     "patronymic": "Baba adı",
     "position": "Görevi",
-    "employmentType": "Çalışma türü",
-    "chooseEmploymentType": "Seçin",
-    "employment": {
-      "DIRECT": "Direkt",
-      "INDIRECT": "Endirekt"
-    },
     "personalData": "Kişisel bilgiler",
     "personalDataHint": "Puantörlere ve ekip başlarına gösterilmez.",
     "pinfl": "PINFL",
@@ -1135,6 +1140,8 @@
     "problemsFilter": "Sorunlar",
     "byFirm": "Firmalara göre",
     "byFirmHint": "Firmalar arasında geçen işçi, her firmanın ödediği tutarla ikisinde de sayılır.",
+    "byCategory": "Kategoriye göre",
+    "byCategoryHint": "Bir kategoriye veya iki kategorinin çaprazına göre çalışanlar, çalışılan saat ve ücret. Saat ve ücret yalnızca ödenebilen çalışanları sayar.",
     "payslipsTotal": "Tüm firmalardan toplam",
     "ruleSetRules": "“{{name}}” kurallarına göre"
   },
@@ -1318,8 +1325,9 @@
     "mappingSaved": "Bunlar son aktarımda seçilen sütunlar.",
     "requiredField": "{{field}} (zorunlu)",
     "notInFile": "Dosyada yok",
-    "valuesTitle": "Dosyadaki istihdam türleri",
+    "valuesTitle": "“{{name}}” sütunundaki değerler",
     "valuesDescription": "Dosyadaki her değerin ne anlama geldiğini seçin.",
+    "chooseOption": "Bir seçenek seçin",
     "checkAgain": "Dosyayı yeniden kontrol et",
     "checkAgainHint": "Değişikliklerin sonucunu görmek için dosyayı yeniden kontrol edin.",
     "workersTitle": "1. adım: işçiler",
@@ -1364,7 +1372,6 @@
       "firstName": "Adı",
       "patronymic": "Baba adı",
       "position": "Görevi",
-      "employmentType": "İstihdam türü",
       "pinfl": "PINFL",
       "birthDate": "Doğum tarihi",
       "nationality": "Uyruğu",
@@ -1449,6 +1456,57 @@
       "description": "“{{name}}” yeni görev yerleri için yeniden sunulacak."
     },
     "missing": "Firmasız işçiler: {{count}}"
+  },
+  "workerCategories": {
+    "title": "Çalışan kategorileri",
+    "description": "Çalışanları gruplamanın kendi yollarınız, örneğin Direkt / Endirekt veya Yerel / Yabancı.",
+    "create": "Kategori ekle",
+    "name": "Adı",
+    "nameHint": "Örneğin: Direkt / Endirekt veya Yerel / Yabancı.",
+    "options": "Seçenekler",
+    "optionNumber": "{{number}}. seçenek",
+    "removeOption": "{{number}}. seçeneği kaldır",
+    "addOption": "Seçenek ekle",
+    "newOption": "Yeni seçenek",
+    "renameOption": "“{{name}}” için yeni ad",
+    "status": "Durum",
+    "active": "Aktif",
+    "closed": "Kapalı",
+    "rename": "Yeniden adlandır",
+    "manageOptions": "Seçenekler",
+    "optionsDescription": "“{{name}}” kategorisinin seçenekleri. Kapatılan seçenek ona sahip çalışanlarda kalır ama yeniden seçilemez.",
+    "close": "Kapat",
+    "reopen": "Yeniden aç",
+    "hint": "Kategoriler yalnızca filtreler ve toplamlar içindir. Ücreti asla değiştirmez. Her seçeneğin yanındaki sayı, ona sahip çalışan sayısıdır.",
+    "empty": "Henüz kategori yok",
+    "emptyDescription": "Çalışanları filtrelemek ve toplamak için bir kategori ekleyin.",
+    "dialogDescription": "Kategoriye bir ad ve en az iki seçenek verin.",
+    "notSet": "Belirtilmemiş",
+    "notSetIn": "{{name}}: belirtilmemiş",
+    "filter": "Kategori",
+    "allWorkers": "Tüm kategoriler",
+    "workers": "Çalışanlar",
+    "hoursWorked": "Çalışılan saat",
+    "groupBy": "Gruplama",
+    "crossWith": "Çapraz",
+    "noCross": "İkinci kategori yok",
+    "crossWithName": "× {{name}}",
+    "confirmClose": {
+      "title": "Kategori kapatılsın mı?",
+      "description": "“{{name}}” artık çalışanlarda ve filtrelerde sunulmayacak. Çalışanlar seçeneklerini korur, kategori yeniden açılabilir."
+    },
+    "confirmReopen": {
+      "title": "Kategori yeniden açılsın mı?",
+      "description": "“{{name}}” yeniden çalışanlarda ve filtrelerde sunulacak."
+    },
+    "confirmCloseOption": {
+      "title": "Seçenek kapatılsın mı?",
+      "description": "“{{name}}” artık “{{category}}” kategorisinde seçilemeyecek. Ona sahip çalışanlarda kalır."
+    },
+    "confirmReopenOption": {
+      "title": "Seçenek yeniden açılsın mı?",
+      "description": "“{{name}}” yeniden “{{category}}” kategorisinde seçilebilecek."
+    }
   },
   "ruleSets": {
     "title": "Kural setleri",

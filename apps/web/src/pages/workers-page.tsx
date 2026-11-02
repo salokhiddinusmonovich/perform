@@ -1,7 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createWorkerSchema,
-  EMPLOYMENT_TYPES,
   leaveSchema,
   placementDepartmentSchema,
   placementFirmSchema,
@@ -47,6 +46,7 @@ import {
   inDepartmentFilter,
   type DepartmentFilterValue,
 } from '@/components/department-select';
+import { CategoryFilter, CategoryOptionSelect, inCategoryFilter, type CategoryFilterValue } from '@/components/category-select';
 import { FirmFilter, FirmSelect, inFirmFilter, type FirmFilterValue } from '@/components/firm-select';
 import { ErrorState } from '@/components/error-state';
 import { Field, fieldControlProps, FormActions, FormError, MonthField } from '@/components/form';
@@ -88,6 +88,7 @@ import {
   departmentTree,
   useDepartments,
   useFirms,
+  useWorkerCategories,
   useRefreshOrganisation,
   useSalaries,
   useShifts,
@@ -99,6 +100,7 @@ import {
   type FirmItem,
   type ShiftItem,
   type SiteItem,
+  type WorkerCategoryItem,
   type WorkerItem,
   type WorkerShiftItem,
 } from '@/lib/organisation';
@@ -153,6 +155,8 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
     () => new Map(departmentTree(departments.data ?? []).map((d) => [d.id, d.path])),
     [departments.data],
   );
+  const categories = useWorkerCategories();
+  const activeCategories = useMemo(() => (categories.data ?? []).filter((c) => c.isActive), [categories.data]);
   const manage = canManageWorkers(me);
   const personal = seesPersonalData(me);
   const pay = seesPay(me);
@@ -162,6 +166,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
   const [status, setStatus] = useState<Status>('working');
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilterValue>(ALL);
   const [firmFilter, setFirmFilter] = useState<FirmFilterValue>(ALL);
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilterValue>(ALL);
   const [action, setAction] = useState<Action | null>(null);
   const [settingShifts, setSettingShifts] = useState(false);
 
@@ -173,9 +178,10 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
           (!showDepartments || inDepartmentFilter(departmentFilter, w.placement?.departmentId, departments.data ?? [])) &&
           (!showFirms ||
             inFirmFilter(firmFilter, w.placement?.firmId ? [{ id: w.placement.firmId, type: w.placement.firmType! }] : [])) &&
+          inCategoryFilter(categoryFilter, w.categories) &&
           (status === 'all' || (status === 'left') === hasLeft(w)),
       ),
-    [workers.data, siteFilter, status, showDepartments, departmentFilter, departments.data, showFirms, firmFilter],
+    [workers.data, siteFilter, status, showDepartments, departmentFilter, departments.data, showFirms, firmFilter, categoryFilter],
   );
 
   const columns = useMemo<ColumnDef<WorkerItem, unknown>[]>(
@@ -244,6 +250,16 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
             } satisfies ColumnDef<WorkerItem, unknown>,
           ]
         : []),
+      ...activeCategories.map(
+        (c) =>
+          ({
+            id: `category-${c.id}`,
+            accessorFn: (w) => optionName(c, w.categories[c.id]),
+            header: c.name,
+            cell: ({ getValue }) =>
+              (getValue() as string) || <span className="text-muted-foreground">{t('workerCategories.notSet')}</span>,
+          }) satisfies ColumnDef<WorkerItem, unknown>,
+      ),
       {
         id: 'shift',
         accessorFn: (w) => w.shift?.name ?? '',
@@ -357,7 +373,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
           ),
       },
     ],
-    [t, format, manage, personal, pay, currency, showDepartments, paths, showFirms],
+    [t, format, manage, personal, pay, currency, showDepartments, paths, showFirms, activeCategories],
   );
 
   const activeSites = (sites.data ?? []).filter((s) => s.isActive);
@@ -387,6 +403,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
             w.placement?.teamName,
             showDepartments && w.placement?.departmentId ? paths.get(w.placement.departmentId) : null,
             showFirms ? w.placement?.firmName : null,
+            ...activeCategories.map((c) => optionName(c, w.categories[c.id])),
             w.shift?.name,
           ]
             .filter(Boolean)
@@ -403,6 +420,9 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
               <DepartmentFilter departments={departments.data ?? []} value={departmentFilter} onChange={setDepartmentFilter} />
             )}
             {showFirms && <FirmFilter firms={firms.data ?? []} value={firmFilter} onChange={setFirmFilter} />}
+            {activeCategories.length > 0 && (
+              <CategoryFilter categories={activeCategories} value={categoryFilter} onChange={setCategoryFilter} />
+            )}
             <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
               <SelectTrigger className="w-full sm:w-40" aria-label={t('workers.status')}>
                 <SelectValue />
@@ -430,12 +450,19 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
           sites={activeSites}
           departments={departmentChoices}
           firms={firmChoices}
+          categories={categories.data ?? []}
           onClose={() => onAddingChange(false)}
           onSaved={done}
         />
       )}
       {action?.kind === 'edit' && (
-        <EditWorkerDialog worker={action.worker} personal={personal} onClose={() => setAction(null)} onSaved={done} />
+        <EditWorkerDialog
+          worker={action.worker}
+          personal={personal}
+          categories={categories.data ?? []}
+          onClose={() => setAction(null)}
+          onSaved={done}
+        />
       )}
       {action?.kind === 'move' && (
         <MoveDialog
@@ -488,14 +515,18 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
   );
 }
 
-/** Empty worker form. Employment type has no default: the person adding chooses. */
+/** The name of a worker's option in a category, or '' when none is set. */
+const optionName = (category: WorkerCategoryItem, optionId: string | undefined) =>
+  category.options.find((o) => o.id === optionId)?.name ?? '';
+
+/** Empty worker form. Categories have no default: the person adding chooses (AGENTS.md: Worker categories). */
 const EMPTY_WORKER = {
   employeeNumber: '',
   lastName: '',
   firstName: '',
   patronymic: '',
   position: '',
-  employmentType: undefined,
+  categories: {},
   pinfl: '',
   birthDate: '',
   nationality: '',
@@ -511,7 +542,7 @@ function toWorkerInput(w: WorkerItem): WorkerInput {
     firstName: w.firstName,
     patronymic: w.patronymic ?? '',
     position: w.position ?? '',
-    employmentType: w.employmentType,
+    categories: { ...w.categories },
     pinfl: w.personal?.pinfl ?? '',
     birthDate: w.personal?.birthDate ?? '',
     nationality: w.personal?.nationality ?? '',
@@ -525,12 +556,14 @@ function AddWorkerDialog({
   sites,
   departments,
   firms,
+  categories,
   onClose,
   onSaved,
 }: {
   sites: SiteItem[];
   departments: DepartmentItem[] | null;
   firms: FirmItem[] | null;
+  categories: WorkerCategoryItem[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -568,7 +601,14 @@ function AddWorkerDialog({
           })}
         >
           <FormError message={formError} />
-          <WorkerFields control={form.control} prefix="worker." errors={form.formState.errors.worker} personal />
+          <WorkerFields
+            control={form.control}
+            prefix="worker."
+            errors={form.formState.errors.worker}
+            personal
+            categories={categories}
+            current={{}}
+          />
           <section className="space-y-4 border-t pt-4">
             <h3 className="font-semibold">{t('workers.placement')}</h3>
             <PlacementFields
@@ -591,11 +631,13 @@ function AddWorkerDialog({
 function EditWorkerDialog({
   worker,
   personal,
+  categories,
   onClose,
   onSaved,
 }: {
   worker: WorkerItem;
   personal: boolean;
+  categories: WorkerCategoryItem[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -630,7 +672,14 @@ function EditWorkerDialog({
           })}
         >
           <FormError message={formError} />
-          <WorkerFields control={form.control} prefix="" errors={form.formState.errors} personal={personal} />
+          <WorkerFields
+            control={form.control}
+            prefix=""
+            errors={form.formState.errors}
+            personal={personal}
+            categories={categories}
+            current={worker.categories}
+          />
           <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
         </form>
       </DialogContent>
@@ -1077,15 +1126,22 @@ function WorkerFields<T extends FieldValues>({
   prefix,
   errors,
   personal,
+  categories,
+  current,
 }: {
   control: Control<T>;
   prefix: '' | 'worker.';
   errors: FieldErrors<WorkerInput> | undefined;
   personal: boolean;
+  /** The company's categories: the active ones are offered, and a closed one the worker has stays shown */
+  categories: readonly WorkerCategoryItem[];
+  /** The worker's options as saved (by category id) */
+  current: Readonly<Record<string, string>>;
 }) {
   const { t } = useTranslation();
   const name = (field: keyof WorkerInput) => `${prefix}${field}` as FieldPath<T>;
-  const text = (field: keyof WorkerInput, label: string, extra: { hint?: string; inputMode?: 'numeric' | 'tel' } = {}) => (
+  const shownCategories = categories.filter((c) => c.isActive || current[c.id] !== undefined);
+  const text = (field: Exclude<keyof WorkerInput, 'categories'>, label: string, extra: { hint?: string; inputMode?: 'numeric' | 'tel' } = {}) => (
     <Controller
       control={control}
       name={name(field)}
@@ -1120,27 +1176,33 @@ function WorkerFields<T extends FieldValues>({
       <div className="grid gap-4 sm:grid-cols-3">
         {text('employeeNumber', t('workers.employeeNumber'), { hint: t('workers.employeeNumberHint') })}
         {text('position', t('workers.position'))}
-        <Controller
-          control={control}
-          name={name('employmentType')}
-          render={({ field }) => (
-            <Field id="w-employmentType" label={t('workers.employmentType')} error={errors?.employmentType}>
-              <Select value={(field.value as string | undefined) ?? ''} onValueChange={field.onChange}>
-                <SelectTrigger id="w-employmentType" className="w-full" aria-invalid={errors?.employmentType ? true : undefined}>
-                  <SelectValue placeholder={t('workers.chooseEmploymentType')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {EMPLOYMENT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {t(`workers.employment.${type}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          )}
-        />
       </div>
+      {shownCategories.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {shownCategories.map((c) => {
+            const id = `w-category-${c.id}`;
+            const error = (errors?.categories as Record<string, FieldError | undefined> | undefined)?.[c.id];
+            return (
+              <Controller
+                key={c.id}
+                control={control}
+                name={`${prefix}categories.${c.id}` as FieldPath<T>}
+                render={({ field }) => (
+                  <Field id={id} label={c.name} error={error}>
+                    <CategoryOptionSelect
+                      id={id}
+                      category={c}
+                      value={(field.value as string | null | undefined) ?? null}
+                      onChange={field.onChange}
+                      invalid={!!error}
+                    />
+                  </Field>
+                )}
+              />
+            );
+          })}
+        </div>
+      )}
       {personal && (
         <section className="space-y-4 border-t pt-4">
           <div>

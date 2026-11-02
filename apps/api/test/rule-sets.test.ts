@@ -56,7 +56,7 @@ async function worker(c: Company, siteId: string, firmId?: string) {
   const id = (
     await c.agent
       .post('/api/workers')
-      .send({ worker: { lastName: 'Testov', firstName: 'Test', employmentType: 'DIRECT' }, placement: { from: '2026-09-01', siteId, firmId } })
+      .send({ worker: { lastName: 'Testov', firstName: 'Test' }, placement: { from: '2026-09-01', siteId, firmId } })
       .expect(201)
   ).body.id as string;
   await c.agent.post(`/api/workers/${id}/salaries`).send({ firmId: firmId ?? null, fromYear: 2026, fromMonth: 9, monthlySalary: '10000000' }).expect(201);

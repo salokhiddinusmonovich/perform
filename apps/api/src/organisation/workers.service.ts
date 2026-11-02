@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { EmploymentType, FirmType, Prisma } from '@prisma/client';
+import type { FirmType, Prisma } from '@prisma/client';
 import type { CreateWorker, Placement, Salary, Worker } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { assertManagesSite, seesPay, seesPersonalData, seesPlacement } from './access';
 import { findDepartment } from './departments.service';
 import { findFirm } from './firms.service';
+import { checkCategoryChoices, listCategories, setCategoryChoices } from './worker-categories.service';
 import { withinWorkerLimit } from './worker-limit';
 import { shiftInfo, type ShiftInfo } from './worker-shifts';
 
@@ -65,7 +66,8 @@ export interface WorkerView {
   firstName: string;
   patronymic: string | null;
   position: string | null;
-  employmentType: EmploymentType;
+  /** The worker's option in each category (AGENTS.md: Worker categories), by category id; a category not set is left out */
+  categories: Record<string, string>;
   /** The latest placement (the current one, or the last before leaving). */
   placement: PlacementView | null;
   /** The worker's shift today (AGENTS.md: Shifts); null: none, the rule set's normal hours */
@@ -100,6 +102,7 @@ const WORKER_INCLUDE = {
   assignments: { orderBy: { hiredOn: 'desc' }, include: PLACEMENT_INCLUDE },
   salaries: { orderBy: SALARY_ORDER },
   shifts: { orderBy: { fromDay: 'desc' }, include: { shift: true } },
+  categoryOptions: { select: { categoryId: true, optionId: true } },
 } as const satisfies Prisma.WorkerInclude;
 
 type WorkerRow = Prisma.WorkerGetPayload<{ include: typeof WORKER_INCLUDE }>;
@@ -166,15 +169,18 @@ export class WorkersService {
     const departmentId = await this.checkPlace(tx, auth, placement, 'placement.');
     const firmId = await this.checkFirm(tx, auth, placement, 'placement.');
     await this.assertUniqueFree(tx, companyId, details, null);
+    const categories = checkCategoryChoices(await listCategories(tx, companyId), details.categories, new Map(), 'worker.');
     await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
     const { worker, assignment } = await withinWorkerLimit(tx, companyId, null, placement.from, async () => {
       const worker = await tx.worker.create({ data: { companyId, ...toColumns(details) } });
       const assignment = await tx.assignment.create({ data: placementColumns(companyId, worker.id, placement, departmentId, firmId) });
       return { worker, assignment };
     });
+    await setCategoryChoices(tx, companyId, worker.id, categories);
     await this.record(tx, auth, 'worker.create', worker.id, {
       name: fullName(details),
       employeeNumber: details.employeeNumber,
+      categories: Object.fromEntries(categories.map((c) => [c.categoryId, c.optionId])),
       placement: { assignmentId: assignment.id, ...placement, departmentId, firmId },
       personalData: PERSONAL_FIELDS.filter((f) => details[f] !== null),
     });
@@ -187,14 +193,26 @@ export class WorkersService {
       const before = await this.find(tx, auth, id);
       assertManagesSite(auth, before.assignments[0].siteId);
       await this.assertUniqueFree(tx, companyId, details, id);
+      const current = new Map(before.categoryOptions.map((v) => [v.categoryId, v.optionId]));
+      const categories = checkCategoryChoices(await listCategories(tx, companyId), details.categories, current, '');
       await tx.worker.update({ where: { id }, data: toColumns(details) });
+      await setCategoryChoices(tx, companyId, id, categories);
       const old = toInput(before);
-      const changed = (Object.keys(details) as (keyof Worker)[]).filter((k) => details[k] !== old[k]);
+      const changed = (Object.keys(details) as (keyof Worker)[]).filter((k) => k !== 'categories' && details[k] !== old[k]);
       await this.record(tx, auth, 'worker.update', id, {
         // Personal data is named, not copied, so the audit log doesn't become a second copy of it.
-        changes: Object.fromEntries(
-          changed.map((k) => [k, (PERSONAL_FIELDS as readonly string[]).includes(k) ? 'changed' : { from: old[k], to: details[k] }]),
-        ),
+        changes: {
+          ...Object.fromEntries(
+            changed.map((k) => [k, (PERSONAL_FIELDS as readonly string[]).includes(k) ? 'changed' : { from: old[k], to: details[k] }]),
+          ),
+          ...(categories.length > 0
+            ? {
+                categories: Object.fromEntries(
+                  categories.map((c) => [c.categoryId, { from: current.get(c.categoryId) ?? null, to: c.optionId }]),
+                ),
+              }
+            : {}),
+        },
       });
     });
   }
@@ -488,7 +506,7 @@ export class WorkersService {
       firstName: w.firstName,
       patronymic: w.patronymic,
       position: w.position,
-      employmentType: w.employmentType,
+      categories: Object.fromEntries(w.categoryOptions.map((v) => [v.categoryId, v.optionId])),
       placement: p
         ? {
             id: p.id,
@@ -538,7 +556,7 @@ export class WorkersService {
 const fullName = (w: Pick<Worker, 'lastName' | 'firstName' | 'patronymic'>) =>
   [w.lastName, w.firstName, w.patronymic].filter(Boolean).join(' ');
 
-function toColumns(w: Worker) {
+function toColumns({ categories: _categories, ...w }: Worker) {
   return { ...w, birthDate: w.birthDate ? dayToDate(w.birthDate) : null };
 }
 
@@ -549,7 +567,7 @@ function toInput(w: WorkerRow): Worker {
     firstName: w.firstName,
     patronymic: w.patronymic,
     position: w.position,
-    employmentType: w.employmentType,
+    categories: Object.fromEntries(w.categoryOptions.map((v) => [v.categoryId, v.optionId])),
     pinfl: w.pinfl,
     birthDate: w.birthDate ? isoDay(w.birthDate) : null,
     nationality: w.nationality,

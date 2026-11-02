@@ -11,6 +11,8 @@ export interface ImportProblem {
   name: string | null;
   code: string;
   field?: ImportField;
+  /** The worker category whose column it is */
+  categoryId?: string;
   value?: string;
   days?: number[];
 }
@@ -20,7 +22,9 @@ export interface ImportWorkerChange {
   row: number;
   employeeNumber: string;
   name: string;
-  field: 'site' | 'department' | 'firm' | 'leftOn' | 'salary';
+  field: 'site' | 'department' | 'firm' | 'leftOn' | 'salary' | 'category';
+  /** With field 'category': which one */
+  categoryId?: string;
   file: string | null;
   app: string | null;
 }
@@ -36,8 +40,8 @@ export interface ImportPreview {
   mapping: ImportMapping;
   /** The mapping is the one saved with the company's last import */
   mappingSaved: boolean;
-  /** Values found for each fixed choice (folded), to map each one */
-  values: { employmentType: string[] };
+  /** Values found in each worker category's column (folded), by category id, to map each one to an option */
+  values: { categories: Record<string, string[]> };
   locked: boolean;
   workers: {
     rows: number;

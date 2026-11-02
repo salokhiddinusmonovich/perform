@@ -53,6 +53,7 @@ model Company {
   shifts            Shift[]
   departments       Department[]
   firms             Firm[]
+  workerCategories  WorkerCategory[]
   timesheetImports  TimesheetImport[]
   importedDayEdits  ImportedDayEdit[]
   importMapping     ImportMapping?
@@ -357,7 +358,7 @@ model Firm {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  company     Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: NoAction)
   assignments Assignment[]
   salaries    Salary[]
   adjustments Adjustment[]
@@ -397,14 +398,9 @@ model Team {
 
 // ---------- People ----------
 
-enum EmploymentType {
-  DIRECT
-  INDIRECT
-}
-
 model Worker {
-  id             String         @id @default(uuid()) @db.Uuid
-  companyId      String         @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  companyId      String    @db.Uuid
   /// The company's own number for the worker (e.g. SICIL), unique in the company. Excel
   /// imports recognise workers by it (AGENTS.md: Excel import); null: none given.
   employeeNumber String?
@@ -413,15 +409,14 @@ model Worker {
   lastName       String
   firstName      String
   patronymic     String?
-  birthDate      DateTime?      @db.Date
+  birthDate      DateTime? @db.Date
   nationality    String?
   passportSeries String?
   passportNumber String?
   phone          String?
   position       String?
-  employmentType EmploymentType @default(DIRECT)
-  isActive       Boolean        @default(true)
-  createdAt      DateTime       @default(now())
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
 
   company          Company                 @relation(fields: [companyId], references: [id], onDelete: NoAction)
   assignments      Assignment[]
@@ -430,11 +425,63 @@ model Worker {
   adjustments      Adjustment[]
   shifts           WorkerShift[]
   importedDayEdits ImportedDayEdit[]
+  categoryOptions  WorkerCategoryValue[]
 
   @@unique([companyId, pinfl])
   @@unique([companyId, employeeNumber])
   @@unique([id, companyId])
   @@index([companyId, lastName])
+}
+
+/// A company's own way of grouping workers (AGENTS.md: Worker categories), e.g. Direct/Indirect.
+/// Never changes pay. Deactivated, never deleted; names are unique in the company ignoring case.
+model WorkerCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  company Company                @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  options WorkerCategoryOption[]
+  values  WorkerCategoryValue[]
+
+  @@unique([id, companyId])
+  @@index([companyId])
+}
+
+/// One of a category's options (e.g. Local). Deactivated, never deleted: workers keep it,
+/// but it can't be chosen anew. Names are unique in the category ignoring case.
+model WorkerCategoryOption {
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @db.Uuid
+  categoryId String   @db.Uuid
+  name       String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  category WorkerCategory        @relation(fields: [categoryId, companyId], references: [id, companyId], onDelete: NoAction)
+  values   WorkerCategoryValue[]
+
+  /// Target of WorkerCategoryValue's foreign key, which keeps a worker's option one of the category's
+  @@unique([id, categoryId, companyId])
+  @@index([categoryId])
+}
+
+/// A worker's option in a category: at most one per category. No row: not set.
+model WorkerCategoryValue {
+  companyId  String @db.Uuid
+  workerId   String @db.Uuid
+  categoryId String @db.Uuid
+  optionId   String @db.Uuid
+
+  worker   Worker               @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+  category WorkerCategory       @relation(fields: [categoryId, companyId], references: [id, companyId], onDelete: NoAction)
+  option   WorkerCategoryOption @relation(fields: [optionId, categoryId, companyId], references: [id, categoryId, companyId], onDelete: NoAction)
+
+  @@id([workerId, categoryId])
+  @@index([companyId])
+  @@index([optionId])
 }
 
 /// A company's shift (AGENTS.md: Shifts): a name and its own normal hours per day, which

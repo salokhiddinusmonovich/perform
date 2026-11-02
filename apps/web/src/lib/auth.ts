@@ -177,6 +177,12 @@ export function seesFirms(me: Me | null | undefined): boolean {
   return canManageCompany(me) || (usesFirms(me) && (role === 'ACCOUNTANT' || role === 'PROJECT_MANAGER'));
 }
 
+/** Sees the worker categories page (AGENTS.md: Worker categories); only owners and admins change it. */
+export function seesWorkerCategories(me: Me | null | undefined): boolean {
+  const role = me?.activeCompany?.role;
+  return canManageCompany(me) || role === 'ACCOUNTANT' || role === 'PROJECT_MANAGER';
+}
+
 /** Can change who enters daily hours (Timesheet module, owners and admins). */
 export function canManageTimesheet(me: Me | null | undefined): boolean {
   return hasTimesheet(me) && canManageCompany(me);

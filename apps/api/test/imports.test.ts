@@ -97,6 +97,13 @@ async function company() {
   return owner;
 }
 
+/** Adds a worker category with these options; returns its id and each option's id by name. */
+async function category(agent: Agent, name: string, options: string[]) {
+  const { id } = (await agent.post('/api/worker-categories').send({ name, options }).expect(201)).body;
+  const all = (await agent.get('/api/worker-categories').expect(200)).body as { id: string; options: { id: string; name: string }[] }[];
+  return { id: id as string, options: Object.fromEntries(all.find((c) => c.id === id)!.options.map((o) => [o.name, o.id])) };
+}
+
 async function member(companyId: string, role: Role) {
   const user = await createUser(ctx.prisma);
   await addMember(ctx.prisma, user.id, companyId, role);
@@ -106,6 +113,7 @@ async function member(companyId: string, role: Role) {
 describe('Excel import', () => {
   it('guesses the columns, adds the new workers, then imports their hours, paid as an import', async () => {
     const owner = await company();
+    const status = await category(owner.agent, 'Statu', ['Direkt', 'Endirekt']);
     const file = await workbook([
       { number: '10001', lastName: 'Aliyev' },
       { number: '10002', lastName: 'Karimov', status: 'Endirekt', salary: 0, left: '20.09.2026' },
@@ -118,20 +126,22 @@ describe('Excel import', () => {
       sheet: 'Timesheet',
       headerRow: 2,
       mappingSaved: false,
-      values: { employmentType: ['DIREKT', 'ENDIREKT'] },
+      values: { categories: { [status.id]: ['DIREKT', 'ENDIREKT'] } },
       workers: { rows: 2, new: 2, existing: 0, problems: [] },
     });
     expect(preview.mapping.columns).toEqual({
       employeeNumber: 'SICIL',
       lastName: 'SOYADI',
       firstName: 'ADI',
-      employmentType: 'Statu',
       site: 'Объект / Santiye',
       hiredOn: 'GIRIS TARIHI',
       leftOn: 'CIKIS TARIHI',
       salary: 'ÜCRET MAAŞ',
     });
-    expect(preview.mapping.values.employmentType).toEqual({ DIREKT: 'DIRECT', ENDIREKT: 'INDIRECT' });
+    // The category's column is found by its name, and the values by the options' names.
+    expect(preview.mapping.categories).toEqual({
+      [status.id]: { column: 'Statu', values: { DIREKT: status.options.Direkt, ENDIREKT: status.options.Endirekt } },
+    });
     expect(preview.days).toHaveLength(DAYS);
     // The workers aren't in the app yet, so their hours can't be imported.
     expect(preview.hours.problems.map((p: { code: string }) => p.code)).toEqual(['import.workerNotFound', 'import.workerNotFound']);
@@ -141,11 +151,11 @@ describe('Excel import', () => {
     await send(owner.agent, 'workers', file, { mapping }).expect(201, { created: 2 });
     const workers = await ctx.prisma.worker.findMany({
       orderBy: { employeeNumber: 'asc' },
-      include: { assignments: true, salaries: true },
+      include: { assignments: true, salaries: true, categoryOptions: true },
     });
-    expect(workers.map((w) => [w.employeeNumber, w.lastName, w.employmentType])).toEqual([
-      ['10001', 'Aliyev', 'DIRECT'],
-      ['10002', 'Karimov', 'INDIRECT'],
+    expect(workers.map((w) => [w.employeeNumber, w.lastName, w.categoryOptions.map((v) => v.optionId)])).toEqual([
+      ['10001', 'Aliyev', [status.options.Direkt]],
+      ['10002', 'Karimov', [status.options.Endirekt]],
     ]);
     expect(workers[0].assignments[0].hiredOn.toISOString().slice(0, 10)).toBe('2026-07-06');
     expect(workers[1].assignments[0].leftOn?.toISOString().slice(0, 10)).toBe('2026-09-20');
@@ -188,6 +198,51 @@ describe('Excel import', () => {
 
     const audit = await ctx.prisma.auditLog.findMany({ where: { action: { startsWith: 'timesheetImport.' } } });
     expect(audit.map((a) => a.action).sort()).toEqual(['timesheetImport.create', 'timesheetImport.worker', 'timesheetImport.worker']);
+  });
+
+  it("maps a category's column and values, and shows where workers already in the app differ", async () => {
+    const owner = await company();
+    const type = await category(owner.agent, 'Direkt / Endirekt', ['Direkt', 'Endirekt']);
+    const file = await workbook([
+      { number: '1', lastName: 'Aliyev' },
+      { number: '2', lastName: 'Karimov', status: 'Endir.' },
+      { number: '3', lastName: 'Sobirov', status: '' },
+    ]);
+
+    // "Statu" doesn't hold the category's name, so its column isn't guessed and nothing is set.
+    const guessed = (await send(owner.agent, 'preview', file).expect(200)).body;
+    expect(guessed.mapping.categories).toEqual({});
+    expect(guessed.workers.problems).toEqual([]);
+
+    // Mapped by the user: "Direkt" is guessed by name, "Endir." stands for nothing yet.
+    const column = (values: Record<string, string>) =>
+      JSON.stringify({ ...guessed.mapping, categories: { [type.id]: { column: 'Statu', values } } });
+    const unmapped = (await send(owner.agent, 'preview', file, { mapping: column({}) }).expect(200)).body;
+    expect(unmapped.values.categories).toEqual({ [type.id]: ['DIREKT', 'ENDIR.'] });
+    expect(unmapped.mapping.categories[type.id].values).toEqual({ DIREKT: type.options.Direkt });
+    expect(unmapped.workers.problems).toEqual([
+      { row: 4, employeeNumber: '2', name: 'Karimov Test', code: 'import.valueNotMapped', categoryId: type.id, value: 'Endir.' },
+    ]);
+
+    // A column already read for a field isn't also read for a category.
+    const twice = JSON.stringify({ ...guessed.mapping, categories: { [type.id]: { column: 'SOYADI', values: {} } } });
+    expect((await send(owner.agent, 'preview', file, { mapping: twice }).expect(200)).body.mapping.categories).toEqual({});
+
+    const mapping = column({ 'ENDIR.': type.options.Endirekt });
+    await send(owner.agent, 'workers', file, { mapping }).expect(201, { created: 3 });
+    const values = await ctx.prisma.workerCategoryValue.findMany({ include: { worker: true } });
+    // A blank cell sets nothing.
+    expect(values.map((v) => [v.worker.employeeNumber, v.optionId]).sort()).toEqual([
+      ['1', type.options.Direkt],
+      ['2', type.options.Endirekt],
+    ]);
+
+    // The file says otherwise for a worker already in the app: shown, not changed.
+    const changed = await workbook([{ number: '1', lastName: 'Aliyev', status: 'Endir.' }]);
+    const preview = (await send(owner.agent, 'preview', changed).expect(200)).body;
+    expect(preview.workers.changes).toEqual([
+      { row: 3, employeeNumber: '1', name: 'Aliyev Test', field: 'category', categoryId: type.id, file: 'Endirekt', app: 'Direkt' },
+    ]);
   });
 
   it('trusts an exit date before the hire date, and takes an exit date from a "not employed" code', async () => {
@@ -264,6 +319,7 @@ describe('Excel import', () => {
 
   it('writes nothing while any row has a problem', async () => {
     const owner = await company();
+    await category(owner.agent, 'Statu', ['Direkt', 'Endirekt']);
     const file = await workbook([
       { number: '1', lastName: 'Aliyev' },
       { number: '2', lastName: 'Karimov', site: 'Nowhere' },

@@ -53,7 +53,7 @@ async function hire(agent: Awaited<ReturnType<typeof memberOfNewCompany>>['agent
   const res = await agent
     .post('/api/workers')
     .send({
-      worker: { lastName, firstName: 'Test', employmentType: 'DIRECT' },
+      worker: { lastName, firstName: 'Test' },
       placement: { siteId, from },
     })
     .expect(201);

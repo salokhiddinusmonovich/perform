@@ -1,4 +1,4 @@
-import type { EmploymentType, FirmType, Role } from '@puantaj/schemas';
+import type { FirmType, Role } from '@puantaj/schemas';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 
@@ -42,7 +42,8 @@ export interface WorkerItem {
   firstName: string;
   patronymic: string | null;
   position: string | null;
-  employmentType: EmploymentType;
+  /** The worker's option in each category (AGENTS.md: Worker categories), by category id; a category not set is left out */
+  categories: Record<string, string>;
   placement: {
     id: string;
     siteId: string;
@@ -132,6 +133,14 @@ export interface FirmItem {
   isActive: boolean;
 }
 
+/** A company's own way of grouping workers (AGENTS.md: Worker categories), with its options in the order they were added. */
+export interface WorkerCategoryItem {
+  id: string;
+  name: string;
+  isActive: boolean;
+  options: { id: string; name: string; isActive: boolean }[];
+}
+
 /** A department in tree order: its depth (0 = top level) and its path from the top. */
 export interface DepartmentNode extends DepartmentItem {
   depth: number;
@@ -173,6 +182,16 @@ export const FIRMS_KEY = ['firms'] as const;
 
 export function useFirms({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({ queryKey: FIRMS_KEY, queryFn: () => api.get<FirmItem[]>('/firms'), enabled });
+}
+
+export const WORKER_CATEGORIES_KEY = ['worker-categories'] as const;
+
+export function useWorkerCategories({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: WORKER_CATEGORIES_KEY,
+    queryFn: () => api.get<WorkerCategoryItem[]>('/worker-categories'),
+    enabled,
+  });
 }
 
 /** Departments in tree order: each one followed by its sub-departments, siblings by name (the API's order). */
@@ -227,6 +246,7 @@ export function useRefreshOrganisation() {
       queryClient.invalidateQueries({ queryKey: WORKERS_KEY }),
       queryClient.invalidateQueries({ queryKey: DEPARTMENTS_KEY }),
       queryClient.invalidateQueries({ queryKey: FIRMS_KEY }),
+      queryClient.invalidateQueries({ queryKey: WORKER_CATEGORIES_KEY }),
     ]);
 }
 

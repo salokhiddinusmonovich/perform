@@ -14,7 +14,6 @@ const WORKER = {
   firstName: 'Test',
   patronymic: '',
   position: 'Electrician',
-  employmentType: 'DIRECT',
   pinfl: '12345678901234',
   birthDate: '1990-05-01',
   nationality: '',
@@ -199,7 +198,7 @@ describe('workers', () => {
       firstName: 'Test',
       patronymic: null,
       position: 'Electrician',
-      employmentType: 'DIRECT',
+      categories: {},
       placement: {
         id: expect.any(String),
         siteId: siteA,

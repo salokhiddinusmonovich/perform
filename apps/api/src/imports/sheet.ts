@@ -141,7 +141,6 @@ const GUESSES: [ImportField, string[]][] = [
   ['lastName', ['SOYADI', 'SOYAD', 'ФАМИЛИЯ', 'FAMILIYA', 'FAMILIYASI', 'LAST NAME', 'SURNAME']],
   ['firstName', ['ADI', 'AD', 'ИМЯ', 'ISM', 'ISMI', 'FIRST NAME', 'NAME']],
   ['position', ['GOREV', 'GOREVI', 'ДОЛЖНОСТЬ', 'LAVOZIM', 'LAVOZIMI', 'POSITION', 'UNVAN']],
-  ['employmentType', ['STATU', 'STATUS', 'DIREKT ENDIREKT', 'DIRECT INDIRECT', 'EMPLOYMENT TYPE']],
   ['pinfl', ['ПИНФЛ', 'PINFL', 'JSHSHIR']],
   ['birthDate', ['ДАТА РОЖДЕНИЯ', 'DOGUM TARIHI', 'TUGILGAN SANA', 'BIRTH DATE', 'DATE OF BIRTH']],
   ['nationality', ['MENSEI', 'UYRUK', 'УЙРУК', 'НАЦИОНАЛЬНОСТЬ', 'ГРАЖДАНСТВО', 'MILLATI', 'FUQAROLIGI', 'NATIONALITY']],
@@ -161,24 +160,45 @@ const GUESSES: [ImportField, string[]][] = [
 const headerWords = (text: string) => ` ${foldText(text.replace(/[_\-/\\().,:;]+/g, ' '))} `;
 
 /**
- * The mapping to use for a sheet: each field's column from `preferred` (sent with the
- * request, or the company's saved mapping) where the sheet has that header. Without one,
- * every column is guessed from GUESSES. Value mappings are kept as they are.
+ * The mapping to use for a sheet: each field's and each active worker category's column
+ * from `preferred` (sent with the request, or the company's saved mapping) where the sheet
+ * has that header. Without one, every column is guessed: a category's from a header that
+ * holds its name, the fields' from GUESSES. Value mappings are kept as they are.
  */
-export function mappingFor(sheet: Sheet, preferred: ImportMapping | null): ImportMapping {
+export function mappingFor(
+  sheet: Sheet,
+  preferred: ImportMapping | null,
+  categories: readonly { id: string; name: string }[],
+): ImportMapping {
   const columns: ImportMapping['columns'] = {};
+  const mapped: ImportMapping['categories'] = {};
   const used = new Set<number>();
   const texts = new Map(sheet.headers.map((h) => [foldText(h.text), h]));
-  for (const field of IMPORT_FIELDS) {
-    const text = preferred?.columns[field];
+  const take = (text: string | undefined) => {
     const header = text === undefined ? undefined : texts.get(foldText(text));
-    if (header && !used.has(header.column)) {
-      columns[field] = header.text;
-      used.add(header.column);
-    }
+    if (!header || used.has(header.column)) return null;
+    used.add(header.column);
+    return header.text;
+  };
+  for (const field of IMPORT_FIELDS) {
+    const text = take(preferred?.columns[field]);
+    if (text !== null) columns[field] = text;
+  }
+  for (const { id } of categories) {
+    const own = preferred?.categories[id];
+    const text = take(own?.column);
+    if (text !== null) mapped[id] = { column: text, values: { ...own!.values } };
   }
   // A mapping sent or saved is the user's: a column they left out stays out.
   if (!preferred) {
+    // Category names are the company's own, so more specific than the usual words.
+    for (const { id, name } of categories) {
+      const header = sheet.headers.find((h) => !used.has(h.column) && headerWords(h.text).includes(headerWords(name)));
+      if (header) {
+        mapped[id] = { column: header.text, values: {} };
+        used.add(header.column);
+      }
+    }
     for (const [field, words] of GUESSES) {
       if (columns[field] !== undefined) continue;
       const header = sheet.headers.find(
@@ -190,18 +210,12 @@ export function mappingFor(sheet: Sheet, preferred: ImportMapping | null): Impor
       }
     }
   }
-  return {
-    columns,
-    values: { employmentType: { ...(preferred?.values.employmentType ?? {}) } },
-    blankCells: preferred?.blankCells ?? 'PROBLEM',
-  };
+  return { columns, categories: mapped, blankCells: preferred?.blankCells ?? 'PROBLEM' };
 }
 
-/** A guess of what an employment type value stands for, or null. */
-export function guessEmploymentType(folded: string): 'DIRECT' | 'INDIRECT' | null {
-  if (/^(DIR|DIRECT|DIREKT|ПРЯМ)/.test(folded)) return 'DIRECT';
-  if (/^(INDIR|ENDIR|INDIRECT|ENDIREKT|КОСВ)/.test(folded)) return 'INDIRECT';
-  return null;
+/** A guess of the option a file's value (folded) stands for: the one with that name, or null. */
+export function guessOption<O extends { id: string; name: string }>(options: readonly O[], folded: string): O | null {
+  return options.find((o) => foldText(o.name) === folded) ?? null;
 }
 
 /** Column number of each mapped field (fields whose header isn't in the sheet are left out). */
@@ -212,6 +226,16 @@ export function columnsOf(sheet: Sheet, mapping: ImportMapping): Partial<Record<
     if (text === undefined) continue;
     const header = sheet.headers.find((h) => foldText(h.text) === foldText(text));
     if (header) out[field] = header.column;
+  }
+  return out;
+}
+
+/** Column number of each mapped worker category, by category id (as columnsOf()). */
+export function categoryColumnsOf(sheet: Sheet, mapping: ImportMapping): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const [id, { column }] of Object.entries(mapping.categories)) {
+    const header = sheet.headers.find((h) => foldText(h.text) === foldText(column));
+    if (header) out.set(id, header.column);
   }
   return out;
 }

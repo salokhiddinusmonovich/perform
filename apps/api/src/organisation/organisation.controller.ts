@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
 import {
+  categoryOptionSchema,
   createWorkerSchema,
   departmentSchema,
   departmentSettingsSchema,
@@ -14,14 +15,18 @@ import {
   siteSchema,
   staffSchema,
   teamSchema,
+  updateCategoryOptionSchema,
   updateDepartmentSchema,
   updateFirmSchema,
   updateSiteSchema,
   updateShiftSchema,
   updateTeamSchema,
+  updateWorkerCategorySchema,
+  workerCategorySchema,
   workerSchema,
   workerShiftSchema,
   workerShiftsSchema,
+  type CategoryOption,
   type CreateWorker,
   type Department,
   type DepartmentSettings,
@@ -35,12 +40,15 @@ import {
   type Shift,
   type Site,
   type Team,
+  type UpdateCategoryOption,
   type UpdateDepartment,
   type UpdateFirm,
   type UpdateSite,
   type UpdateShift,
   type UpdateTeam,
+  type UpdateWorkerCategory,
   type Worker,
+  type WorkerCategory,
   type WorkerShift,
   type WorkerShifts,
 } from '@puantaj/schemas';
@@ -50,6 +58,7 @@ import { DepartmentsService, type DepartmentView } from './departments.service';
 import { FirmsService, type FirmView } from './firms.service';
 import { ShiftsService, type ShiftView, type WorkerShiftView } from './shifts.service';
 import { SitesService, type SiteView, type StaffView } from './sites.service';
+import { WorkerCategoriesService, type WorkerCategoryView } from './worker-categories.service';
 import { WorkersService, type SalaryView, type WorkerView } from './workers.service';
 
 // Everyone in the company sees sites, teams and workers within their scope (access.ts).
@@ -418,6 +427,64 @@ export class FirmsController {
     @Body(new ZodPipe(updateFirmSchema)) body: UpdateFirm,
   ): Promise<void> {
     return this.firms.update(auth, id, body);
+  }
+}
+
+/**
+ * The company's worker categories (AGENTS.md: Worker categories). Everyone sees them (they
+ * carry no pay); owners and admins create, rename and (de)activate them and their options.
+ */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER', 'TIMEKEEPER', 'FOREMAN')
+@Controller('worker-categories')
+export class WorkerCategoriesController {
+  constructor(private readonly categories: WorkerCategoriesService) {}
+
+  @Get()
+  list(@CompanyAuth() auth: CompanyAuthContext): Promise<WorkerCategoryView[]> {
+    return this.categories.list(auth);
+  }
+
+  @Post()
+  @Roles('OWNER', 'ADMIN')
+  create(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Body(new ZodPipe(workerCategorySchema)) body: WorkerCategory,
+  ): Promise<{ id: string }> {
+    return this.categories.create(auth, body);
+  }
+
+  @Patch(':id')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  update(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(updateWorkerCategorySchema)) body: UpdateWorkerCategory,
+  ): Promise<void> {
+    return this.categories.update(auth, id, body);
+  }
+
+  @Post(':id/options')
+  @Roles('OWNER', 'ADMIN')
+  addOption(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(categoryOptionSchema)) body: CategoryOption,
+  ): Promise<{ id: string }> {
+    return this.categories.addOption(auth, id, body);
+  }
+
+  @Patch(':id/options/:optionId')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  updateOption(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('optionId', ParseUUIDPipe) optionId: string,
+    @Body(new ZodPipe(updateCategoryOptionSchema)) body: UpdateCategoryOption,
+  ): Promise<void> {
+    return this.categories.updateOption(auth, id, optionId, body);
   }
 }
 

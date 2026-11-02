@@ -1,13 +1,12 @@
 import { z } from 'zod';
-import { EMPLOYMENT_TYPES } from './organisation.js';
 import { monthSchema, yearSchema } from './pay-rules.js';
 
 // Excel import of a month's sheet (AGENTS.md: Excel import).
 
 /**
  * What a column of the sheet can hold, besides the day columns 1…31 (found by their
- * header). The worker's details go to the workers step; the shift is checked by the hours
- * step.
+ * header) and the worker categories' columns (ImportMapping.categories). The worker's details
+ * go to the workers step; the shift is checked by the hours step.
  */
 export const IMPORT_FIELDS = [
   'employeeNumber',
@@ -15,7 +14,6 @@ export const IMPORT_FIELDS = [
   'firstName',
   'patronymic',
   'position',
-  'employmentType',
   'pinfl',
   'birthDate',
   'nationality',
@@ -40,7 +38,6 @@ export const WORKER_IMPORT_REQUIRED = [
   'employeeNumber',
   'lastName',
   'firstName',
-  'employmentType',
   'site',
   'hiredOn',
 ] as const satisfies readonly ImportField[];
@@ -58,16 +55,24 @@ export const BLANK_CELL_READINGS = ['PROBLEM', 'ABSENT'] as const;
 export type BlankCellReading = (typeof BLANK_CELL_READINGS)[number];
 
 /**
- * How a company's sheet is read: the header text of each field's column, what the file's
- * values of a fixed choice stand for (keyed by the value folded with foldText()), and what
- * a blank day cell means. Saved per company by each import and offered for the next one.
- * Mappings saved before blank cells could be read as absences read them as problems.
+ * A worker category's column (AGENTS.md: Worker categories): its header text, and the option
+ * each of the file's values stands for (keyed by the value folded with foldText()).
+ */
+export const importCategoryMappingSchema = z.object({
+  column: headerText,
+  values: z.record(z.string().max(200), z.uuid({ error: 'validation.invalid' })),
+});
+export type ImportCategoryMapping = z.output<typeof importCategoryMappingSchema>;
+
+/**
+ * How a company's sheet is read: the header text of each field's column, each worker
+ * category's column and values (by category id), and what a blank day cell means. Saved per
+ * company by each import and offered for the next one. Mappings saved before blank cells
+ * could be read as absences read them as problems.
  */
 export const importMappingSchema = z.object({
   columns: z.partialRecord(z.enum(IMPORT_FIELDS), headerText),
-  values: z.object({
-    employmentType: z.record(z.string().max(200), z.enum(EMPLOYMENT_TYPES)),
-  }),
+  categories: z.record(z.uuid({ error: 'validation.invalid' }), importCategoryMappingSchema).default({}),
   blankCells: z.enum(BLANK_CELL_READINGS, { error: 'validation.invalid' }).default('PROBLEM'),
 });
 export type ImportMappingInput = z.input<typeof importMappingSchema>;

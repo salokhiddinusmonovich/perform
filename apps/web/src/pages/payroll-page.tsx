@@ -9,6 +9,7 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
+import { CategoryFilter, inCategoryFilter, type CategoryFilterValue } from '@/components/category-select';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
 import { DepartmentFilter, inDepartmentFilter, type DepartmentFilterValue } from '@/components/department-select';
@@ -38,7 +39,16 @@ import {
   type Me,
 } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { departmentTree, useDepartments, useFirms, workerName, workerSearchText, type DepartmentNode } from '@/lib/organisation';
+import {
+  departmentTree,
+  useDepartments,
+  useFirms,
+  useWorkerCategories,
+  workerName,
+  workerSearchText,
+  type DepartmentNode,
+  type WorkerCategoryItem,
+} from '@/lib/organisation';
 import {
   ADJUSTMENTS_KEY,
   currentMonth,
@@ -49,6 +59,7 @@ import {
   payslipsOf,
   siteChoices,
   usePayroll,
+  type CategoryTotal,
   type DepartmentTotal,
   type FirmTotal,
   type LockItem,
@@ -87,6 +98,16 @@ function PayrollView({ me }: { me: Me }) {
   const showFirms = usesFirms(me);
   const firms = useFirms({ enabled: showFirms });
   const [firmFilter, setFirmFilter] = useState<FirmFilterValue>('all');
+  const categories = useWorkerCategories();
+  // A closed category stays while a worker of the month on screen has one of its options.
+  const shownCategories = useMemo(
+    () =>
+      (categories.data ?? []).filter(
+        (c) => c.isActive || data.data?.categories.some((total) => total.categoryIds.includes(c.id)),
+      ),
+    [categories.data, data.data],
+  );
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilterValue>('all');
   const [chosenSite, setSiteFilter] = useState(ALL_SITES);
   const [problemFilter, setProblemFilter] = useState<'all' | 'problems' | 'ok'>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | NonNullable<PayrollWorker['source']>>('all');
@@ -101,9 +122,21 @@ function PayrollView({ me }: { me: Me }) {
           (!showFirms || inFirmFilter(firmFilter, w.firms ?? [])) &&
           (siteFilter === ALL_SITES || payrollSiteNames(w).includes(siteFilter)) &&
           (problemFilter === 'all' || (w.problems.length > 0) === (problemFilter === 'problems')) &&
+          inCategoryFilter(categoryFilter, w.categories) &&
           (sourceFilter === 'all' || w.source === sourceFilter),
       ),
-    [data.data, showDepartments, departmentFilter, departments.data, showFirms, firmFilter, siteFilter, problemFilter, sourceFilter],
+    [
+      data.data,
+      showDepartments,
+      departmentFilter,
+      departments.data,
+      showFirms,
+      firmFilter,
+      categoryFilter,
+      siteFilter,
+      problemFilter,
+      sourceFilter,
+    ],
   );
   const departmentPaths = useMemo(() => new Map(tree.map((d) => [d.id, d.path])), [tree]);
 
@@ -256,6 +289,9 @@ function PayrollView({ me }: { me: Me }) {
               <DepartmentFilter departments={departments.data ?? []} value={departmentFilter} onChange={setDepartmentFilter} />
             )}
             {showFirms && <FirmFilter firms={firms.data ?? []} value={firmFilter} onChange={setFirmFilter} />}
+            {shownCategories.length > 0 && (
+              <CategoryFilter categories={shownCategories} value={categoryFilter} onChange={setCategoryFilter} />
+            )}
             <Select value={problemFilter} onValueChange={(v) => setProblemFilter(v as typeof problemFilter)}>
               <SelectTrigger className="w-full sm:w-44" aria-label={t('payroll.problemsFilter')}>
                 <SelectValue />
@@ -288,6 +324,9 @@ function PayrollView({ me }: { me: Me }) {
         <DepartmentTotals totals={data.data.departments} tree={tree} currency={currency} />
       )}
       {showFirms && data.data && data.data.firms.length > 0 && <FirmTotals totals={data.data.firms} currency={currency} />}
+      {data.data && data.data.categories.length > 0 && shownCategories.length > 0 && (
+        <CategoryTotals totals={data.data.categories} categories={shownCategories} currency={currency} />
+      )}
       {data.data && data.data.locks.length > 0 && <LockHistory locks={data.data.locks} currency={currency} />}
       {open && <PayslipDialog worker={open} month={month} currency={currency} onClose={() => setOpen(null)} />}
       {data.data && (
@@ -504,6 +543,120 @@ function FirmTotals({ totals, currency }: { totals: FirmTotal[]; currency: strin
         <p className="text-sm text-muted-foreground">{t('payroll.byFirmHint')}</p>
       </div>
       <DataTable columns={columns} data={totals} />
+    </section>
+  );
+}
+
+/** No second category: totals by the first one alone. */
+const NO_CROSS = 'none';
+
+/**
+ * The month's workers, hours and pay by one category's options, or by two categories'
+ * options crossed (AGENTS.md: Worker categories). "Not set" is its own row.
+ */
+function CategoryTotals({
+  totals,
+  categories,
+  currency,
+}: {
+  totals: CategoryTotal[];
+  categories: WorkerCategoryItem[];
+  currency: string;
+}) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const [chosenFirst, setFirst] = useState(categories[0].id);
+  const [chosenSecond, setSecond] = useState(NO_CROSS);
+  const first = categories.find((c) => c.id === chosenFirst) ?? categories[0];
+  const second = chosenSecond !== first.id ? categories.find((c) => c.id === chosenSecond) : undefined;
+  const grouping = second ? [first, second] : [first];
+
+  // The API gives each grouping once, its categories in name order; rows follow the choice here.
+  const ids = grouping.map((c) => c.id);
+  const rows = totals.flatMap((row) => {
+    if (row.categoryIds.length !== ids.length || !ids.every((id) => row.categoryIds.includes(id))) return [];
+    const options = ids.map((id) => row.optionIds[row.categoryIds.indexOf(id)]);
+    return [{ ...row, options }];
+  });
+
+  const optionName = (category: WorkerCategoryItem, optionId: string | null) =>
+    category.options.find((o) => o.id === optionId)?.name ?? t('workerCategories.notSet');
+
+  const columns: ColumnDef<(typeof rows)[number], unknown>[] = [
+    ...grouping.map(
+      (category, i) =>
+        ({
+          id: `option-${i}`,
+          header: category.name,
+          enableSorting: false,
+          cell: ({ row }) => optionName(category, row.original.options[i]),
+        }) satisfies ColumnDef<(typeof rows)[number], unknown>,
+    ),
+    {
+      id: 'workers',
+      header: t('workerCategories.workers'),
+      enableSorting: false,
+      cell: ({ row }) => <span className="tabular-nums">{row.original.workers}</span>,
+    },
+    {
+      id: 'hours',
+      header: t('workerCategories.hoursWorked'),
+      enableSorting: false,
+      cell: ({ row }) => <span className="tabular-nums">{format.number(row.original.hours)}</span>,
+    },
+    {
+      id: 'total',
+      header: t('payroll.pay'),
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold tabular-nums">{format.money(row.original.total, currency)}</span>
+          {row.original.withProblems > 0 && (
+            <StatusBadge tone="warning">{t('payroll.workersWithProblems', { count: row.original.withProblems })}</StatusBadge>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <section className="mt-4 space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold">{t('payroll.byCategory')}</h2>
+        <p className="text-sm text-muted-foreground">{t('payroll.byCategoryHint')}</p>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Select value={first.id} onValueChange={setFirst}>
+          <SelectTrigger className="w-full sm:w-56" aria-label={t('workerCategories.groupBy')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {categories.length > 1 && (
+          <Select value={second?.id ?? NO_CROSS} onValueChange={setSecond}>
+            <SelectTrigger className="w-full sm:w-56" aria-label={t('workerCategories.crossWith')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_CROSS}>{t('workerCategories.noCross')}</SelectItem>
+              {categories
+                .filter((c) => c.id !== first.id)
+                .map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {t('workerCategories.crossWithName', { name: c.name })}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+      <DataTable columns={columns} data={rows} />
     </section>
   );
 }

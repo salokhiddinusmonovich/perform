@@ -19,7 +19,11 @@ import {
   siteSchema,
   timesheetEntrySchema,
   timesheetSettingsSchema,
+  updateCategoryOptionSchema,
   updateDepartmentSchema,
+  updateWorkerCategorySchema,
+  workerCategorySchema,
+  importMappingSchema,
   workerSchema,
   workingDaysOverrideSchema,
 } from './index.js';
@@ -265,7 +269,7 @@ describe('worker and placement schemas', () => {
     firstName: 'Test',
     patronymic: '',
     position: '',
-    employmentType: 'DIRECT',
+    categories: { '7c9e6679-7425-40de-944b-e07fc1f90ae7': '' },
     pinfl: '1234 5678 9012 34',
     birthDate: '1985-02-28',
     nationality: '',
@@ -281,6 +285,7 @@ describe('worker and placement schemas', () => {
     });
     expect(once.worker).toMatchObject({ lastName: 'Testov', pinfl: '12345678901234', passportSeries: 'AB', phone: null, patronymic: null });
     expect(once.placement.teamId).toBeNull();
+    expect(once.worker.categories).toEqual({ '7c9e6679-7425-40de-944b-e07fc1f90ae7': null });
     expect(createWorkerSchema.parse(JSON.parse(JSON.stringify(once)))).toEqual(once);
   });
 
@@ -313,6 +318,29 @@ describe('departments', () => {
       firmId: null,
       from: '2026-09-01',
     });
+  });
+});
+
+describe('worker categories', () => {
+  it('needs two options, named once each ignoring case', () => {
+    expect(workerCategorySchema.parse({ name: ' Origin ', options: ['Local', ' Foreign '] })).toEqual({
+      name: 'Origin',
+      options: ['Local', 'Foreign'],
+    });
+    expect(messages(workerCategorySchema.safeParse({ name: 'Origin', options: ['Local'] }))).toEqual(['validation.twoOptions']);
+    expect(messages(workerCategorySchema.safeParse({ name: 'Origin', options: ['Local', 'local'] }))).toEqual([
+      'validation.optionTwice',
+    ]);
+  });
+
+  it('changes only what an update names', () => {
+    expect(updateWorkerCategorySchema.parse({ isActive: false })).toEqual({ isActive: false });
+    expect(updateCategoryOptionSchema.parse({ name: ' Yerel ' })).toEqual({ name: 'Yerel' });
+    expect(messages(updateCategoryOptionSchema.safeParse({}))).toEqual(['validation.nothingToUpdate']);
+  });
+
+  it('reads an import mapping saved before categories as having none', () => {
+    expect(importMappingSchema.parse({ columns: {}, blankCells: 'ABSENT' })).toEqual({ columns: {}, categories: {}, blankCells: 'ABSENT' });
   });
 });
 

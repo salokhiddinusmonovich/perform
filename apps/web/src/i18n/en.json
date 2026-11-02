@@ -35,6 +35,7 @@
     "departments": "Departments",
     "import": "Excel import",
     "firms": "Firms",
+    "workerCategories": "Worker categories",
     "ruleSets": "Rule sets"
   },
   "settings": {
@@ -313,7 +314,10 @@
     "tooMany": "Too many entries",
     "chooseWorkers": "Choose at least one worker",
     "departmentCycle": "A department can’t be put under itself or its own sub-department.",
-    "departmentNotTeams": "A worker in a brigade is in the brigade’s department."
+    "departmentNotTeams": "A worker in a brigade is in the brigade’s department.",
+    "twoOptions": "Add at least two options.",
+    "optionTwice": "Each option needs its own name.",
+    "optionClosed": "This option is closed."
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -510,6 +514,13 @@
       "inactive": "This firm is closed.",
       "hasWorkers": "Workers are placed in this firm, now or from a later day. Move them first.",
       "noneActive": "Add a firm before switching firms on."
+    },
+    "workerCategory": {
+      "notFound": "This category doesn’t exist.",
+      "inactive": "This category is closed.",
+      "nameTaken": "A category with this name already exists.",
+      "optionTaken": "This category already has an option with this name.",
+      "optionNotFound": "This option doesn’t exist."
     },
     "ruleSet": {
       "notFound": "This rule set doesn’t exist.",
@@ -761,12 +772,6 @@
     "firstName": "First name",
     "patronymic": "Patronymic",
     "position": "Position",
-    "employmentType": "Employment",
-    "chooseEmploymentType": "Choose",
-    "employment": {
-      "DIRECT": "Direct",
-      "INDIRECT": "Indirect"
-    },
     "personalData": "Personal data",
     "personalDataHint": "Not shown to timekeepers and foremen.",
     "pinfl": "PINFL",
@@ -1135,6 +1140,8 @@
     "problemsFilter": "Problems",
     "byFirm": "By firm",
     "byFirmHint": "A worker who moved between firms counts in both, with what each firm pays.",
+    "byCategory": "By category",
+    "byCategoryHint": "Workers, hours worked and pay by one category, or by two crossed. Hours and pay count only workers who can be paid.",
     "payslipsTotal": "Total from all firms",
     "ruleSetRules": "Under the rules of “{{name}}”"
   },
@@ -1318,8 +1325,9 @@
     "mappingSaved": "These columns are the ones chosen at the last import.",
     "requiredField": "{{field}} (required)",
     "notInFile": "Not in the file",
-    "valuesTitle": "Employment types in the file",
+    "valuesTitle": "Values in the “{{name}}” column",
     "valuesDescription": "Choose what each value in the file means.",
+    "chooseOption": "Choose an option",
     "checkAgain": "Check the file again",
     "checkAgainHint": "Check the file again to see the result of your changes.",
     "workersTitle": "Step 1: workers",
@@ -1364,7 +1372,6 @@
       "firstName": "First name",
       "patronymic": "Patronymic",
       "position": "Position",
-      "employmentType": "Employment type",
       "pinfl": "PINFL",
       "birthDate": "Date of birth",
       "nationality": "Nationality",
@@ -1449,6 +1456,57 @@
       "description": "“{{name}}” will be offered for new placements again."
     },
     "missing": "Workers without a firm: {{count}}"
+  },
+  "workerCategories": {
+    "title": "Worker categories",
+    "description": "Your own ways of grouping workers, such as Direct / Indirect or Local / Foreign.",
+    "create": "Add category",
+    "name": "Name",
+    "nameHint": "For example: Direct / Indirect, or Local / Foreign.",
+    "options": "Options",
+    "optionNumber": "Option {{number}}",
+    "removeOption": "Remove option {{number}}",
+    "addOption": "Add option",
+    "newOption": "New option",
+    "renameOption": "New name for “{{name}}”",
+    "status": "Status",
+    "active": "Active",
+    "closed": "Closed",
+    "rename": "Rename",
+    "manageOptions": "Options",
+    "optionsDescription": "Options of “{{name}}”. A closed option stays with the workers who have it, but can’t be chosen again.",
+    "close": "Close",
+    "reopen": "Reopen",
+    "hint": "Categories are only for filters and totals. They never change pay. The number after each option is how many workers have it.",
+    "empty": "No categories yet",
+    "emptyDescription": "Add one to filter and total workers by it.",
+    "dialogDescription": "Give the category a name and at least two options.",
+    "notSet": "Not set",
+    "notSetIn": "{{name}}: not set",
+    "filter": "Category",
+    "allWorkers": "All categories",
+    "workers": "Workers",
+    "hoursWorked": "Hours worked",
+    "groupBy": "Group by",
+    "crossWith": "Cross with",
+    "noCross": "No second category",
+    "crossWithName": "× {{name}}",
+    "confirmClose": {
+      "title": "Close this category?",
+      "description": "“{{name}}” will no longer be offered on workers or in filters. Workers keep their options, and it can be reopened."
+    },
+    "confirmReopen": {
+      "title": "Reopen this category?",
+      "description": "“{{name}}” will be offered on workers and in filters again."
+    },
+    "confirmCloseOption": {
+      "title": "Close this option?",
+      "description": "“{{name}}” can no longer be chosen in “{{category}}”. Workers who have it keep it."
+    },
+    "confirmReopenOption": {
+      "title": "Reopen this option?",
+      "description": "“{{name}}” can be chosen in “{{category}}” again."
+    }
   },
   "ruleSets": {
     "title": "Rule sets",

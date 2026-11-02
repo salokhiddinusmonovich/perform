@@ -35,6 +35,7 @@
     "departments": "Boʻlimlar",
     "import": "Excel’dan import",
     "firms": "Firmalar",
+    "workerCategories": "Ishchi toifalari",
     "ruleSets": "Qoidalar toʻplamlari"
   },
   "settings": {
@@ -313,7 +314,10 @@
     "tooMany": "Juda koʻp yozuv",
     "chooseWorkers": "Kamida bitta ishchini tanlang",
     "departmentCycle": "Boʻlimni oʻzi yoki oʻzining ichki boʻlimi ichiga qoʻyib boʻlmaydi.",
-    "departmentNotTeams": "Brigadadagi ishchi brigadaning boʻlimida boʻladi."
+    "departmentNotTeams": "Brigadadagi ishchi brigadaning boʻlimida boʻladi.",
+    "twoOptions": "Kamida ikkita variant qoʻshing.",
+    "optionTwice": "Har bir variantning nomi boshqacha boʻlsin.",
+    "optionClosed": "Bu variant yopilgan."
   },
   "errors": {
     "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
@@ -510,6 +514,13 @@
       "inactive": "Bu firma yopilgan.",
       "hasWorkers": "Bu firmada hozir yoki keyingi kundan ishchilar bor. Avval ularni koʻchiring.",
       "noneActive": "Firmalarni yoqishdan oldin firma qoʻshing."
+    },
+    "workerCategory": {
+      "notFound": "Bunday toifa yoʻq.",
+      "inactive": "Bu toifa yopilgan.",
+      "nameTaken": "Bunday nomli toifa allaqachon bor.",
+      "optionTaken": "Bu toifada bunday nomli variant allaqachon bor.",
+      "optionNotFound": "Bunday variant yoʻq."
     },
     "ruleSet": {
       "notFound": "Bunday qoidalar toʻplami yoʻq.",
@@ -761,12 +772,6 @@
     "firstName": "Ism",
     "patronymic": "Otasining ismi",
     "position": "Lavozim",
-    "employmentType": "Ish turi",
-    "chooseEmploymentType": "Tanlang",
-    "employment": {
-      "DIRECT": "Toʻgʻridan-toʻgʻri",
-      "INDIRECT": "Bilvosita"
-    },
     "personalData": "Shaxsiy maʼlumotlar",
     "personalDataHint": "Tabelchilar va brigadirlarga koʻrsatilmaydi.",
     "pinfl": "JShShIR (PINFL)",
@@ -1135,6 +1140,8 @@
     "problemsFilter": "Muammolar",
     "byFirm": "Firmalar boʻyicha",
     "byFirmHint": "Firmadan firmaga oʻtgan ishchi ikkalasida ham, har bir firma toʻlagan summa bilan hisoblanadi.",
+    "byCategory": "Toifalar boʻyicha",
+    "byCategoryHint": "Ishchilar, ishlangan soatlar va ish haqi bitta toifa yoki ikkita toifa kesishmasi boʻyicha. Soat va ish haqi faqat toʻlanishi mumkin boʻlgan ishchilarni hisoblaydi.",
     "payslipsTotal": "Barcha firmalardan jami",
     "ruleSetRules": "“{{name}}” qoidalari boʻyicha"
   },
@@ -1318,8 +1325,9 @@
     "mappingSaved": "Bular oxirgi importda tanlangan ustunlar.",
     "requiredField": "{{field}} (majburiy)",
     "notInFile": "Faylda yoʻq",
-    "valuesTitle": "Fayldagi bandlik turlari",
+    "valuesTitle": "“{{name}}” ustunidagi qiymatlar",
     "valuesDescription": "Fayldagi har bir qiymat nimani bildirishini tanlang.",
+    "chooseOption": "Variantni tanlang",
     "checkAgain": "Faylni qayta tekshirish",
     "checkAgainHint": "Oʻzgarishlar natijasini koʻrish uchun faylni qayta tekshiring.",
     "workersTitle": "1-qadam: ishchilar",
@@ -1364,7 +1372,6 @@
       "firstName": "Ism",
       "patronymic": "Otasining ismi",
       "position": "Lavozim",
-      "employmentType": "Bandlik turi",
       "pinfl": "JSHSHIR",
       "birthDate": "Tugʻilgan sana",
       "nationality": "Fuqaroligi",
@@ -1449,6 +1456,57 @@
       "description": "“{{name}}” yana yangi joylashuvlar uchun taklif qilinadi."
     },
     "missing": "Firmasiz ishchilar: {{count}}"
+  },
+  "workerCategories": {
+    "title": "Ishchi toifalari",
+    "description": "Ishchilarni guruhlashning oʻz usullaringiz, masalan Direkt / Endirekt yoki Mahalliy / Xorijiy.",
+    "create": "Toifa qoʻshish",
+    "name": "Nomi",
+    "nameHint": "Masalan: Direkt / Endirekt yoki Mahalliy / Xorijiy.",
+    "options": "Variantlar",
+    "optionNumber": "{{number}}-variant",
+    "removeOption": "{{number}}-variantni olib tashlash",
+    "addOption": "Variant qoʻshish",
+    "newOption": "Yangi variant",
+    "renameOption": "“{{name}}” uchun yangi nom",
+    "status": "Holati",
+    "active": "Faol",
+    "closed": "Yopilgan",
+    "rename": "Nomini oʻzgartirish",
+    "manageOptions": "Variantlar",
+    "optionsDescription": "“{{name}}” variantlari. Yopilgan variant uni olgan ishchilarda qoladi, lekin uni qayta tanlab boʻlmaydi.",
+    "close": "Yopish",
+    "reopen": "Qayta ochish",
+    "hint": "Toifalar faqat filtrlar va jamlar uchun. Ular ish haqini hech qachon oʻzgartirmaydi. Har bir variantdan keyingi son uni olgan ishchilar soni.",
+    "empty": "Hali toifalar yoʻq",
+    "emptyDescription": "Ishchilarni filtrlash va jamlash uchun toifa qoʻshing.",
+    "dialogDescription": "Toifaga nom va kamida ikkita variant bering.",
+    "notSet": "Belgilanmagan",
+    "notSetIn": "{{name}}: belgilanmagan",
+    "filter": "Toifa",
+    "allWorkers": "Barcha toifalar",
+    "workers": "Ishchilar",
+    "hoursWorked": "Ishlangan soatlar",
+    "groupBy": "Guruhlash",
+    "crossWith": "Kesishma",
+    "noCross": "Ikkinchi toifasiz",
+    "crossWithName": "× {{name}}",
+    "confirmClose": {
+      "title": "Toifa yopilsinmi?",
+      "description": "“{{name}}” endi ishchilarda va filtrlarda taklif qilinmaydi. Ishchilar oʻz variantlarini saqlaydi, toifani qayta ochish mumkin."
+    },
+    "confirmReopen": {
+      "title": "Toifa qayta ochilsinmi?",
+      "description": "“{{name}}” yana ishchilarda va filtrlarda taklif qilinadi."
+    },
+    "confirmCloseOption": {
+      "title": "Variant yopilsinmi?",
+      "description": "“{{name}}” endi “{{category}}” toifasida tanlanmaydi. Uni olgan ishchilarda qoladi."
+    },
+    "confirmReopenOption": {
+      "title": "Variant qayta ochilsinmi?",
+      "description": "“{{name}}” yana “{{category}}” toifasida tanlanadi."
+    }
   },
   "ruleSets": {
     "title": "Qoidalar toʻplamlari",

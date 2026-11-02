@@ -20,6 +20,7 @@ import { conflict } from '../common/api-error';
 import { inMonth, isoDay, monthSpan, todayIn } from '../common/dates';
 import { seesPlacement } from '../organisation/access';
 import { subtreeIds } from '../organisation/departments.service';
+import { listCategories, type WorkerCategoryView } from '../organisation/worker-categories.service';
 import { placementDaysIn, shiftPartsOf, type ShiftPart } from '../organisation/worker-shifts';
 import { SALARY_ORDER, salaryForFirm } from '../organisation/workers.service';
 import { lockCompanyMonths } from '../pay-rules/months';
@@ -128,6 +129,11 @@ export interface PayrollWorkerView {
   siteNames?: string[];
   /** Firms of the worker's placements in the month; absent while the company doesn't use firms and in months locked before them */
   firms?: FirmRef[];
+  /**
+   * The worker's option in each category (AGENTS.md: Worker categories), by category id, as
+   * when worked out, so a locked month keeps them. Absent in months locked before categories.
+   */
+  categories?: Record<string, string>;
   /** The salary of the firm of the last placement in the month */
   salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
   /** Where the hours came from (IMPORT: an Excel import, AGENTS.md: Excel import), or null when there are none */
@@ -195,6 +201,24 @@ export interface FirmTotalView {
   total: string;
 }
 
+/**
+ * Workers, hours and pay of one worker category's option, or of two categories' options
+ * crossed (AGENTS.md: Worker categories). Each worker counts once per grouping.
+ */
+export interface CategoryTotalView {
+  /** One category, or two, in name order */
+  categoryIds: string[];
+  /** The option of each category, in the same order; null: not set */
+  optionIds: (string | null)[];
+  workers: number;
+  /** Workers that can't be paid yet, so not in the hours and total */
+  withProblems: number;
+  /** Hours worked (normal, overtime, rest day and holiday), not absences */
+  hours: string;
+  /** Sum of the workers that could be paid */
+  total: string;
+}
+
 export interface PayrollMonthView {
   year: number;
   month: number;
@@ -209,6 +233,8 @@ export interface PayrollMonthView {
   departments: DepartmentTotalView[];
   /** Totals per firm with workers this month */
   firms: FirmTotalView[];
+  /** Totals per category option, and per two categories' options crossed, with workers this month */
+  categories: CategoryTotalView[];
   /** Every lock of the month, oldest first */
   locks: LockView[];
 }
@@ -290,6 +316,7 @@ export class PayrollService {
       workers,
       departments: await this.departmentTotals(companyId, workers),
       firms: firmTotals(workers),
+      categories: categoryTotals(await listCategories(this.prisma, companyId), workers),
       locks: snapshots.map((snap, i) => {
         const unlock = unlocks.find((u) => (u.data as { lockNumber?: number }).lockNumber === snap.lockNumber);
         return {
@@ -449,7 +476,7 @@ export class PayrollService {
     const assignmentIds = placements.map((p) => p.id);
     const workerIds = [...visible];
 
-    const [salaries, entries, editedDays, travelAmounts, adjustments, companyRules, shiftParts] = await Promise.all([
+    const [salaries, entries, editedDays, travelAmounts, adjustments, companyRules, shiftParts, categoryValues] = await Promise.all([
       db.salary.findMany({
         where: {
           companyId,
@@ -480,6 +507,10 @@ export class PayrollService {
         .defaultRuleSet(companyId, db)
         .then((set) => (set ? this.rules.month(companyId, set.id, year, month, db) : null)),
       shiftPartsOf(db, companyId, workerIds, year, month),
+      db.workerCategoryValue.findMany({
+        where: { companyId, workerId: { in: workerIds } },
+        select: { workerId: true, categoryId: true, optionId: true },
+      }),
     ]);
     const roundingStep = companyRules?.rules?.settings.payRoundingStep ?? null;
 
@@ -518,6 +549,9 @@ export class PayrollService {
         department: own.at(-1)!.department,
         siteNames: [...new Set(own.map((p) => p.site.name))],
         ...(firmsOn ? { firms: ownFirms.filter((f) => f !== null) } : {}),
+        categories: Object.fromEntries(
+          categoryValues.filter((v) => v.workerId === workerId).map((v) => [v.categoryId, v.optionId]),
+        ),
         salary: salary && {
           fromYear: salary.fromYear,
           fromMonth: salary.fromMonth,
@@ -784,6 +818,43 @@ function firmTotals(workers: readonly PayrollWorkerView[]): FirmTotalView[] {
     if (!a.firm || !b.firm) return a.firm ? -1 : 1;
     return collator.compare(a.firm.name, b.firm.name);
   });
+}
+
+/**
+ * Totals per option of each category, and per options of each two categories crossed, from
+ * the options each worker's result saved. Categories in name order, closed ones only while a
+ * worker has one; rows in option order, "not set" last. Workers from months locked before
+ * categories are left out.
+ */
+function categoryTotals(all: readonly WorkerCategoryView[], workers: readonly PayrollWorkerView[]): CategoryTotalView[] {
+  const counted = workers.filter((w) => w.categories !== undefined);
+  const categories = all.filter((c) => c.isActive || counted.some((w) => w.categories![c.id] !== undefined));
+  const groupings = categories.flatMap((a, i) => [[a], ...categories.slice(i + 1).map((b) => [a, b])]);
+  const out: CategoryTotalView[] = [];
+  for (const grouping of groupings) {
+    // Every combination of options (null last), kept when it has workers.
+    const combos = grouping.reduce<(string | null)[][]>(
+      (acc, c) => acc.flatMap((prefix) => [...c.options.map((o) => o.id), null].map((id) => [...prefix, id])),
+      [[]],
+    );
+    for (const optionIds of combos) {
+      const rows = counted.filter((w) => grouping.every((c, i) => (w.categories![c.id] ?? null) === optionIds[i]));
+      if (rows.length === 0) continue;
+      const paid = rows.filter((w) => w.total !== null);
+      out.push({
+        categoryIds: grouping.map((c) => c.id),
+        optionIds,
+        workers: rows.length,
+        withProblems: rows.length - paid.length,
+        hours: paid
+          .flatMap((w) => w.parts.flatMap((p) => p.result.lines))
+          .reduce((sum, line) => (line.type === 'HOURS' ? sum.plus(line.hours) : sum), new Prisma.Decimal(0))
+          .toString(),
+        total: sumTotals(rows),
+      });
+    }
+  }
+  return out;
 }
 
 /** Sum of the totals of the workers that can be paid. */

@@ -1,11 +1,9 @@
 import {
   BLANK_CELL_READINGS,
-  EMPLOYMENT_TYPES,
   HOURS_IMPORT_REQUIRED,
   IMPORT_FIELDS,
   WORKER_IMPORT_REQUIRED,
   type BlankCellReading,
-  type EmploymentType,
   type ImportField,
   type ImportMapping,
   type YearMonth,
@@ -41,7 +39,7 @@ import {
   type ImportRequest,
   type ImportWorkerChange,
 } from '@/lib/imports';
-import { WORKERS_KEY } from '@/lib/organisation';
+import { useWorkerCategories, WORKERS_KEY, type WorkerCategoryItem } from '@/lib/organisation';
 import { currentMonth, PAYROLL_KEY } from '@/lib/payroll';
 
 /** Select value for "this field has no column in the file". */
@@ -319,14 +317,42 @@ function MappingCard({
 }) {
   const { t } = useTranslation();
   const required = new Set<ImportField>([...WORKER_IMPORT_REQUIRED, ...HOURS_IMPORT_REQUIRED]);
+  // Closed categories aren't read (AGENTS.md: Worker categories).
+  const categories = (useWorkerCategories().data ?? []).filter((c) => c.isActive);
   const setColumn = (field: ImportField, header: string) => {
     const columns = { ...mapping.columns };
     if (header === NONE) delete columns[field];
     else columns[field] = header;
     onChange({ ...mapping, columns });
   };
-  const setValue = (value: string, type: EmploymentType) =>
-    onChange({ ...mapping, values: { employmentType: { ...mapping.values.employmentType, [value]: type } } });
+  const setCategoryColumn = (categoryId: string, header: string) => {
+    const mapped = { ...mapping.categories };
+    if (header === NONE) delete mapped[categoryId];
+    else mapped[categoryId] = { column: header, values: mapped[categoryId]?.values ?? {} };
+    onChange({ ...mapping, categories: mapped });
+  };
+  const setValue = (categoryId: string, value: string, optionId: string) => {
+    const mapped = mapping.categories[categoryId];
+    onChange({
+      ...mapping,
+      categories: { ...mapping.categories, [categoryId]: { ...mapped, values: { ...mapped.values, [value]: optionId } } },
+    });
+  };
+  const columnSelect = (id: string, value: string | undefined, onSelect: (header: string) => void) => (
+    <Select value={value ?? NONE} onValueChange={onSelect}>
+      <SelectTrigger id={id} className="w-full">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NONE}>{t('import.notInFile')}</SelectItem>
+        {preview.headers.map((h) => (
+          <SelectItem key={h} value={h}>
+            {h}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 
   return (
     <Card>
@@ -352,55 +378,28 @@ function MappingCard({
                 id={id}
                 label={required.has(field) ? t('import.requiredField', { field: t(`import.fields.${field}`) }) : t(`import.fields.${field}`)}
               >
-                <Select value={mapping.columns[field] ?? NONE} onValueChange={(v) => setColumn(field, v)}>
-                  <SelectTrigger id={id} className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>{t('import.notInFile')}</SelectItem>
-                    {preview.headers.map((h) => (
-                      <SelectItem key={h} value={h}>
-                        {h}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {columnSelect(id, mapping.columns[field], (v) => setColumn(field, v))}
+              </Field>
+            );
+          })}
+          {categories.map((c) => {
+            const id = `import-category-${c.id}`;
+            return (
+              <Field key={c.id} id={id} label={c.name}>
+                {columnSelect(id, mapping.categories[c.id]?.column, (v) => setCategoryColumn(c.id, v))}
               </Field>
             );
           })}
         </div>
-        {mapping.columns.employmentType !== undefined && preview.values.employmentType.length > 0 && (
-          <section className="space-y-3 border-t pt-4">
-            <div>
-              <h3 className="font-semibold">{t('import.valuesTitle')}</h3>
-              <p className="text-sm text-muted-foreground">{t('import.valuesDescription')}</p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {preview.values.employmentType.map((value) => {
-                const id = `import-value-${value}`;
-                return (
-                  <Field key={value} id={id} label={value}>
-                    <Select
-                      value={mapping.values.employmentType[value] ?? undefined}
-                      onValueChange={(v) => setValue(value, v as EmploymentType)}
-                    >
-                      <SelectTrigger id={id} className="w-full">
-                        <SelectValue placeholder={t('workers.chooseEmploymentType')} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {EMPLOYMENT_TYPES.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {t(`workers.employment.${type}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                );
-              })}
-            </div>
-          </section>
-        )}
+        {categories.map((c) => (
+          <CategoryValues
+            key={c.id}
+            category={c}
+            values={mapping.categories[c.id] ? (preview.values.categories[c.id] ?? []) : []}
+            mapped={mapping.categories[c.id]?.values ?? {}}
+            onChange={(value, optionId) => setValue(c.id, value, optionId)}
+          />
+        ))}
         <section className="space-y-3 border-t pt-4">
           <Field id="import-blank-cells" label={t('import.blankCells')} hint={t('import.blankCellsHint')}>
             <Select
@@ -432,14 +431,75 @@ function MappingCard({
   );
 }
 
+/** What each value found in a category's column stands for: one of the category's active options. */
+function CategoryValues({
+  category,
+  values,
+  mapped,
+  onChange,
+}: {
+  category: WorkerCategoryItem;
+  /** The values found in the file (folded); none while the category has no column */
+  values: readonly string[];
+  mapped: Readonly<Record<string, string>>;
+  onChange: (value: string, optionId: string) => void;
+}) {
+  const { t } = useTranslation();
+  if (values.length === 0) return null;
+  return (
+    <section className="space-y-3 border-t pt-4">
+      <div>
+        <h3 className="font-semibold">{t('import.valuesTitle', { name: category.name })}</h3>
+        <p className="text-sm text-muted-foreground">{t('import.valuesDescription')}</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {values.map((value) => {
+          const id = `import-value-${category.id}-${value}`;
+          return (
+            <Field key={value} id={id} label={value}>
+              <Select value={mapped[value] ?? ''} onValueChange={(v) => onChange(value, v)}>
+                <SelectTrigger id={id} className="w-full">
+                  <SelectValue placeholder={t('import.chooseOption')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {category.options
+                    .filter((o) => o.isActive || o.id === mapped[value])
+                    .map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** The name a problem or difference gives its column: a field's, or a worker category's own name. */
+function useColumnName() {
+  const { t } = useTranslation();
+  const categories = useWorkerCategories().data;
+  return (p: { field?: string; categoryId?: string }) =>
+    p.categoryId
+      ? (categories?.find((c) => c.id === p.categoryId)?.name ?? '')
+      : p.field
+        ? t(`import.fields.${p.field}`)
+        : '';
+}
+
 /** A problem as the user reads it: what is wrong, with the field, the file's value and the days. */
 function useProblemText() {
   const { t } = useTranslation();
+  const columnName = useColumnName();
   return (p: ImportProblem) => {
-    const field = p.field ? t(`import.fields.${p.field}`) : '';
+    const field = columnName(p);
     const message = p.code.startsWith('validation.') ? t(p.code) : t(`errors.${p.code}`, { field, value: p.value ?? '' });
     return [
-      p.field && !message.includes(field) ? `${field}: ${message}` : message,
+      field && !message.includes(field) ? `${field}: ${message}` : message,
       p.value !== undefined && p.value !== '' && !message.includes(p.value) ? t('import.fileValue', { value: p.value }) : null,
       p.days && p.days.length > 0 ? t('import.days', { days: p.days.join(', ') }) : null,
     ]
@@ -510,6 +570,7 @@ function Problems({ problems, notes = false }: { problems: ImportProblem[]; note
 function Changes({ changes, currency }: { changes: ImportWorkerChange[]; currency: string }) {
   const { t } = useTranslation();
   const format = useFormat();
+  const columnName = useColumnName();
   const columns = useMemo<ColumnDef<ImportWorkerChange, unknown>[]>(() => {
     const show = (c: ImportWorkerChange, value: string | null) =>
       value === null
@@ -535,13 +596,13 @@ function Changes({ changes, currency }: { changes: ImportWorkerChange[]; currenc
       },
       {
         id: 'field',
-        accessorFn: (c) => t(`import.fields.${c.field}`),
+        accessorFn: (c) => columnName(c),
         header: t('import.field'),
       },
       { id: 'app', header: t('import.inApp'), enableSorting: false, cell: ({ row }) => show(row.original, row.original.app) },
       { id: 'file', header: t('import.inFile'), enableSorting: false, cell: ({ row }) => show(row.original, row.original.file) },
     ];
-  }, [t, format, currency]);
+  }, [t, format, currency, columnName]);
   return (
     <section className="space-y-2">
       <div>

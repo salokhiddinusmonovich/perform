@@ -65,10 +65,6 @@ export const updateTeamSchema = teamSchema
   .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
 export type UpdateTeam = z.output<typeof updateTeamSchema>;
 
-/** Mirrors EmploymentType in apps/api/prisma/schema.prisma. */
-export const EMPLOYMENT_TYPES = ['DIRECT', 'INDIRECT'] as const;
-export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
-
 /** Uzbek personal ID: 14 digits. */
 const pinflSchema = z
   .string()
@@ -84,7 +80,11 @@ export const workerSchema = z.object({
   firstName: requiredName(80),
   patronymic: optionalText(80),
   position: optionalText(120),
-  employmentType: z.enum(EMPLOYMENT_TYPES, { error: 'validation.required' }),
+  /**
+   * The worker's option in each category (AGENTS.md: Worker categories), by category id; null
+   * clears it. Categories left out keep what they have.
+   */
+  categories: z.record(z.uuid({ error: 'validation.invalid' }), optionalUuid).default({}),
   pinfl: pinflSchema,
   birthDate: birthDateSchema,
   nationality: optionalText(60),
@@ -163,6 +163,41 @@ export const updateFirmSchema = firmSchema
   .extend({ isActive: z.boolean().optional() })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
 export type UpdateFirm = z.output<typeof updateFirmSchema>;
+
+/**
+ * A company's own way of grouping workers (AGENTS.md: Worker categories), created with its
+ * options (at least two, names unique ignoring case).
+ */
+export const workerCategorySchema = z.object({
+  name: requiredName(80),
+  options: z
+    .array(requiredName(80))
+    .min(2, { error: 'validation.twoOptions' })
+    .max(50, { error: 'validation.tooMany' })
+    .refine((names) => new Set(names.map((n) => n.toLowerCase())).size === names.length, {
+      error: 'validation.optionTwice',
+    }),
+});
+export type WorkerCategoryInput = z.input<typeof workerCategorySchema>;
+export type WorkerCategory = z.output<typeof workerCategorySchema>;
+
+/** Renaming or (de)activating a category. */
+export const updateWorkerCategorySchema = z
+  .object({ name: requiredName(80).optional(), isActive: z.boolean().optional() })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
+export type UpdateWorkerCategory = z.output<typeof updateWorkerCategorySchema>;
+
+/** A new option of a category. */
+export const categoryOptionSchema = z.object({ name: requiredName(80) });
+export type CategoryOptionInput = z.input<typeof categoryOptionSchema>;
+export type CategoryOption = z.output<typeof categoryOptionSchema>;
+
+/** Renaming or (de)activating an option. */
+export const updateCategoryOptionSchema = categoryOptionSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
+export type UpdateCategoryOption = z.output<typeof updateCategoryOptionSchema>;
 
 /** A named rule set that sites and firms share (AGENTS.md: Pay rule sets). */
 export const ruleSetSchema = z.object({ name: requiredName(120) });

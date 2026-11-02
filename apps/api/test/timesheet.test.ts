@@ -49,7 +49,7 @@ async function company({ timesheetModule = true, planFrom = '2000-01-01' } = {})
 async function hire(agent: Agent, siteId: string, teamId: string | null, lastName: string, from = '2026-09-01') {
   const res = await agent
     .post('/api/workers')
-    .send({ worker: { lastName, firstName: 'Test', employmentType: 'DIRECT' }, placement: { siteId, teamId, from } })
+    .send({ worker: { lastName, firstName: 'Test' }, placement: { siteId, teamId, from } })
     .expect(201);
   return res.body.id as string;
 }

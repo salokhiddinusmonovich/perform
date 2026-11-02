@@ -65,7 +65,7 @@ async function member(companyId: string, role: Role) {
 const hire = (agent: Agent, placement: { siteId: string; firmId?: string | null; from?: string }) =>
   agent
     .post('/api/workers')
-    .send({ worker: { lastName: 'Testov', firstName: 'Test', employmentType: 'DIRECT' }, placement: { from: '2026-09-01', ...placement } });
+    .send({ worker: { lastName: 'Testov', firstName: 'Test' }, placement: { from: '2026-09-01', ...placement } });
 
 const salary = (agent: Agent, workerId: string, firmId: string | null, monthlySalary: string) =>
   agent.post(`/api/workers/${workerId}/salaries`).send({ firmId, fromYear: 2026, fromMonth: 9, monthlySalary });
