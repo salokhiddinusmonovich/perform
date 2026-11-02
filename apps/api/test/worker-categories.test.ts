@@ -118,6 +118,8 @@ describe('worker categories', () => {
     await c.agent.patch(`/api/worker-categories/${c.origin.id}`).send({ name: 'Yerel / Yabancı' }).expect(204);
     await c.agent.patch(`/api/worker-categories/${c.origin.id}/options/${c.origin.options.Local}`).send({ name: 'Yerel' }).expect(204);
     const { id: other } = (await c.agent.post(`/api/worker-categories/${c.origin.id}/options`).send({ name: 'Diğer' }).expect(201)).body;
+    // Options stay in the order they were added, whatever their names.
+    expect(Object.keys(await optionIds(c.agent, c.origin.id))).toEqual(['Yerel', 'Foreign', 'Diğer']);
     const log = await ctx.prisma.auditLog.findMany({
       where: { companyId: c.company.id, action: { startsWith: 'workerCategory.' } },
       orderBy: { createdAt: 'asc' },

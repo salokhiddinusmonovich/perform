@@ -456,6 +456,8 @@ model WorkerCategoryOption {
   id         String   @id @default(uuid()) @db.Uuid
   companyId  String   @db.Uuid
   categoryId String   @db.Uuid
+  /// Place in the category's list (0, 1, 2…): the order the options were added in
+  position   Int
   name       String
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
@@ -465,7 +467,7 @@ model WorkerCategoryOption {
 
   /// Target of WorkerCategoryValue's foreign key, which keeps a worker's option one of the category's
   @@unique([id, categoryId, companyId])
-  @@index([categoryId])
+  @@unique([categoryId, position])
 }
 
 /// A worker's option in a category: at most one per category. No row: not set.

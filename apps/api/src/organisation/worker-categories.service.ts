@@ -23,7 +23,6 @@ export interface WorkerCategoryView {
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaService;
 
-const OPTION_ORDER = [{ createdAt: 'asc' }, { name: 'asc' }] as const satisfies Prisma.WorkerCategoryOptionOrderByWithRelationInput[];
 
 /**
  * Worker categories (AGENTS.md: Worker categories): the company's own ways of grouping
@@ -46,10 +45,9 @@ export class WorkerCategoriesService {
     return this.prisma.$transaction(async (tx) => {
       await this.assertNameFree(tx, companyId, input.name, null);
       const row = await tx.workerCategory.create({ data: { companyId, name: input.name } });
-      // One by one, so createdAt keeps the order they were given in.
-      for (const name of input.options) {
-        await tx.workerCategoryOption.create({ data: { companyId, categoryId: row.id, name } });
-      }
+      await tx.workerCategoryOption.createMany({
+        data: input.options.map((name, position) => ({ companyId, categoryId: row.id, position, name })),
+      });
       await this.record(tx, auth, 'workerCategory.create', row.id, { ...input });
       return { id: row.id };
     });
@@ -72,7 +70,10 @@ export class WorkerCategoriesService {
     return this.prisma.$transaction(async (tx) => {
       await this.find(tx, companyId, id);
       await this.assertOptionFree(tx, id, input.name, null);
-      const row = await tx.workerCategoryOption.create({ data: { companyId, categoryId: id, name: input.name } });
+      // Last in the list; the unique (category, position) refuses a second option added at the same time.
+      const last = await tx.workerCategoryOption.aggregate({ where: { categoryId: id }, _max: { position: true } });
+      const position = (last._max.position ?? -1) + 1;
+      const row = await tx.workerCategoryOption.create({ data: { companyId, categoryId: id, position, name: input.name } });
       await this.record(tx, auth, 'workerCategory.addOption', id, { optionId: row.id, name: input.name });
       return { id: row.id };
     });
@@ -126,7 +127,7 @@ export class WorkerCategoriesService {
 export async function listCategories(db: Db, companyId: string): Promise<WorkerCategoryView[]> {
   const rows = await db.workerCategory.findMany({
     where: { companyId },
-    include: { options: { orderBy: OPTION_ORDER } },
+    include: { options: { orderBy: { position: 'asc' } } },
     orderBy: { name: 'asc' },
   });
   return rows.map((c) => ({
