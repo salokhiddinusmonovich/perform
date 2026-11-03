@@ -318,6 +318,7 @@ describe('departments', () => {
       teamId: null,
       departmentId: null,
       firmId: null,
+      travelRouteId: null,
       from: '2026-09-01',
     });
   });

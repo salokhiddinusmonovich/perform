@@ -61,8 +61,8 @@ export type PayrollProblem =
   | { code: 'invalidHours'; detail: string };
 
 /**
- * What a pay line's place key stands for: a site and team the hours were entered at
- * (daily entries, placeKey) or a placement (totals).
+ * What a pay line's place key stands for: a site and team the hours of one placement were
+ * entered at (daily entries, placeKey) or a placement (totals).
  */
 export interface PlaceLabel {
   siteName: string;
@@ -75,9 +75,11 @@ export interface PlaceLabel {
 
 /**
  * Key of the place daily hours were entered at. A worker's day may be split between
- * teams of one site too, so the team is part of it.
+ * teams of one site too, so the team is part of it. So is the placement the hours belong
+ * to: two placements at one site in a month may have different travel routes.
  */
-const placeKey = (siteId: string, teamId: string | null) => (teamId ? `${siteId}/${teamId}` : siteId);
+const placeKey = (assignmentId: string, siteId: string, teamId: string | null) =>
+  [assignmentId, siteId, teamId].filter(Boolean).join('/');
 
 /**
  * The days of the worker's placements under one rule set and on one shift, paid under the
@@ -729,27 +731,31 @@ function payPart(
         places[p.id] = { siteName: p.site.name, from: isoDay(p.hiredOn), until: p.leftOn ? isoDay(p.leftOn) : null };
       }
       const routes = Object.fromEntries(inPart.map((p) => [p.id, route(p)]));
-      result = calculatePay({ ...base, totals, travel: travel(settings, routes, inPart, travelAmounts) });
+      result = calculatePay({ ...base, totals, travel: travel(settings, routes, startingIn(m, shiftPart, inPart), travelAmounts) });
     } else {
       const inThisPart = ownEntries.filter(
         (e) => ids.has(e.assignmentId) && isoDay(e.date) >= shiftPart.from && isoDay(e.date) <= shiftPart.until,
       );
       const partEntries: DayEntry[] = inThisPart.map((e) => ({
         date: isoDay(e.date),
-        place: placeKey(e.siteId, e.teamId),
+        place: placeKey(e.assignmentId, e.siteId, e.teamId),
         seq: Number(e.seq),
         status: e.status,
         hours: e.hours.toString(),
       }));
-      // A place's route is the worker's route on their placement at its site; elsewhere none.
+      // A place's route is the route of the entry's placement when the hours were entered at its site; elsewhere none.
       const routes: Record<string, ReturnType<typeof route>> = {};
       for (const e of inThisPart) {
-        const key = placeKey(e.siteId, e.teamId);
+        const key = placeKey(e.assignmentId, e.siteId, e.teamId);
         places[key] = { siteName: e.site.name, teamName: e.team?.name ?? null, from: null, until: null };
-        const p = inPart.find((x) => x.siteId === e.siteId);
-        routes[key] = p ? route(p) : null;
+        const p = inPart.find((x) => x.id === e.assignmentId)!;
+        routes[key] = p.siteId === e.siteId ? route(p) : null;
       }
-      result = calculatePay({ ...base, entries: partEntries, travel: travel(settings, routes, inPart, travelAmounts) });
+      result = calculatePay({
+        ...base,
+        entries: partEntries,
+        travel: travel(settings, routes, startingIn(m, shiftPart, inPart), travelAmounts),
+      });
     }
   } catch (error) {
     if (!(error instanceof RangeError)) throw error;
@@ -767,6 +773,18 @@ function payPart(
     places,
     result,
   };
+}
+
+/**
+ * The placements whose first day in the month is in the part. A placement's monthly travel
+ * amount is paid once, with the part it starts the month in, however the month is split.
+ */
+function startingIn(m: MonthRules, part: Pick<ShiftPart, 'from' | 'until'>, inPart: readonly Placement[]): Placement[] {
+  const monthStart = m.calendar![0].date;
+  return inPart.filter((p) => {
+    const first = isoDay(p.hiredOn) > monthStart ? isoDay(p.hiredOn) : monthStart;
+    return first >= part.from && first <= part.until;
+  });
 }
 
 /** A placement's newest totals for a part's days, if any. */
@@ -794,17 +812,18 @@ function route(p: Placement) {
 
 /**
  * Travel pay of a part under its rules: per day worked at each place's route, or the
- * monthly amounts the accountant entered for these placements (none entered: none paid).
+ * monthly amounts the accountant entered for the placements starting the month in it
+ * (none entered: none paid).
  */
 function travel(
   rules: StoredPayRules,
   routes: Record<string, ReturnType<typeof route>>,
-  inPart: readonly Placement[],
+  starting: readonly Placement[],
   amounts: readonly { assignmentId: string; amount: Prisma.Decimal }[],
 ): TravelInput | null {
   if (rules.travelPayMode === 'PER_DAY_WORKED') return { kind: 'PER_DAY_WORKED', routes };
   if (rules.travelPayMode === 'MONTHLY_AMOUNT') {
-    const own = amounts.filter((a) => inPart.some((p) => p.id === a.assignmentId));
+    const own = amounts.filter((a) => starting.some((p) => p.id === a.assignmentId));
     if (own.length === 0) return null;
     const sum = own.reduce((acc, a) => acc.plus(a.amount), new Prisma.Decimal(0));
     return { kind: 'MONTHLY_AMOUNT', amount: sum.toFixed(2) };

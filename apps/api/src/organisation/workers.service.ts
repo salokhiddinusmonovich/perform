@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { assertManagesSite, seesPay, seesPersonalData, seesPlacement } from './access';
 import { findDepartment } from './departments.service';
 import { findFirm } from './firms.service';
+import { findTravelRoute } from './travel-routes.service';
 import { CATEGORY_VALUE_ORDER, checkCategoryChoices, listCategories, optionsAt, setCategoryChoices } from './worker-categories.service';
 import { withinWorkerLimit } from './worker-limit';
 import { shiftInfo, type ShiftInfo } from './worker-shifts';
@@ -27,6 +28,9 @@ export interface PlacementView {
   firmId: string | null;
   firmName: string | null;
   firmType: FirmType | null;
+  /** The route whose travel pay the placement earns (AGENTS.md: Travel pay); null: none. Its amount is pay, so it isn't here. */
+  travelRouteId: string | null;
+  travelRouteName: string | null;
   /** First day at this site */
   from: string;
   /** Last day, or null while the worker is still there */
@@ -100,6 +104,7 @@ const PLACEMENT_INCLUDE = {
   team: { select: { name: true } },
   department: { select: { name: true } },
   firm: { select: { name: true, type: true } },
+  travelRoute: { select: { name: true } },
 } as const satisfies Prisma.AssignmentInclude;
 
 /** Newest first: by from-month, then the one added last. The first row of a month is the one that counts. */
@@ -198,6 +203,7 @@ export class WorkersService {
     assertManagesSite(auth, placement.siteId);
     const departmentId = await this.checkPlace(tx, auth, placement, 'placement.');
     const firmId = await this.checkFirm(tx, auth, placement, 'placement.');
+    await findTravelRoute(tx, companyId, placement.travelRouteId);
     await this.assertUniqueFree(tx, companyId, details, null);
     const categories = checkCategoryChoices(await listCategories(tx, companyId), details.categories, new Map(), 'worker.');
     await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
@@ -276,6 +282,7 @@ export class WorkersService {
     assertManagesSite(auth, placement.siteId);
     const departmentId = await this.checkPlace(tx, auth, placement, '');
     const firmId = await this.checkFirm(tx, auth, placement, '');
+    await findTravelRoute(tx, companyId, placement.travelRouteId);
 
     const stillThere = current.leftOn === null || isoDay(current.leftOn) >= placement.from;
     const created = await withinWorkerLimit(tx, companyId, id, placement.from, async () => {
@@ -350,6 +357,36 @@ export class WorkersService {
         assignmentId: placementId,
         firmId,
         firmName: firm.name,
+      });
+    });
+  }
+
+  /**
+   * Sets or changes the travel route of a placement (none: no route). The route decides the
+   * travel pay of every day of the placement, so none of its months may be locked; a placement
+   * reaching into a locked month changes route by a new placement from a day instead.
+   */
+  async setTravelRoute(auth: CompanyAuthContext, id: string, placementId: string, travelRouteId: string | null): Promise<void> {
+    const companyId = auth.company.id;
+    await this.prisma.$transaction(async (tx) => {
+      const worker = await this.find(tx, auth, id);
+      const placement = worker.assignments.find((p) => p.id === placementId);
+      if (!placement) throw notFound('placement.notFound');
+      assertManagesSite(auth, placement.siteId);
+      if (placement.travelRouteId === travelRouteId) throw conflict('placement.routeUnchanged');
+      const route = await findTravelRoute(tx, companyId, travelRouteId, placement.travelRouteId);
+      const last = placement.leftOn && monthOfDay(isoDay(placement.leftOn));
+      await assertMonthsOpen(
+        tx,
+        companyId,
+        monthOfDay(isoDay(placement.hiredOn)),
+        last && { year: last.year, month: last.month + 1 },
+      );
+      await tx.assignment.update({ where: { id: placementId }, data: { travelRouteId } });
+      await this.record(tx, auth, 'worker.placementTravelRoute', id, {
+        assignmentId: placementId,
+        from: placement.travelRouteId && { id: placement.travelRouteId, name: placement.travelRoute?.name ?? null },
+        to: route && { id: route.id, name: route.name, amountPerDay: route.amountPerDay.toString() },
       });
     });
   }
@@ -561,6 +598,8 @@ export class WorkersService {
             firmId: p.firmId,
             firmName: p.firm?.name ?? null,
             firmType: p.firm?.type ?? null,
+            travelRouteId: p.travelRouteId,
+            travelRouteName: p.travelRoute?.name ?? null,
             from: isoDay(p.hiredOn),
             until: p.leftOn ? isoDay(p.leftOn) : null,
           }
@@ -621,7 +660,7 @@ function toInput(auth: CompanyAuthContext, w: WorkerRow): Worker {
 }
 
 function placementColumns(companyId: string, workerId: string, p: Placement, departmentId: string | null, firmId: string | null) {
-  return { companyId, workerId, siteId: p.siteId, teamId: p.teamId, departmentId, firmId, hiredOn: dayToDate(p.from) };
+  return { companyId, workerId, siteId: p.siteId, teamId: p.teamId, departmentId, firmId, travelRouteId: p.travelRouteId, hiredOn: dayToDate(p.from) };
 }
 
 function shiftToday(auth: CompanyAuthContext, w: WorkerRow): ShiftInfo | null {

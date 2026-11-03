@@ -3,11 +3,13 @@ import {
   adjustmentSchema,
   cancelAdjustmentSchema,
   monthlyHoursSchema,
+  travelAmountSchema,
   unlockSchema,
   yearMonthSchema,
   type Adjustment,
   type CancelAdjustment,
   type MonthlyHours,
+  type TravelAmount,
   type Unlock,
   type YearMonth,
 } from '@puantaj/schemas';
@@ -16,6 +18,7 @@ import { ZodPipe } from '../common/zod.pipe';
 import { AdjustmentsService, type AdjustmentsMonthView } from './adjustments.service';
 import { MonthlyHoursService, type MonthlyHoursMonthView } from './monthly-hours.service';
 import { PayrollService, type PayrollMonthView } from './payroll.service';
+import { TravelAmountsService, type TravelAmountsMonthView } from './travel-amounts.service';
 
 // Timekeepers and foremen never see pay (AGENTS.md: Roles), so none of this is theirs.
 
@@ -43,6 +46,33 @@ export class MonthlyHoursController {
     @Body(new ZodPipe(monthlyHoursSchema)) body: MonthlyHours,
   ): Promise<{ id: string }> {
     return this.hours.add(auth, month, assignmentId, body);
+  }
+}
+
+/** Monthly travel amounts per placement (AGENTS.md: Travel pay). Owners, admins and accountants add them. */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+@Controller('travel-amounts')
+export class TravelAmountsController {
+  constructor(private readonly amounts: TravelAmountsService) {}
+
+  @Get(':year/:month')
+  month(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param(new ZodPipe(yearMonthSchema)) month: YearMonth,
+  ): Promise<TravelAmountsMonthView> {
+    return this.amounts.month(auth, month);
+  }
+
+  /** Only ever added: a correction is a newer amount for the same placement and month. */
+  @Post(':year/:month/:assignmentId')
+  add(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param(new ZodPipe(yearMonthSchema)) month: YearMonth,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+    @Body(new ZodPipe(travelAmountSchema)) body: TravelAmount,
+  ): Promise<{ id: string }> {
+    return this.amounts.add(auth, month, assignmentId, body);
   }
 }
 

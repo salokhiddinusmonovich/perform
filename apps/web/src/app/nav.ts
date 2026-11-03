@@ -1,6 +1,7 @@
 import {
   Building,
   Briefcase,
+  Bus,
   Building2,
   CalendarCheck,
   CalendarDays,
@@ -13,6 +14,7 @@ import {
   HardHat,
   LayoutDashboard,
   MapPin,
+  Route,
   Layers,
   Scale,
   Network,
@@ -75,6 +77,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { path: '/import', labelKey: 'nav.import', icon: FileSpreadsheet, visible: canEnterMonthlyHours },
       { path: '/monthly-hours', labelKey: 'nav.monthlyHours', icon: Clock, visible: canEnterMonthlyHours },
+      { path: '/travel-amounts', labelKey: 'nav.travelAmounts', icon: Bus, visible: canEnterMonthlyHours },
       { path: '/adjustments', labelKey: 'nav.adjustments', icon: Coins, visible: seesPay },
       { path: '/payroll', labelKey: 'nav.payrollRun', icon: Wallet, visible: seesPay },
     ],
@@ -91,6 +94,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { path: '/settings/timesheet', labelKey: 'nav.timesheetSettings', icon: ClipboardPen, visible: canManageTimesheet },
       { path: '/settings/codes', labelKey: 'nav.codes', icon: Tags, visible: canManageCompany },
       { path: '/settings/shifts', labelKey: 'nav.shifts', icon: SunMoon, visible: canManageCompany },
+      { path: '/settings/travel-routes', labelKey: 'nav.travelRoutes', icon: Route, visible: canManageCompany },
     ],
   },
   {

@@ -60,6 +60,10 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/monthly-hours-page')).MonthlyHoursPage }),
       },
       {
+        path: 'travel-amounts',
+        lazy: async () => ({ Component: (await import('@/pages/travel-amounts-page')).TravelAmountsPage }),
+      },
+      {
         path: 'adjustments',
         lazy: async () => ({ Component: (await import('@/pages/adjustments-page')).AdjustmentsPage }),
       },
@@ -122,6 +126,10 @@ export const router = createBrowserRouter([
       {
         path: 'settings/shifts',
         lazy: async () => ({ Component: (await import('@/pages/shifts-page')).ShiftsPage }),
+      },
+      {
+        path: 'settings/travel-routes',
+        lazy: async () => ({ Component: (await import('@/pages/travel-routes-page')).TravelRoutesPage }),
       },
       {
         path: 'platform/companies',

@@ -688,7 +688,7 @@ export class ImportsService {
       problems.push(...rowProblems);
       if (rowProblems.length === 0 && details.success && site && hiredOn) {
         const planned = {
-          placement: { siteId: site.id, teamId: null, departmentId, firmId, from: hiredOn },
+          placement: { siteId: site.id, teamId: null, departmentId, firmId, travelRouteId: null, from: hiredOn },
           leftOn,
           salary,
         };

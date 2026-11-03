@@ -1,5 +1,5 @@
 import type { MonthlyTotals, PayOut, PayOutAdjustment, PayResult, TotalsProblem } from '@puantaj/payroll';
-import type { AdjustmentType, FirmType, YearMonth } from '@puantaj/schemas';
+import type { AdjustmentType, FirmType, TravelPayMode, YearMonth } from '@puantaj/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
 import type { ShiftInfo } from './organisation';
@@ -61,6 +61,39 @@ export interface MonthlyHoursMonth {
   month: number;
   locked: boolean;
   rows: MonthlyHoursRow[];
+}
+
+export interface TravelAmountEntry {
+  id: string;
+  amount: string;
+  note: string | null;
+  /** A newer amount corrected this one, so it never counts. */
+  corrected: boolean;
+  setBy: { fullName: string };
+  setAt: string;
+}
+
+/** A placement in the month and the travel amounts entered for it (AGENTS.md: Travel pay). */
+export interface TravelAmountRow {
+  assignmentId: string;
+  worker: WorkerName;
+  siteName: string;
+  teamId: string | null;
+  teamName: string | null;
+  departmentId: string | null;
+  from: string;
+  until: string | null;
+  /** How the rules that pay the placement this month pay travel; only MONTHLY_AMOUNT pays the amount. null: no rules yet. */
+  travelPayMode: TravelPayMode | null;
+  /** Newest first; the first one counts. */
+  history: TravelAmountEntry[];
+}
+
+export interface TravelAmountsMonth {
+  year: number;
+  month: number;
+  locked: boolean;
+  rows: TravelAmountRow[];
 }
 
 export type PayrollProblem =
@@ -249,8 +282,16 @@ export interface AdjustmentsMonth {
 }
 
 export const MONTHLY_HOURS_KEY = ['monthly-hours'] as const;
+export const TRAVEL_AMOUNTS_KEY = ['travel-amounts'] as const;
 export const ADJUSTMENTS_KEY = ['adjustments'] as const;
 export const PAYROLL_KEY = ['payroll'] as const;
+
+export function useTravelAmounts({ year, month }: YearMonth) {
+  return useQuery({
+    queryKey: [...TRAVEL_AMOUNTS_KEY, year, month],
+    queryFn: () => api.get<TravelAmountsMonth>(`/travel-amounts/${year}/${month}`),
+  });
+}
 
 export function useMonthlyHours({ year, month }: YearMonth) {
   return useQuery({
@@ -293,6 +334,33 @@ export function payslipsOf(w: Pick<PayrollWorker, 'parts' | 'payOut' | 'payslips
 }
 
 /** Each name once, sorted, as a site filter offers them. */
+/**
+ * The days a row covers: "1.09.2026 – 14.09.2026" for a part of a shift change, else when
+ * the placement starts or ends inside the month; empty for the whole month.
+ */
+export function partDates(
+  row: { part: DaySpan; days: DaySpan },
+  { year, month }: YearMonth,
+  date: (value: string) => string,
+  t: (key: string, options?: Record<string, string>) => string,
+): string {
+  const { first, last } = monthDays({ year, month });
+  const { days } = row;
+  const split = row.part.from > first || row.part.until < last;
+  const starts = days.from > first;
+  const ends = days.until < last;
+  if (split || (starts && ends)) return t('monthlyHours.fromUntil', { from: date(days.from), until: date(days.until) });
+  if (starts) return t('monthlyHours.fromDay', { date: date(days.from) });
+  if (ends) return t('monthlyHours.untilDay', { date: date(days.until) });
+  return '';
+}
+
+/** First and last day of a month, as calendar days ("YYYY-MM-DD"). */
+export function monthDays({ year, month }: YearMonth): { first: string; last: string } {
+  const prefix = `${year}-${String(month).padStart(2, '0')}`;
+  return { first: `${prefix}-01`, last: `${prefix}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, '0')}` };
+}
+
 export function siteChoices(names: readonly string[]): { value: string; name: string }[] {
   return [...new Set(names)].sort((a, b) => a.localeCompare(b)).map((name) => ({ value: name, name }));
 }

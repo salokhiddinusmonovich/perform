@@ -5,6 +5,7 @@ import {
   placementDepartmentSchema,
   placementFirmSchema,
   placementSchema,
+  placementTravelRouteSchema,
   salarySchema,
   workerSchema,
   workerShiftSchema,
@@ -19,6 +20,8 @@ import {
   type PlacementFirm,
   type PlacementFirmInput,
   type PlacementInput,
+  type PlacementTravelRoute,
+  type PlacementTravelRouteInput,
   type Salary,
   type SalaryInput,
   type Worker,
@@ -31,7 +34,7 @@ import {
 } from '@puantaj/schemas';
 import { useMutation } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowRightLeft, Briefcase, Building2, LogOut, MoreHorizontal, Pencil, SunMoon, Trash2, UserPlus, Wallet } from 'lucide-react';
+import { ArrowRightLeft, Briefcase, Building2, LogOut, MoreHorizontal, Pencil, Route, SunMoon, Trash2, UserPlus, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm, useWatch, type Control, type FieldError, type FieldErrors, type FieldPath, type FieldValues } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -48,6 +51,7 @@ import {
 } from '@/components/department-select';
 import { CategoryFilter, CategoryOptionSelect, inCategoryFilter, type CategoryFilterValue } from '@/components/category-select';
 import { FirmFilter, FirmSelect, inFirmFilter, type FirmFilterValue } from '@/components/firm-select';
+import { TravelRouteSelect } from '@/components/travel-route-select';
 import { ErrorState } from '@/components/error-state';
 import { Field, fieldControlProps, FormActions, FormError, MonthField } from '@/components/form';
 import { LoadingState } from '@/components/loading-state';
@@ -94,6 +98,7 @@ import {
   useSalaries,
   useShifts,
   useSites,
+  useTravelRoutes,
   useWorkers,
   useWorkerShifts,
   workerName,
@@ -101,6 +106,7 @@ import {
   type FirmItem,
   type ShiftItem,
   type SiteItem,
+  type TravelRouteItem,
   type WorkerCategoryItem,
   type WorkerItem,
   type WorkerShiftItem,
@@ -137,7 +143,7 @@ export function WorkersPage() {
   );
 }
 
-type Action = { kind: 'edit' | 'move' | 'leave' | 'salary' | 'shift' | 'department' | 'firm'; worker: WorkerItem };
+type Action = { kind: 'edit' | 'move' | 'leave' | 'salary' | 'shift' | 'department' | 'firm' | 'route'; worker: WorkerItem };
 
 function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; onAddingChange: (open: boolean) => void }) {
   const { t } = useTranslation();
@@ -160,6 +166,9 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
   const categories = useWorkerCategories();
   const activeCategories = useMemo(() => (categories.data ?? []).filter((c) => c.isActive), [categories.data]);
   const manage = canManageWorkers(me);
+  const travelRoutes = useTravelRoutes({ enabled: manage });
+  // The forms offer travel routes to those who place workers, once the company has any.
+  const routeChoices = manage && (travelRoutes.data?.length ?? 0) > 0 ? travelRoutes.data! : null;
   const personal = seesPersonalData(me);
   const pay = seesPay(me);
   const assignShifts = canAssignShifts(me);
@@ -358,6 +367,12 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
                         {t('workers.setFirm')}
                       </DropdownMenuItem>
                     )}
+                    {routeChoices && row.original.placement && (
+                      <DropdownMenuItem onSelect={() => setAction({ kind: 'route', worker: row.original })}>
+                        <Route aria-hidden />
+                        {t('workers.travelRouteAction')}
+                      </DropdownMenuItem>
+                    )}
                   </>
                 )}
                 {pay && (
@@ -375,7 +390,7 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
           ),
       },
     ],
-    [t, format, manage, personal, pay, currency, showDepartments, paths, showFirms, activeCategories],
+    [t, format, manage, personal, pay, currency, showDepartments, paths, showFirms, activeCategories, routeChoices],
   );
 
   const activeSites = (sites.data ?? []).filter((s) => s.isActive);
@@ -452,6 +467,8 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
           sites={activeSites}
           departments={departmentChoices}
           firms={firmChoices}
+          routes={routeChoices}
+          currency={currency}
           categories={categories.data ?? []}
           onClose={() => onAddingChange(false)}
           onSaved={done}
@@ -472,11 +489,22 @@ function WorkersView({ me, adding, onAddingChange }: { me: Me; adding: boolean; 
           sites={activeSites}
           departments={departmentChoices}
           firms={firmChoices}
+          routes={routeChoices}
+          currency={currency}
           onClose={() => setAction(null)}
           onSaved={done}
         />
       )}
       {action?.kind === 'leave' && <LeaveDialog worker={action.worker} onClose={() => setAction(null)} onSaved={done} />}
+      {action?.kind === 'route' && routeChoices && (
+        <PlacementTravelRouteDialog
+          worker={action.worker}
+          routes={routeChoices}
+          currency={currency}
+          onClose={() => setAction(null)}
+          onSaved={done}
+        />
+      )}
       {action?.kind === 'department' && (
         <PlacementDepartmentDialog
           worker={action.worker}
@@ -560,6 +588,8 @@ function AddWorkerDialog({
   sites,
   departments,
   firms,
+  routes,
+  currency,
   categories,
   onClose,
   onSaved,
@@ -567,6 +597,8 @@ function AddWorkerDialog({
   sites: SiteItem[];
   departments: DepartmentItem[] | null;
   firms: FirmItem[] | null;
+  routes: TravelRouteItem[] | null;
+  currency: string;
   categories: WorkerCategoryItem[];
   onClose: () => void;
   onSaved: () => void;
@@ -577,7 +609,7 @@ function AddWorkerDialog({
     resolver: zodResolver(createWorkerSchema),
     defaultValues: {
       worker: EMPTY_WORKER,
-      placement: { siteId: sites.length === 1 ? sites[0].id : '', teamId: '', departmentId: '', firmId: firms?.filter((f) => f.isActive).length === 1 ? firms.find((f) => f.isActive)!.id : '', from: today() },
+      placement: { siteId: sites.length === 1 ? sites[0].id : '', teamId: '', departmentId: '', firmId: firms?.filter((f) => f.isActive).length === 1 ? firms.find((f) => f.isActive)!.id : '', travelRouteId: '', from: today() },
     },
   });
 
@@ -622,6 +654,8 @@ function AddWorkerDialog({
               sites={sites}
               departments={departments}
               firms={firms}
+              routes={routes}
+              currency={currency}
               fromLabel={t('workers.firstDay')}
             />
           </section>
@@ -742,6 +776,8 @@ function MoveDialog({
   sites,
   departments,
   firms,
+  routes,
+  currency,
   onClose,
   onSaved,
 }: {
@@ -749,6 +785,8 @@ function MoveDialog({
   sites: SiteItem[];
   departments: DepartmentItem[] | null;
   firms: FirmItem[] | null;
+  routes: TravelRouteItem[] | null;
+  currency: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -761,6 +799,7 @@ function MoveDialog({
       teamId: worker.placement?.teamId ?? '',
       departmentId: worker.placement?.departmentId ?? '',
       firmId: worker.placement?.firmId ?? '',
+      travelRouteId: worker.placement?.travelRouteId ?? '',
       from: today(),
     },
   });
@@ -800,6 +839,9 @@ function MoveDialog({
             departments={departments}
             firms={firms}
             keepFirm={worker.placement?.firmId}
+            routes={routes}
+            keepRoute={worker.placement?.travelRouteId}
+            currency={currency}
             fromLabel={t('workers.firstDayThere')}
           />
           <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
@@ -940,6 +982,82 @@ function PlacementDepartmentDialog({
             <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
           </form>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Sets or changes the travel route of a worker's placement. If a month of the placement is
+ * locked, the API refuses: a move from a day gives the new route instead.
+ */
+function PlacementTravelRouteDialog({
+  worker,
+  routes,
+  currency,
+  onClose,
+  onSaved,
+}: {
+  worker: WorkerItem;
+  routes: TravelRouteItem[];
+  currency: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useTranslation();
+  const placement = worker.placement!;
+  const [formError, setFormError] = useState<string>();
+  const form = useForm<PlacementTravelRouteInput, unknown, PlacementTravelRoute>({
+    resolver: zodResolver(placementTravelRouteSchema),
+    defaultValues: { travelRouteId: placement.travelRouteId ?? '' },
+  });
+
+  const save = useMutation({
+    mutationFn: (values: PlacementTravelRoute) =>
+      api.put(`/workers/${worker.id}/placements/${placement.id}/travel-route`, values),
+    onSuccess: onSaved,
+    onError: (error) => {
+      if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('workers.travelRouteAction')}</DialogTitle>
+          <DialogDescription>
+            {workerName(worker)} · {placement.siteName} · {t('workers.travelRouteDialogHint')}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          noValidate
+          onSubmit={form.handleSubmit((values) => {
+            setFormError(undefined);
+            save.mutate(values);
+          })}
+        >
+          <FormError message={formError} />
+          <Controller
+            control={form.control}
+            name="travelRouteId"
+            render={({ field, fieldState }) => (
+              <Field id="pr-route" label={t('workers.travelRoute')} error={fieldState.error}>
+                <TravelRouteSelect
+                  id="pr-route"
+                  routes={routes}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  keep={placement.travelRouteId}
+                  currency={currency}
+                  invalid={!!fieldState.error}
+                />
+              </Field>
+            )}
+          />
+          <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -1295,6 +1413,9 @@ function PlacementFields<T extends FieldValues>({
   departments,
   firms,
   keepFirm,
+  routes,
+  keepRoute,
+  currency,
   fromLabel,
 }: {
   control: Control<T>;
@@ -1307,6 +1428,11 @@ function PlacementFields<T extends FieldValues>({
   firms: FirmItem[] | null;
   /** The firm the worker is in now, offered even if it was closed since */
   keepFirm?: string | null;
+  /** The company's travel routes; null: none to offer */
+  routes: TravelRouteItem[] | null;
+  /** The route the worker has now, offered even if it was archived since */
+  keepRoute?: string | null;
+  currency: string;
   fromLabel: string;
 }) {
   const { t } = useTranslation();
@@ -1404,6 +1530,25 @@ function PlacementFields<T extends FieldValues>({
                 onChange={field.onChange}
                 keep={keepFirm}
                 invalid={!!errors?.firmId}
+              />
+            </Field>
+          )}
+        />
+      )}
+      {routes && (
+        <Controller
+          control={control}
+          name={name('travelRouteId')}
+          render={({ field }) => (
+            <Field id="p-route" label={t('workers.travelRoute')} error={errors?.travelRouteId} hint={t('workers.travelRouteHint')}>
+              <TravelRouteSelect
+                id="p-route"
+                routes={routes}
+                value={(field.value as string | null) ?? ''}
+                onChange={field.onChange}
+                keep={keepRoute}
+                currency={currency}
+                invalid={!!errors?.travelRouteId}
               />
             </Field>
           )}

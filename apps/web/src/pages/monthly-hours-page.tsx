@@ -29,6 +29,7 @@ import {
   HOURS_STATUSES,
   hoursStatus,
   MONTHLY_HOURS_KEY,
+  partDates,
   PAYROLL_KEY,
   siteChoices,
   useMonthlyHours,
@@ -216,28 +217,6 @@ function MonthlyHoursView({ me }: { me: Me }) {
       )}
     </>
   );
-}
-
-/**
- * The days the row's totals cover: "1.09.2026 – 14.09.2026" for a part of a shift change,
- * else when the placement starts or ends inside the month; empty for the whole month.
- */
-function partDates(
-  row: Pick<MonthlyHoursRow, 'part' | 'days'>,
-  { year, month }: YearMonth,
-  date: (value: string) => string,
-  t: (key: string, options?: Record<string, string>) => string,
-): string {
-  const first = `${year}-${String(month).padStart(2, '0')}-01`;
-  const last = `${year}-${String(month).padStart(2, '0')}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, '0')}`;
-  const { days } = row;
-  const split = row.part.from > first || row.part.until < last;
-  const starts = days.from > first;
-  const ends = days.until < last;
-  if (split || (starts && ends)) return t('monthlyHours.fromUntil', { from: date(days.from), until: date(days.until) });
-  if (starts) return t('monthlyHours.fromDay', { date: date(days.from) });
-  if (ends) return t('monthlyHours.untilDay', { date: date(days.until) });
-  return '';
 }
 
 /** Hours and days of an entry, leaving out what is zero. */

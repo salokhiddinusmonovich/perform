@@ -37,6 +37,17 @@ export const monthlyHoursSchema = z.object({
 export type MonthlyHoursInput = z.input<typeof monthlyHoursSchema>;
 export type MonthlyHours = z.output<typeof monthlyHoursSchema>;
 
+/**
+ * A placement's travel amount for a month, when its rules pay travel as a monthly amount
+ * (AGENTS.md: Travel pay). Only ever added: a correction is a newer amount, 0 pays none.
+ */
+export const travelAmountSchema = z.object({
+  amount: decimalSchema({ min: 0, max: 999_999_999_999, rangeError: 'validation.amountRange' }),
+  note: optionalText(500),
+});
+export type TravelAmountInput = z.input<typeof travelAmountSchema>;
+export type TravelAmount = z.output<typeof travelAmountSchema>;
+
 const requiredReason = z
   .string({ error: 'validation.required' })
   .trim()

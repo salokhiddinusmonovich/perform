@@ -36,7 +36,9 @@
     "import": "Excel’den aktar",
     "firms": "Firmalar",
     "workerCategories": "Çalışan kategorileri",
-    "ruleSets": "Kural setleri"
+    "ruleSets": "Kural setleri",
+    "travelRoutes": "Güzergâhlar",
+    "travelAmounts": "Yol ücreti tutarları"
   },
   "settings": {
     "language": "Dil",
@@ -319,7 +321,8 @@
     "optionTwice": "Her seçeneğin kendi adı olmalı.",
     "optionClosed": "Bu seçenek kapalı.",
     "twoCategoriesAtMost": "En fazla iki kategori seçin.",
-    "categoryTwice": "Her kategori yalnızca bir kez seçilebilir."
+    "categoryTwice": "Her kategori yalnızca bir kez seçilebilir.",
+    "routeAmountRange": "0’dan büyük olmalı"
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -430,7 +433,8 @@
       "hasDepartment": "Bu görevlendirmenin zaten bir bölümü var. Başka birine geçmek, bir günden itibaren nakildir.",
       "departmentFromTeam": "Bu çalışan bir ekipte: bunun yerine ekibin bölümünü belirleyin.",
       "hasFirm": "Bu görev yerinin zaten firması var. Başka firmaya geçiş, belirli bir günden itibaren taşımadır.",
-      "noFirm": "Bu ayki görev yerinin henüz firması yok. Önce belirleyin."
+      "noFirm": "Bu ayki görev yerinin henüz firması yok. Önce belirleyin.",
+      "routeUnchanged": "Bu görev yerinde zaten bu güzergâh var."
     },
     "monthlyHours": {
       "notInMonth": "İşçi bu ay bu şantiyede çalışmadı.",
@@ -536,6 +540,16 @@
       "noCategoryRules": "Bu ücret kurallarında bu ay çalışanın seçenekleri için kural yok. “Kategoriye göre kurallar” bölümünden ekleyin.",
       "variantExists": "Bu birleşimin kuralları zaten var.",
       "splitNotFound": "Bu bölme artık yok."
+    },
+    "travelRoute": {
+      "notFound": "Böyle bir güzergâh yok.",
+      "nameTaken": "Bu adla bir güzergâh zaten var.",
+      "inUse": "Bu güzergâh bir görev yerine verildi, bu yüzden tutarı değişemez. Bunun yerine yeni bir güzergâh ekleyin.",
+      "inactive": "Bu güzergâh arşivde, görev yerlerine verilemez."
+    },
+    "travelAmount": {
+      "notInMonth": "İşçi bu ay bu şantiyede değildi.",
+      "unchanged": "Bu tutar bu ay için zaten girildi."
     }
   },
   "payRules": {
@@ -605,8 +619,8 @@
     },
     "travelModeHint": {
       "NONE": "Şirket yol ücreti ödemez.",
-      "PER_DAY_WORKED": "Çalışılan her iş günü için işçinin güzergâh tutarı ödenir. Hafta tatili ve resmî tatiller sayılmaz.",
-      "MONTHLY_AMOUNT": "Muhasebeci her ay her işçi için yol ücreti tutarını girer."
+      "PER_DAY_WORKED": "Her çalışılan iş günü işçinin güzergâhının tutarını öder (Ayarlar → Güzergâhlar, her görev yerine verilir). Tatil ve bayram günleri sayılmaz.",
+      "MONTHLY_AMOUNT": "Muhasebeci her ay her görev yeri için yol ücreti tutarını “Yol ücreti tutarları” sayfasında girer."
     },
     "rounding": "Yuvarlama",
     "roundingStep": "Ödenecek tutarı yuvarlama adımı ({{currency}})",
@@ -857,7 +871,12 @@
     "salaryFirmHint": "Firma değiştiren işçinin yeni firmada ücreti olmalıdır.",
     "categoriesFrom": "Yeni seçenekler şu aydan itibaren geçerli",
     "categoriesFromHint": "Önceki aylar kendi seçeneklerini korur.",
-    "categoryHistory": "Aylara göre seçenekler"
+    "categoryHistory": "Aylara göre seçenekler",
+    "travelRoute": "Güzergâh",
+    "noTravelRoute": "Yol ücreti yok",
+    "travelRouteHint": "Çalışılan gün başına yol ücreti bu güzergâhın tutarıdır.",
+    "travelRouteAction": "Güzergâh",
+    "travelRouteDialogHint": "Güzergâh bu görev yerinin her günü için geçerlidir. Aylarından biri kilitliyse işçiyi belirli bir günden yeni güzergâhla taşıyın."
   },
   "impersonation": {
     "banner": "{{name}} olarak giriş yaptınız.",
@@ -1602,5 +1621,55 @@
     "sourceEmpty": "Bu kuralların henüz bir sürümü yok. Başka kurallar veya boş form seçin.",
     "combinationEmptyTitle": "Bu birleşimin henüz kuralı yok",
     "combinationEmptyDescription": "Kuralları girin: çalışanları bunlarla ödenir."
+  },
+  "travelRoutes": {
+    "title": "Güzergâhlar",
+    "description": "İşçilerin şantiyeye gittiği güzergâhlar, her biri çalışılan iş günü başına kendi yol ücretiyle. Her görev yerine bir tane verilebilir.",
+    "create": "Güzergâh ekle",
+    "edit": "Güzergâhı düzenle",
+    "name": "Adı",
+    "amountPerDay": "Çalışılan gün başına ücret",
+    "amountPerDayIn": "Çalışılan gün başına ücret ({{currency}})",
+    "amountHint": "Kurallar yol ücretini çalışılan gün başına ödediğinde her çalışılan iş günü için ödenir. Tatil ve bayram günleri sayılmaz.",
+    "offered": "Kullanımda",
+    "archived": "Arşivde",
+    "archive": "Arşivle",
+    "restore": "Geri al",
+    "empty": "Henüz güzergâh yok",
+    "emptyDescription": "Ücret kuralları yol ücretini çalışılan gün başına ödüyorsa güzergâh ekleyin.",
+    "dialogDescription": "İki şantiyede çalışılan gün bir kez, sonra girilen şantiyenin güzergâhıyla sayılır.",
+    "amountFixed": "Bu güzergâh bir görev yerine verildi, bu yüzden tutarı değişemez: çalışılmış aylar değişirdi. Başka tutar için yeni bir güzergâh ekleyin.",
+    "withAmount": "{{name}} · günde {{amount}}",
+    "confirm": {
+      "archive": {
+        "title": "Güzergâh arşivlensin mi?",
+        "description": "“{{name}}” artık sunulmayacak. Bu güzergâhı olan görev yerlerinde kalır.",
+        "button": "Arşivle"
+      },
+      "restore": {
+        "title": "Güzergâh geri alınsın mı?",
+        "description": "“{{name}}” tekrar görev yerlerine verilebilir.",
+        "button": "Geri al"
+      }
+    }
+  },
+  "travelAmounts": {
+    "title": "Yol ücreti tutarları",
+    "description": "Ücret kuralları yol ücretini aylık tutar olarak ödediğinde her görev yeri ve ay için girilen yol ücreti.",
+    "amount": "Yol ücreti",
+    "amountIn": "Yol ücreti ({{currency}})",
+    "amountHint": "Bu görev yerinin bütün ayın yol ücreti. 0 hiçbir şey ödemez.",
+    "entered": "Girildi",
+    "notEntered": "Girilmedi",
+    "notPaid": "Bu kurallar ödemiyor",
+    "noRules": "Ücret kuralı yok",
+    "notPaidHint": "Bu görev yerinin ücret kuralları bu ay yol ücretini aylık tutar olarak ödemiyor, bu yüzden burada girilen tutar ödenmez.",
+    "noRulesHint": "Bu ay bu görev yerini henüz hiçbir ücret kuralı ödeyemiyor. Neyin eksik olduğunu ücret hesabı sayfası gösterir.",
+    "enterFor": "Yol ücretini gir: {{name}}",
+    "dialogTitle": "Yol ücreti: {{month}}",
+    "dialogHint": "Düzeltme yeni bir tutardır; en yenisi geçerlidir.",
+    "lockedHint": "Ay kilitli, yol ücreti tutarları değiştirilemez.",
+    "emptyTitle": "Bu ay işçi yok",
+    "emptyDescription": "Ay içinde görev yeri olan işçiler burada listelenir."
   }
 }

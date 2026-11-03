@@ -211,6 +211,8 @@ describe('workers', () => {
         firmId: null,
         firmName: null,
         firmType: null,
+        travelRouteId: null,
+        travelRouteName: null,
         from: '2026-09-01',
         until: null,
       },
