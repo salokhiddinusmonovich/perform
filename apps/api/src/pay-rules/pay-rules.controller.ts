@@ -4,7 +4,9 @@ import {
   payRulesSchema,
   ruleSetPayRulesSchema,
   ruleSetSchema,
+  ruleSetSplitSchema,
   ruleSetUseSchema,
+  ruleSetVariantSchema,
   updateRuleSetSchema,
   workingDaysOverrideSchema,
   yearMonthSchema,
@@ -13,7 +15,9 @@ import {
   type PayRules,
   type RuleSet,
   type RuleSetPayRules,
+  type RuleSetSplit,
   type RuleSetUse,
+  type RuleSetVariant,
   type UpdateRuleSet,
   type WorkingDaysOverride,
   type YearMonth,
@@ -22,7 +26,14 @@ import {
 import { CompanyAuth, ForModule, Roles, type CompanyAuthContext } from '../auth/auth.context';
 import { ZodPipe } from '../common/zod.pipe';
 import { HolidaysService, type HolidayYearView } from './holidays.service';
-import { PayRulesService, type PayRulesVersionView, type RuleSetUseView, type RuleSetView } from './pay-rules.service';
+import {
+  PayRulesService,
+  type PayRulesVersionView,
+  type RuleSetSplitView,
+  type RuleSetUseView,
+  type RuleSetVariantView,
+  type RuleSetView,
+} from './pay-rules.service';
 import { WorkingDaysService, type WorkingDaysYearView } from './working-days.service';
 
 // Owners and admins change pay rules and holidays; accountants see them (AGENTS.md: Roles).
@@ -143,6 +154,51 @@ export class RuleSetsController {
     @Body(new ZodPipe(workingDaysOverrideSchema)) body: WorkingDaysOverride,
   ): Promise<void> {
     return this.workingDays.override(auth, month, body, id);
+  }
+
+  /** The categories the set (the company default too) splits by (AGENTS.md: Rule sets split by categories). */
+  @Get(':id/splits')
+  splits(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<RuleSetSplitView[]> {
+    return this.rules.listSplits(auth.company.id, id);
+  }
+
+  @Put(':id/splits/:year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  setSplit(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
+    @Body(new ZodPipe(ruleSetSplitSchema)) body: RuleSetSplit,
+  ): Promise<void> {
+    return this.rules.setSplit(auth, id, from, body.categoryIds);
+  }
+
+  @Delete(':id/splits/:year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  removeSplit(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
+  ): Promise<void> {
+    return this.rules.removeSplit(auth, id, from);
+  }
+
+  /** The set's combinations; each one's rules and working days go through the routes above with its own id. */
+  @Get(':id/variants')
+  variants(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<RuleSetVariantView[]> {
+    return this.rules.listVariants(auth.company.id, id);
+  }
+
+  @Post(':id/variants')
+  @Roles('OWNER', 'ADMIN')
+  createVariant(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(ruleSetVariantSchema)) body: RuleSetVariant,
+  ): Promise<{ id: string }> {
+    return this.rules.createVariant(auth, id, body.optionIds);
   }
 }
 

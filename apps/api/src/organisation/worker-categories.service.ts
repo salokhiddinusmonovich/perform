@@ -4,6 +4,8 @@ import type { CategoryOption, UpdateCategoryOption, UpdateWorkerCategory, Worker
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
+import { todayIn } from '../common/dates';
+import { assertMonthsOpen, monthIndex } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface CategoryOptionView {
@@ -26,8 +28,8 @@ type Db = Tx | PrismaService;
 
 /**
  * Worker categories (AGENTS.md: Worker categories): the company's own ways of grouping
- * workers, each with its options. Everyone sees them (they carry no pay); owners and admins
- * create, rename and (de)activate them. They never change pay.
+ * workers, each with its options. Everyone sees them; owners and admins create, rename and
+ * (de)activate them. They change pay only where a rule set splits by them.
  */
 @Injectable()
 export class WorkerCategoriesService {
@@ -60,6 +62,7 @@ export class WorkerCategoriesService {
       if (input.name !== undefined && input.name.toLowerCase() !== before.name.toLowerCase()) {
         await this.assertNameFree(tx, companyId, input.name, id);
       }
+      if (input.isActive === false && before.isActive) await this.assertNotSplitBy(tx, auth, id);
       await tx.workerCategory.update({ where: { id }, data: input });
       await this.record(tx, auth, 'workerCategory.update', id, { changes: changesOf(before, input) });
     });
@@ -91,6 +94,29 @@ export class WorkerCategoriesService {
       await tx.workerCategoryOption.update({ where: { id: optionId }, data: input });
       await this.record(tx, auth, 'workerCategory.updateOption', id, { optionId, changes: changesOf(before, input) });
     });
+  }
+
+  /**
+   * A category a rule set splits by now or from a later month can't be deactivated (AGENTS.md:
+   * Rule sets split by categories): each set's split of the current month, and all its later ones.
+   */
+  private async assertNotSplitBy(tx: Tx, auth: CompanyAuthContext, categoryId: string) {
+    const today = todayIn(auth.company.timezone);
+    const now = monthIndex(Number(today.slice(0, 4)), Number(today.slice(5, 7)));
+    const splits = await tx.ruleSetSplit.findMany({
+      where: { companyId: auth.company.id },
+      orderBy: [{ fromYear: 'desc' }, { fromMonth: 'desc' }],
+    });
+    const seen = new Set<string>();
+    const live = splits.filter((s) => {
+      if (monthIndex(s.fromYear, s.fromMonth) > now) return true;
+      if (seen.has(s.ruleSetId)) return false;
+      seen.add(s.ruleSetId);
+      return true;
+    });
+    if (live.some((s) => s.firstCategoryId === categoryId || s.secondCategoryId === categoryId)) {
+      throw conflict('workerCategory.inUse');
+    }
   }
 
   private async find(tx: Tx, companyId: string, id: string) {
@@ -168,23 +194,76 @@ export function checkCategoryChoices(
   return changes;
 }
 
-/** Writes checkCategoryChoices()'s changes for a worker. */
+/**
+ * Writes checkCategoryChoices()'s changes for a worker from a month on, until the worker's
+ * next row in each category, replacing a row of that month. Refused when a change would reach
+ * a locked month (AGENTS.md: Worker categories).
+ */
 export async function setCategoryChoices(
   tx: Tx,
   companyId: string,
   workerId: string,
+  from: { year: number; month: number },
   changes: readonly { categoryId: string; optionId: string | null }[],
+  setById: string,
 ): Promise<void> {
   for (const { categoryId, optionId } of changes) {
-    if (optionId === null) await tx.workerCategoryValue.deleteMany({ where: { workerId, categoryId, companyId } });
-    else {
-      await tx.workerCategoryValue.upsert({
-        where: { workerId_categoryId: { workerId, categoryId } },
-        create: { companyId, workerId, categoryId, optionId },
-        update: { optionId },
-      });
-    }
+    const next = await tx.workerCategoryValue.findFirst({
+      where: { workerId, categoryId, OR: [{ fromYear: { gt: from.year } }, { fromYear: from.year, fromMonth: { gt: from.month } }] },
+      orderBy: [{ fromYear: 'asc' }, { fromMonth: 'asc' }],
+    });
+    await assertMonthsOpen(tx, companyId, from, next && { year: next.fromYear, month: next.fromMonth });
+    const data = { optionId, setById, setAt: new Date() };
+    await tx.workerCategoryValue.upsert({
+      where: { workerId_categoryId_fromYear_fromMonth: { workerId, categoryId, fromYear: from.year, fromMonth: from.month } },
+      create: { companyId, workerId, categoryId, fromYear: from.year, fromMonth: from.month, ...data },
+      update: data,
+    });
   }
+}
+
+/** Newest first: the first row of a category up to a month is the one that counts. */
+export const CATEGORY_VALUE_ORDER = [
+  { fromYear: 'desc' },
+  { fromMonth: 'desc' },
+] as const satisfies Prisma.WorkerCategoryValueOrderByWithRelationInput[];
+
+/**
+ * A worker's options in a month, by category id, from their rows (any order); categories not
+ * set are left out.
+ */
+export function optionsAt(
+  rows: readonly { categoryId: string; optionId: string | null; fromYear: number; fromMonth: number }[],
+  { year, month }: { year: number; month: number },
+): Record<string, string> {
+  const at = monthIndex(year, month);
+  const latest = new Map<string, { index: number; optionId: string | null }>();
+  for (const r of rows) {
+    const index = monthIndex(r.fromYear, r.fromMonth);
+    if (index > at) continue;
+    const seen = latest.get(r.categoryId);
+    if (!seen || index > seen.index) latest.set(r.categoryId, { index, optionId: r.optionId });
+  }
+  return Object.fromEntries([...latest].flatMap(([id, v]) => (v.optionId ? [[id, v.optionId]] : [])));
+}
+
+/** Each worker's options in a month (optionsAt), by worker id. */
+export async function categoriesInMonth(
+  db: Db,
+  companyId: string,
+  workerIds: readonly string[],
+  year: number,
+  month: number,
+): Promise<Map<string, Record<string, string>>> {
+  const rows = await db.workerCategoryValue.findMany({
+    where: {
+      companyId,
+      workerId: { in: [...workerIds] },
+      OR: [{ fromYear: { lt: year } }, { fromYear: year, fromMonth: { lte: month } }],
+    },
+    select: { workerId: true, categoryId: true, optionId: true, fromYear: true, fromMonth: true },
+  });
+  return new Map(workerIds.map((id) => [id, optionsAt(rows.filter((r) => r.workerId === id), { year, month })]));
 }
 
 function changesOf<T extends Record<string, unknown>>(before: T, input: Partial<T>) {

@@ -28,7 +28,7 @@ import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { canViewPayRules } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { useRuleSets } from '@/lib/rule-sets';
+import { useCombinationLabel, useRuleSetLabel } from '@/lib/rule-sets';
 
 interface Override {
   workingDays: number | null;
@@ -68,12 +68,20 @@ export function WorkingDaysPage() {
 /** The working days of a named rule set (AGENTS.md: Pay rule sets). */
 export function RuleSetWorkingDaysPage() {
   const { t } = useTranslation();
-  const { ruleSetId } = useParams<{ ruleSetId: string }>();
-  const set = useRuleSets().data?.find((s) => s.id === ruleSetId);
+  const { ruleSetId, variantId } = useParams<{ ruleSetId: string; variantId?: string }>();
+  const name = useRuleSetLabel(ruleSetId);
+  const combination = useCombinationLabel(ruleSetId!, variantId);
   return (
     <>
-      <PageHeader title={t('ruleSets.workingDaysTitle', { name: set?.name ?? '' })} description={t('ruleSets.workingDaysDescription')} />
-      <RequireAccess allowed={canViewPayRules}>{() => <WorkingDaysView ruleSetId={ruleSetId!} />}</RequireAccess>
+      <PageHeader
+        title={
+          variantId
+            ? t('ruleSetCategories.combinationWorkingDaysTitle', { name, combination })
+            : t('ruleSets.workingDaysTitle', { name })
+        }
+        description={t('ruleSets.workingDaysDescription')}
+      />
+      <RequireAccess allowed={canViewPayRules}>{() => <WorkingDaysView ruleSetId={variantId ?? ruleSetId!} />}</RequireAccess>
     </>
   );
 }

@@ -9,6 +9,7 @@ import { dayToDate, inMonth, isoDay, monthSpan } from '../common/dates';
 import { placementDaysIn, shiftPartsOf, type ShiftInfo, type ShiftPart } from '../organisation/worker-shifts';
 import { assertMonthsOpen, lockWorkerMonth } from '../pay-rules/months';
 import { PayRulesService } from '../pay-rules/pay-rules.service';
+import { categoriesInMonth } from '../organisation/worker-categories.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** First and last day of a part of the month. */
@@ -206,7 +207,7 @@ export class MonthlyHoursService {
 
       const totals: MonthlyTotals = Object.fromEntries(TOTAL_FIELDS.map((f) => [f, input[f]])) as unknown as MonthlyTotals;
       const firmId = auth.company.firms ? placement.firmId : null;
-      await this.assertFitsPart(tx, companyId, { siteId: placement.siteId, firmId }, year, month, part, totals);
+      await this.assertFitsPart(tx, companyId, placement.workerId, { siteId: placement.siteId, firmId }, year, month, part, totals);
 
       const previous = await tx.monthlyHours.findFirst({
         where: { assignmentId, year, month, fromDay: dayToDate(part.from), untilDay: dayToDate(part.until) },
@@ -261,21 +262,23 @@ export class MonthlyHoursService {
   }
 
   /**
-   * The totals must fit the part's days under the rules of the placement, with the
-   * part's shift's normal hours (the rule set's without a shift).
+   * The totals must fit the part's days under the rules that pay the worker's placement
+   * (rulesForWorker), with the part's shift's normal hours (the rules' without a shift).
    */
   private async assertFitsPart(
     tx: Tx,
     companyId: string,
+    workerId: string,
     placement: { siteId: string; firmId: string | null },
     year: number,
     month: number,
     part: ShiftPart,
     totals: MonthlyTotals,
   ) {
-    const set = await this.rules.ruleSetForPlacement(companyId, placement, year, month, tx);
-    const m = set && (await this.rules.month(companyId, set.id, year, month, tx));
+    const options = (await categoriesInMonth(tx, companyId, [workerId], year, month)).get(workerId)!;
+    const { month: m, problem } = await this.rules.rulesForWorker(companyId, placement, options, year, month, tx);
     if (!m?.rules || !m.calendar) throw conflict('payRules.notSet');
+    if (problem) throw conflict(problem.code === 'categoryNotSet' ? 'ruleSet.categoryNotSet' : 'ruleSet.noCategoryRules');
     const normalHoursPerDay = part.shiftInfo?.normalHoursPerDay ?? m.rules.settings.normalHoursPerDay;
     const issues = checkTotals([{ place: placement.siteId, totals }], spanCalendar(m.calendar, part), normalHoursPerDay);
     if (issues.length > 0) throw badRequest('validation', { issues: issues.map((i) => PROBLEM_FIELDS[i.problem]) });

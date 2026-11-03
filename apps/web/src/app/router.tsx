@@ -92,6 +92,18 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/working-days-page')).RuleSetWorkingDaysPage }),
       },
       {
+        path: 'settings/rule-sets/:ruleSetId/categories',
+        lazy: async () => ({ Component: (await import('@/pages/rule-set-categories-page')).RuleSetCategoriesPage }),
+      },
+      {
+        path: 'settings/rule-sets/:ruleSetId/combinations/:variantId/pay-rules',
+        lazy: async () => ({ Component: (await import('@/pages/pay-rules-page')).RuleSetPayRulesPage }),
+      },
+      {
+        path: 'settings/rule-sets/:ruleSetId/combinations/:variantId/working-days',
+        lazy: async () => ({ Component: (await import('@/pages/working-days-page')).RuleSetWorkingDaysPage }),
+      },
+      {
         path: 'settings/holidays',
         lazy: async () => ({ Component: (await import('@/pages/holidays-page')).HolidaysPage }),
       },

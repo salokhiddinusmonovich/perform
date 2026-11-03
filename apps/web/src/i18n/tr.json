@@ -317,7 +317,9 @@
     "departmentNotTeams": "Ekipteki bir çalışan ekibin bölümündedir.",
     "twoOptions": "En az iki seçenek ekleyin.",
     "optionTwice": "Her seçeneğin kendi adı olmalı.",
-    "optionClosed": "Bu seçenek kapalı."
+    "optionClosed": "Bu seçenek kapalı.",
+    "twoCategoriesAtMost": "En fazla iki kategori seçin.",
+    "categoryTwice": "Her kategori yalnızca bir kez seçilebilir."
   },
   "errors": {
     "unknown": "Bir sorun oluştu. Lütfen tekrar deneyin.",
@@ -520,7 +522,8 @@
       "inactive": "Bu kategori kapalı.",
       "nameTaken": "Bu adda bir kategori zaten var.",
       "optionTaken": "Bu kategoride bu adda bir seçenek zaten var.",
-      "optionNotFound": "Böyle bir seçenek yok."
+      "optionNotFound": "Böyle bir seçenek yok.",
+      "inUse": "Bir kural seti şu an veya sonraki bir aydan itibaren bu kategoriye göre bölünmüş. Önce o bölmeyi kaldırın."
     },
     "ruleSet": {
       "notFound": "Böyle bir kural seti yok.",
@@ -528,7 +531,11 @@
       "inactive": "Bu kural seti kapalı.",
       "inUse": "Bu kural setini bir şantiye veya firma kullanıyor. Önce onları başka bir sete geçirin.",
       "noRulesForMonth": "Bu sette o ay için kural yok. Önce kuralları girin.",
-      "useNotFound": "Bu seçim artık yok."
+      "useNotFound": "Bu seçim artık yok.",
+      "categoryNotSet": "Bu ücret kuralları, bu çalışan için seçilmemiş bir kategoriye göre değişiyor. Önce çalışanda seçin.",
+      "noCategoryRules": "Bu ücret kurallarında bu ay çalışanın seçenekleri için kural yok. “Kategoriye göre kurallar” bölümünden ekleyin.",
+      "variantExists": "Bu birleşimin kuralları zaten var.",
+      "splitNotFound": "Bu bölme artık yok."
     }
   },
   "payRules": {
@@ -847,7 +854,10 @@
     "setFirm": "Firma belirle",
     "setFirmHint": "Bu görev yerinin henüz firması yok. Aylarından biri kilitliyse işçiyi belirli bir günden itibaren firmaya taşıyın.",
     "firmHint": "Başka firmaya geçiş, aşağıdaki günden itibaren bu firmadan çıkış ve yenisine giriştir.",
-    "salaryFirmHint": "Firma değiştiren işçinin yeni firmada ücreti olmalıdır."
+    "salaryFirmHint": "Firma değiştiren işçinin yeni firmada ücreti olmalıdır.",
+    "categoriesFrom": "Yeni seçenekler şu aydan itibaren geçerli",
+    "categoriesFromHint": "Önceki aylar kendi seçeneklerini korur.",
+    "categoryHistory": "Aylara göre seçenekler"
   },
   "impersonation": {
     "banner": "{{name}} olarak giriş yaptınız.",
@@ -1074,7 +1084,9 @@
       "invalidHours": "Günlük puantaj kayıtları birbiriyle çelişiyor.",
       "daysWithoutHours": "{{site}} için saat yok ({{from}} – {{until}}).",
       "noSalaryInFirm": "Bu ay için {{firm}} firmasında ücret yok.",
-      "adjustmentWithoutFirm": "Bir düzeltme hiçbir firmanın bordrosuna girmiyor. İptal edip firmasıyla yeniden ekleyin."
+      "adjustmentWithoutFirm": "Bir düzeltme hiçbir firmanın bordrosuna girmiyor. İptal edip firmasıyla yeniden ekleyin.",
+      "categoryNotSet": "“{{rules}}” ücret kuralları “{{categories}}” kategorisine göre değişiyor ve bu çalışan için seçilmemiş.",
+      "noCategoryRules": "“{{rules}}” ücret kurallarında bu ay “{{options}}” için kural yok."
     },
     "totalsProblems": {
       "NORMAL_ABOVE_DAYS_WORKED": "normal saatler çalışılan iş günü × günlük normalden fazla",
@@ -1477,7 +1489,7 @@
     "optionsDescription": "“{{name}}” kategorisinin seçenekleri. Kapatılan seçenek ona sahip çalışanlarda kalır ama yeniden seçilemez.",
     "close": "Kapat",
     "reopen": "Yeniden aç",
-    "hint": "Kategoriler yalnızca filtreler ve toplamlar içindir. Ücreti asla değiştirmez. Her seçeneğin yanındaki sayı, ona sahip çalışan sayısıdır.",
+    "hint": "Kategoriler filtreler ve toplamlar içindir. Ücreti yalnızca bir kural seti onlara göre bölündüğünde değiştirir (Kural setleri → Kategoriye göre kurallar). Her seçeneğin yanındaki sayı, ona sahip çalışan sayısıdır.",
     "empty": "Henüz kategori yok",
     "emptyDescription": "Çalışanları filtrelemek ve toplamak için bir kategori ekleyin.",
     "dialogDescription": "Kategoriye bir ad ve en az iki seçenek verin.",
@@ -1552,5 +1564,36 @@
       "title": "Set yeniden açılsın mı?",
       "description": "“{{name}}” yeniden seçim için sunulacak."
     }
+  },
+  "ruleSetCategories": {
+    "title": "Kategoriye göre kurallar: {{name}}",
+    "description": "Bu kuralların çalışanlarına kategorilerine göre farklı ödeyin, örneğin Direkt / Endirekt × Yerel / Yabancı. Her birleşimin kendi tam kuralları vardır.",
+    "defaultName": "Şirket kuralları",
+    "link": "Kategoriye göre kurallar",
+    "splitBy": "Bölme",
+    "noSplit": "Bölme yok",
+    "splitSince": "{{month}} ayından beri “{{categories}}” kategorisine göre bölünmüş.",
+    "notSplit": "Kategorilere göre bölünmemiş: herkes bu kurallarla ödenir.",
+    "changeSplit": "Bölmeyi değiştir",
+    "historyHint": "Her bölme kendi ayından bir sonrakine kadar geçerlidir. Kilitli aylar kendininkini korur.",
+    "confirmRemove": "{{month}} ayından itibaren olan bölme kaldırılacak. O aylar önceki bölmeye döner.",
+    "combinationsTitle": "Birleşimler: {{categories}}",
+    "combinationsHint": "Her birleşimin kuralları var.",
+    "missing": "Kuralı olmayan birleşimler: {{count}}. Kurallar eklenene kadar çalışanlarına ödeme yapılamaz.",
+    "addRules": "Kural ekle",
+    "none": "Yok",
+    "splitDialogDescription": "Bir veya iki kategori seçin ya da bölmeyi kaldırmak için “Yok” seçin. Seçeneği seçilmemiş çalışanlara, seçilene kadar ödeme yapılamaz.",
+    "fromHint": "Önceki aylar kendi bölmelerini korur.",
+    "firstCategory": "Kategori",
+    "secondCategory": "İkinci kategori (isteğe bağlı)",
+    "addRulesFor": "“{{combination}}” için kurallar",
+    "copyDescription": "Kurallar bir kopya olarak başlar. Sonra bu birleşim için farklı olanı değiştirin.",
+    "copyFrom": "Şunun kopyası olarak başla",
+    "ownRules": "Bölmesiz bu kurallar",
+    "copyAndOpen": "Kopyala ve aç",
+    "copied": "Kopyalandı. Şimdi farklı olanı değiştirin.",
+    "sourceNoRules": "Kopyalamak için seçtiğiniz kurallar o ayda geçerli değil.",
+    "combinationRulesTitle": "Ücret kuralları: {{name}}, {{combination}}",
+    "combinationWorkingDaysTitle": "Çalışma günleri: {{name}}, {{combination}}"
   }
 }

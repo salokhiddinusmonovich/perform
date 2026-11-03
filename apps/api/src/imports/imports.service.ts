@@ -20,7 +20,7 @@ import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict } from '../common/api-error';
 import { dayToDate, inMonth, isoDay, monthSpan, previousDay } from '../common/dates';
 import { SALARY_ORDER, salaryForFirm, WorkersService } from '../organisation/workers.service';
-import { listCategories, type WorkerCategoryView } from '../organisation/worker-categories.service';
+import { listCategories, optionsAt, type WorkerCategoryView } from '../organisation/worker-categories.service';
 import { shiftPartsOf } from '../organisation/worker-shifts';
 import { assertMonthsOpen, lockWorkerMonth, monthIndex } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
@@ -545,7 +545,7 @@ export class ImportsService {
         include: {
           assignments: { orderBy: { hiredOn: 'desc' }, include: { site: true, department: true, firm: true } },
           salaries: { orderBy: SALARY_ORDER },
-          categoryOptions: { select: { categoryId: true, optionId: true } },
+          categoryOptions: { select: { categoryId: true, optionId: true, fromYear: true, fromMonth: true } },
         },
       }),
       db.site.findMany({ where: { companyId } }),
@@ -566,9 +566,11 @@ export class ImportsService {
         // No exit date in the file: the day before a "not employed" code after the worker started.
         const leftOn = fileLeftOn ?? (latest ? days.exitBefore(isoDay(latest.hiredOn))?.leftOn ?? null : null);
         changes.push(...this.changesOf(r, worker, ym, mapping, auth.company, leftOn));
+        // Compared with the worker's options of the import month (AGENTS.md: Worker categories).
+        const inMonth = optionsAt(worker.categoryOptions, ym);
         for (const category of categories) {
           const { raw, option } = optionOf(r, category);
-          const app = worker.categoryOptions.find((v) => v.categoryId === category.id)?.optionId;
+          const app = inMonth[category.id];
           if (raw !== null && option?.id !== app) {
             changes.push({
               row: r.row,

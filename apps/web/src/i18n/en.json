@@ -317,7 +317,9 @@
     "departmentNotTeams": "A worker in a brigade is in the brigade’s department.",
     "twoOptions": "Add at least two options.",
     "optionTwice": "Each option needs its own name.",
-    "optionClosed": "This option is closed."
+    "optionClosed": "This option is closed.",
+    "twoCategoriesAtMost": "Choose at most two categories.",
+    "categoryTwice": "Each category can be chosen only once."
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -520,7 +522,8 @@
       "inactive": "This category is closed.",
       "nameTaken": "A category with this name already exists.",
       "optionTaken": "This category already has an option with this name.",
-      "optionNotFound": "This option doesn’t exist."
+      "optionNotFound": "This option doesn’t exist.",
+      "inUse": "A rule set is split by this category now or from a later month. Remove that split first."
     },
     "ruleSet": {
       "notFound": "This rule set doesn’t exist.",
@@ -528,7 +531,11 @@
       "inactive": "This rule set is switched off.",
       "inUse": "A site or firm uses this rule set. Move them to another one first.",
       "noRulesForMonth": "This rule set has no rules for that month. Set them up first.",
-      "useNotFound": "This choice no longer exists."
+      "useNotFound": "This choice no longer exists.",
+      "categoryNotSet": "These pay rules differ by a worker category that isn’t set for this worker. Set it on the worker first.",
+      "noCategoryRules": "These pay rules have no rules for this worker’s options this month. Add them under Rules by category.",
+      "variantExists": "This combination already has its rules.",
+      "splitNotFound": "This split doesn’t exist any more."
     }
   },
   "payRules": {
@@ -847,7 +854,10 @@
     "setFirm": "Set firm",
     "setFirmHint": "This placement has no firm yet. If one of its months is locked, move the worker to the firm from a day instead.",
     "firmHint": "Moving to another firm is an exit from this one and a hire in the new one, from the day below.",
-    "salaryFirmHint": "A worker who moves firms needs a salary in the new firm."
+    "salaryFirmHint": "A worker who moves firms needs a salary in the new firm.",
+    "categoriesFrom": "The new options start from",
+    "categoriesFromHint": "Earlier months keep the options they had.",
+    "categoryHistory": "Options by month"
   },
   "impersonation": {
     "banner": "You are logged in as {{name}}.",
@@ -1074,7 +1084,9 @@
       "invalidHours": "The daily timesheet entries contradict each other.",
       "daysWithoutHours": "No hours for {{site}} ({{from}} – {{until}}).",
       "noSalaryInFirm": "No salary in {{firm}} for this month.",
-      "adjustmentWithoutFirm": "An adjustment isn’t on any firm’s payslip. Cancel it and add it again with its firm."
+      "adjustmentWithoutFirm": "An adjustment isn’t on any firm’s payslip. Cancel it and add it again with its firm.",
+      "categoryNotSet": "The pay rules “{{rules}}” differ by {{categories}}, and it isn’t set for this worker.",
+      "noCategoryRules": "The pay rules “{{rules}}” have no rules for {{options}} this month."
     },
     "totalsProblems": {
       "NORMAL_ABOVE_DAYS_WORKED": "more normal hours than the working days worked × normal hours per day",
@@ -1477,7 +1489,7 @@
     "optionsDescription": "Options of “{{name}}”. A closed option stays with the workers who have it, but can’t be chosen again.",
     "close": "Close",
     "reopen": "Reopen",
-    "hint": "Categories are only for filters and totals. They never change pay. The number after each option is how many workers have it.",
+    "hint": "Categories are for filters and totals. They change pay only where a rule set is split by them (Rule sets → Rules by category). The number after each option is how many workers have it.",
     "empty": "No categories yet",
     "emptyDescription": "Add one to filter and total workers by it.",
     "dialogDescription": "Give the category a name and at least two options.",
@@ -1552,5 +1564,36 @@
       "title": "Switch this rule set on again?",
       "description": "“{{name}}” will be offered again."
     }
+  },
+  "ruleSetCategories": {
+    "title": "Rules by category: {{name}}",
+    "description": "Pay the workers of these rules differently by their categories, e.g. Direct / Indirect × Local / Foreign. Each combination has its own full rules.",
+    "defaultName": "Company rules",
+    "link": "Rules by category",
+    "splitBy": "Split by",
+    "noSplit": "No split",
+    "splitSince": "Split by {{categories}} since {{month}}.",
+    "notSplit": "Not split by categories: everyone is paid by these rules.",
+    "changeSplit": "Change split",
+    "historyHint": "Each split applies from its month until the next one. Locked months keep theirs.",
+    "confirmRemove": "The split from {{month}} will be removed. Those months go back to the split before it.",
+    "combinationsTitle": "Combinations: {{categories}}",
+    "combinationsHint": "Every combination has its rules.",
+    "missing": "Combinations without rules: {{count}}. Their workers can’t be paid until rules are added.",
+    "addRules": "Add rules",
+    "none": "None",
+    "splitDialogDescription": "Choose one or two categories, or none to stop splitting. Workers whose option isn’t set can’t be paid until it is.",
+    "fromHint": "Earlier months keep their split.",
+    "firstCategory": "Category",
+    "secondCategory": "Second category (optional)",
+    "addRulesFor": "Rules for {{combination}}",
+    "copyDescription": "The rules start as a copy. Then change what differs for this combination.",
+    "copyFrom": "Start as a copy of",
+    "ownRules": "These rules without a split",
+    "copyAndOpen": "Copy and open",
+    "copied": "Copied. Now change what differs.",
+    "sourceNoRules": "The rules you chose to copy don’t apply in that month.",
+    "combinationRulesTitle": "Pay rules: {{name}}, {{combination}}",
+    "combinationWorkingDaysTitle": "Working days: {{name}}, {{combination}}"
   }
 }

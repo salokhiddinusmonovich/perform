@@ -149,6 +149,8 @@ model User {
   workingDaysOverrides WorkingDaysOverride[]
   payrollRules         PayrollRules[]
   ruleSetUses          RuleSetUse[]
+  ruleSetSplits        RuleSetSplit[]
+  categoryValues       WorkerCategoryValue[]
   salaries             Salary[]
   monthlyHours         MonthlyHours[]
   payrollSnapshots     PayrollSnapshot[]
@@ -434,7 +436,8 @@ model Worker {
 }
 
 /// A company's own way of grouping workers (AGENTS.md: Worker categories), e.g. Direct/Indirect.
-/// Never changes pay. Deactivated, never deleted; names are unique in the company ignoring case.
+/// Changes pay only where a rule set splits by it (RuleSetSplit). Deactivated, never deleted;
+/// names are unique in the company ignoring case.
 model WorkerCategory {
   id        String   @id @default(uuid()) @db.Uuid
   companyId String   @db.Uuid
@@ -442,9 +445,12 @@ model WorkerCategory {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  company Company                @relation(fields: [companyId], references: [id], onDelete: NoAction)
-  options WorkerCategoryOption[]
-  values  WorkerCategoryValue[]
+  company      Company                @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  options      WorkerCategoryOption[]
+  values       WorkerCategoryValue[]
+  firstSplits  RuleSetSplit[]         @relation("SplitFirst")
+  secondSplits RuleSetSplit[]         @relation("SplitSecond")
+  variants     RuleSetVariantOption[]
 
   @@unique([id, companyId])
   @@index([companyId])
@@ -462,27 +468,42 @@ model WorkerCategoryOption {
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
 
-  category WorkerCategory        @relation(fields: [categoryId, companyId], references: [id, companyId], onDelete: NoAction)
+  category WorkerCategory         @relation(fields: [categoryId, companyId], references: [id, companyId], onDelete: NoAction)
   values   WorkerCategoryValue[]
+  variants RuleSetVariantOption[]
 
   /// Target of WorkerCategoryValue's foreign key, which keeps a worker's option one of the category's
   @@unique([id, categoryId, companyId])
   @@unique([categoryId, position])
 }
 
-/// A worker's option in a category: at most one per category. No row: not set.
+/// A worker's option in a category from a month on, until the worker's next row in that
+/// category (AGENTS.md: Worker categories). Before the first row, and from a row without an
+/// option, the category is not set. A month has at most one row per category: setting it
+/// again replaces it.
 model WorkerCategoryValue {
-  companyId  String @db.Uuid
-  workerId   String @db.Uuid
-  categoryId String @db.Uuid
-  optionId   String @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @db.Uuid
+  workerId   String   @db.Uuid
+  categoryId String   @db.Uuid
+  /// null: not set from this month on
+  optionId   String?  @db.Uuid
+  fromYear   Int
+  /// 1-based
+  fromMonth  Int
+  /// null: from before options were set from a month
+  setById    String?  @db.Uuid
+  setAt      DateTime @default(now())
 
-  worker   Worker               @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
-  category WorkerCategory       @relation(fields: [categoryId, companyId], references: [id, companyId], onDelete: NoAction)
-  option   WorkerCategoryOption @relation(fields: [optionId, categoryId, companyId], references: [id, categoryId, companyId], onDelete: NoAction)
+  worker   Worker                @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+  category WorkerCategory        @relation(fields: [categoryId, companyId], references: [id, companyId], onDelete: NoAction)
+  /// Checked only with an option (MATCH SIMPLE)
+  option   WorkerCategoryOption? @relation(fields: [optionId, categoryId, companyId], references: [id, categoryId, companyId], onDelete: NoAction, onUpdate: NoAction)
+  setBy    User?                 @relation(fields: [setById], references: [id], onDelete: NoAction)
 
-  @@id([workerId, categoryId])
+  @@unique([workerId, categoryId, fromYear, fromMonth])
   @@index([companyId])
+  @@index([categoryId])
   @@index([optionId])
 }
 
@@ -645,25 +666,80 @@ enum TravelPayMode {
   MONTHLY_AMOUNT
 }
 
-/// A set of pay rules: the company default (name null, one per company; a partial unique
-/// index added by hand) or a named set that sites and firms share (RuleSetUse). Names are
-/// unique in the company, ignoring case (also by hand). The rules themselves are versioned
-/// by month (PayrollRules); working-days overrides belong to the rule set. A named set is
-/// deactivated, never deleted.
+/// A set of pay rules: the company default (name and parent null, one per company; a partial
+/// unique index added by hand), a named set that sites and firms share (RuleSetUse), or a
+/// combination of a set that splits by worker categories (parentId set, AGENTS.md: Rule sets
+/// split by categories). Names are unique in the company, ignoring case (also by hand). The
+/// rules themselves are versioned by month (PayrollRules); working-days overrides belong to
+/// the rule set. A named set is deactivated, never deleted.
 model PayrollRuleSet {
-  id        String   @id @default(uuid()) @db.Uuid
-  companyId String   @db.Uuid
-  name      String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @db.Uuid
+  /// null: the company default, or a combination
+  name       String?
+  /// The set a combination belongs to; null for the company default and named sets
+  parentId   String?  @db.Uuid
+  /// A combination's option ids, sorted and joined with ","; set exactly when parentId is
+  /// (CHECK constraint). Unique in the parent, so each combination has one set of rules.
+  variantKey String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
 
-  company              Company               @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  company              Company                @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  parent               PayrollRuleSet?        @relation("RuleSetVariants", fields: [parentId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  variants             PayrollRuleSet[]       @relation("RuleSetVariants")
+  variantOptions       RuleSetVariantOption[]
   versions             PayrollRules[]
   workingDaysOverrides WorkingDaysOverride[]
   uses                 RuleSetUse[]
+  splits               RuleSetSplit[]
 
   @@unique([id, companyId])
+  @@unique([parentId, variantKey])
   @@index([companyId])
+}
+
+/// The worker categories a rule set splits its rules by from a month on, until its next row
+/// (AGENTS.md: Rule sets split by categories). Both null: no split from that month. A second
+/// category only with a first, never the same one (CHECK constraint).
+model RuleSetSplit {
+  id               String   @id @default(uuid()) @db.Uuid
+  companyId        String   @db.Uuid
+  ruleSetId        String   @db.Uuid
+  fromYear         Int
+  /// 1-based
+  fromMonth        Int
+  firstCategoryId  String?  @db.Uuid
+  secondCategoryId String?  @db.Uuid
+  setById          String   @db.Uuid
+  setAt            DateTime @default(now())
+
+  ruleSet        PayrollRuleSet  @relation(fields: [ruleSetId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  firstCategory  WorkerCategory? @relation("SplitFirst", fields: [firstCategoryId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  secondCategory WorkerCategory? @relation("SplitSecond", fields: [secondCategoryId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  setBy          User            @relation(fields: [setById], references: [id], onDelete: NoAction)
+
+  @@unique([ruleSetId, fromYear, fromMonth])
+  @@index([companyId])
+  @@index([firstCategoryId])
+  @@index([secondCategoryId])
+}
+
+/// One option of a combination (a PayrollRuleSet with a parent), one per category.
+model RuleSetVariantOption {
+  companyId  String @db.Uuid
+  ruleSetId  String @db.Uuid
+  categoryId String @db.Uuid
+  optionId   String @db.Uuid
+
+  ruleSet  PayrollRuleSet       @relation(fields: [ruleSetId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  category WorkerCategory       @relation(fields: [categoryId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  option   WorkerCategoryOption @relation(fields: [optionId, categoryId, companyId], references: [id, categoryId, companyId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([ruleSetId, categoryId])
+  @@index([companyId])
+  @@index([categoryId])
+  @@index([optionId])
 }
 
 /// Which rule set a site or a firm uses from a month on, until its next row. ruleSetId null:

@@ -85,6 +85,11 @@ export const workerSchema = z.object({
    * clears it. Categories left out keep what they have.
    */
   categories: z.record(z.uuid({ error: 'validation.invalid' }), optionalUuid).default({}),
+  /**
+   * The month changed options start from (AGENTS.md: Worker categories); required by the API
+   * when an existing worker's options change. A new worker's start from their first placement.
+   */
+  categoriesFrom: z.object({ year: yearSchema, month: monthSchema }).nullish().transform((v) => v ?? null),
   pinfl: pinflSchema,
   birthDate: birthDateSchema,
   nationality: optionalText(60),
@@ -210,6 +215,30 @@ export const updateRuleSetSchema = ruleSetSchema
   .extend({ isActive: z.boolean().optional() })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
 export type UpdateRuleSet = z.output<typeof updateRuleSetSchema>;
+
+/**
+ * The worker categories a rule set splits its rules by from a month on (AGENTS.md: Rule sets
+ * split by categories): none, one or two, in the order given.
+ */
+export const ruleSetSplitSchema = z.object({
+  categoryIds: z
+    .array(uuid)
+    .max(2, { error: 'validation.twoCategoriesAtMost' })
+    .refine((ids) => new Set(ids).size === ids.length, { error: 'validation.categoryTwice' }),
+});
+export type RuleSetSplitInput = z.input<typeof ruleSetSplitSchema>;
+export type RuleSetSplit = z.output<typeof ruleSetSplitSchema>;
+
+/** A combination of a split rule set: one option of each of one or two categories. */
+export const ruleSetVariantSchema = z.object({
+  optionIds: z
+    .array(uuid)
+    .min(1, { error: 'validation.required' })
+    .max(2, { error: 'validation.twoCategoriesAtMost' })
+    .refine((ids) => new Set(ids).size === ids.length, { error: 'validation.invalid' }),
+});
+export type RuleSetVariantInput = z.input<typeof ruleSetVariantSchema>;
+export type RuleSetVariant = z.output<typeof ruleSetVariantSchema>;
 
 /** The rule set a site or firm uses from a month; null: none of its own. */
 export const ruleSetUseSchema = z.object({ ruleSetId: z.uuid({ error: 'validation.invalid' }).nullable() });

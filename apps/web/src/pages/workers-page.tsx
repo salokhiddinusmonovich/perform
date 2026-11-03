@@ -33,7 +33,7 @@ import { useMutation } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ArrowRightLeft, Briefcase, Building2, LogOut, MoreHorizontal, Pencil, SunMoon, Trash2, UserPlus, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Controller, useForm, type Control, type FieldError, type FieldErrors, type FieldPath, type FieldValues } from 'react-hook-form';
+import { Controller, useForm, useWatch, type Control, type FieldError, type FieldErrors, type FieldPath, type FieldValues } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
@@ -89,6 +89,7 @@ import {
   useDepartments,
   useFirms,
   useWorkerCategories,
+  useWorkerCategoryHistory,
   useRefreshOrganisation,
   useSalaries,
   useShifts,
@@ -104,6 +105,7 @@ import {
   type WorkerItem,
   type WorkerShiftItem,
 } from '@/lib/organisation';
+import { currentMonth } from '@/lib/payroll';
 
 type Status = 'working' | 'left' | 'all';
 const ALL = 'all';
@@ -527,6 +529,7 @@ const EMPTY_WORKER = {
   patronymic: '',
   position: '',
   categories: {},
+  categoriesFrom: null,
   pinfl: '',
   birthDate: '',
   nationality: '',
@@ -543,6 +546,7 @@ function toWorkerInput(w: WorkerItem): WorkerInput {
     patronymic: w.patronymic ?? '',
     position: w.position ?? '',
     categories: { ...w.categories },
+    categoriesFrom: currentMonth(),
     pinfl: w.personal?.pinfl ?? '',
     birthDate: w.personal?.birthDate ?? '',
     nationality: w.personal?.nationality ?? '',
@@ -647,6 +651,9 @@ function EditWorkerDialog({
     resolver: zodResolver(workerSchema),
     defaultValues: toWorkerInput(worker),
   });
+  // Changed options start from a month (AGENTS.md: Worker categories), so the month is asked only then.
+  const chosen = useWatch({ control: form.control, name: 'categories' });
+  const categoriesChanged = Object.entries(chosen ?? {}).some(([id, v]) => (v || null) !== (worker.categories[id] ?? null));
 
   const save = useMutation({
     mutationFn: (values: Worker) => api.patch(`/workers/${worker.id}`, values),
@@ -680,10 +687,53 @@ function EditWorkerDialog({
             categories={categories}
             current={worker.categories}
           />
+          {categoriesChanged && (
+            <Controller
+              control={form.control}
+              name="categoriesFrom"
+              render={({ field, fieldState }) => (
+                <MonthField
+                  legend={t('workers.categoriesFrom')}
+                  value={(field.value as YearMonth | null | undefined) ?? currentMonth()}
+                  onChange={field.onChange}
+                  error={fieldState.error}
+                  hint={t('workers.categoriesFromHint')}
+                />
+              )}
+            />
+          )}
+          <CategoryHistory workerId={worker.id} categories={categories} />
           <FormActions submitLabel={t('common.save')} pending={save.isPending} onCancel={onClose} />
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A worker's options from each month on, when they have changed since the first. */
+function CategoryHistory({ workerId, categories }: { workerId: string; categories: readonly WorkerCategoryItem[] }) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const history = useWorkerCategoryHistory(workerId);
+  const rows = history.data ?? [];
+  if (rows.length === 0 || rows.every((r) => rows.filter((o) => o.categoryId === r.categoryId).length === 1)) return null;
+  return (
+    <section className="space-y-2">
+      <h3 className="text-sm font-medium">{t('workers.categoryHistory')}</h3>
+      <ul className="space-y-1 text-sm">
+        {rows.map((r) => {
+          const category = categories.find((c) => c.id === r.categoryId);
+          return (
+            <li key={`${r.categoryId}-${r.fromYear}-${r.fromMonth}`} className="flex flex-wrap gap-x-2">
+              <span className="text-muted-foreground">{t('ruleSets.fromMonth', { month: format.month(r.fromYear, r.fromMonth) })}</span>
+              <span>
+                {category?.name}: {r.optionId ? optionName(category!, r.optionId) : t('workerCategories.notSet')}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -1141,7 +1191,7 @@ function WorkerFields<T extends FieldValues>({
   const { t } = useTranslation();
   const name = (field: keyof WorkerInput) => `${prefix}${field}` as FieldPath<T>;
   const shownCategories = categories.filter((c) => c.isActive || current[c.id] !== undefined);
-  const text = (field: Exclude<keyof WorkerInput, 'categories'>, label: string, extra: { hint?: string; inputMode?: 'numeric' | 'tel' } = {}) => (
+  const text = (field: Exclude<keyof WorkerInput, 'categories' | 'categoriesFrom'>, label: string, extra: { hint?: string; inputMode?: 'numeric' | 'tel' } = {}) => (
     <Controller
       control={control}
       name={name(field)}

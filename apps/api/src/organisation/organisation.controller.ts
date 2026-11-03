@@ -59,7 +59,7 @@ import { FirmsService, type FirmView } from './firms.service';
 import { ShiftsService, type ShiftView, type WorkerShiftView } from './shifts.service';
 import { SitesService, type SiteView, type StaffView } from './sites.service';
 import { WorkerCategoriesService, type WorkerCategoryView } from './worker-categories.service';
-import { WorkersService, type SalaryView, type WorkerView } from './workers.service';
+import { WorkersService, type SalaryView, type WorkerCategoryChangeView, type WorkerView } from './workers.service';
 
 // Everyone in the company sees sites, teams and workers within their scope (access.ts).
 // Changing them is narrower; the services also check the caller's sites.
@@ -185,6 +185,12 @@ export class WorkersController {
   @Get(':id')
   get(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<WorkerView> {
     return this.workers.get(auth, id);
+  }
+
+  /** The worker's category options from each month on (AGENTS.md: Worker categories). */
+  @Get(':id/categories')
+  categoryHistory(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<WorkerCategoryChangeView[]> {
+    return this.workers.categoryHistory(auth, id);
   }
 
   @Post()

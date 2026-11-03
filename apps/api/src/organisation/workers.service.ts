@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { assertManagesSite, seesPay, seesPersonalData, seesPlacement } from './access';
 import { findDepartment } from './departments.service';
 import { findFirm } from './firms.service';
-import { checkCategoryChoices, listCategories, setCategoryChoices } from './worker-categories.service';
+import { CATEGORY_VALUE_ORDER, checkCategoryChoices, listCategories, optionsAt, setCategoryChoices } from './worker-categories.service';
 import { withinWorkerLimit } from './worker-limit';
 import { shiftInfo, type ShiftInfo } from './worker-shifts';
 
@@ -66,7 +66,7 @@ export interface WorkerView {
   firstName: string;
   patronymic: string | null;
   position: string | null;
-  /** The worker's option in each category (AGENTS.md: Worker categories), by category id; a category not set is left out */
+  /** The worker's option in each category this month (AGENTS.md: Worker categories), by category id; a category not set is left out */
   categories: Record<string, string>;
   /** The latest placement (the current one, or the last before leaving). */
   placement: PlacementView | null;
@@ -79,6 +79,18 @@ export interface WorkerView {
    * is none yet or the caller doesn't see pay.
    */
   salary: Pick<SalaryView, 'fromYear' | 'fromMonth' | 'monthlySalary'> | null;
+}
+
+/** A worker's option in a category from a month on, until their next one in it. */
+export interface WorkerCategoryChangeView {
+  categoryId: string;
+  /** null: not set from this month */
+  optionId: string | null;
+  fromYear: number;
+  fromMonth: number;
+  /** null: from before options were set from a month */
+  setBy: { fullName: string } | null;
+  setAt: Date;
 }
 
 type Tx = Prisma.TransactionClient;
@@ -102,7 +114,7 @@ const WORKER_INCLUDE = {
   assignments: { orderBy: { hiredOn: 'desc' }, include: PLACEMENT_INCLUDE },
   salaries: { orderBy: SALARY_ORDER },
   shifts: { orderBy: { fromDay: 'desc' }, include: { shift: true } },
-  categoryOptions: { select: { categoryId: true, optionId: true } },
+  categoryOptions: { select: { categoryId: true, optionId: true, fromYear: true, fromMonth: true }, orderBy: CATEGORY_VALUE_ORDER },
 } as const satisfies Prisma.WorkerInclude;
 
 type WorkerRow = Prisma.WorkerGetPayload<{ include: typeof WORKER_INCLUDE }>;
@@ -157,6 +169,24 @@ export class WorkersService {
     return this.view(auth, await this.find(this.prisma, auth, id));
   }
 
+  /** The worker's options from each month on, newest first (AGENTS.md: Worker categories). */
+  async categoryHistory(auth: CompanyAuthContext, id: string): Promise<WorkerCategoryChangeView[]> {
+    await this.find(this.prisma, auth, id);
+    const rows = await this.prisma.workerCategoryValue.findMany({
+      where: { companyId: auth.company.id, workerId: id },
+      include: { setBy: { select: { fullName: true } } },
+      orderBy: CATEGORY_VALUE_ORDER,
+    });
+    return rows.map((r) => ({
+      categoryId: r.categoryId,
+      optionId: r.optionId,
+      fromYear: r.fromYear,
+      fromMonth: r.fromMonth,
+      setBy: r.setBy,
+      setAt: r.setAt,
+    }));
+  }
+
   async create(auth: CompanyAuthContext, input: CreateWorker): Promise<{ id: string }> {
     return this.prisma.$transaction((tx) => this.createIn(tx, auth, input));
   }
@@ -176,7 +206,8 @@ export class WorkersService {
       const assignment = await tx.assignment.create({ data: placementColumns(companyId, worker.id, placement, departmentId, firmId) });
       return { worker, assignment };
     });
-    await setCategoryChoices(tx, companyId, worker.id, categories);
+    // A new worker's options start from the month of their first placement.
+    await setCategoryChoices(tx, companyId, worker.id, monthOfDay(placement.from), categories, auth.user.id);
     await this.record(tx, auth, 'worker.create', worker.id, {
       name: fullName(details),
       employeeNumber: details.employeeNumber,
@@ -193,12 +224,19 @@ export class WorkersService {
       const before = await this.find(tx, auth, id);
       assertManagesSite(auth, before.assignments[0].siteId);
       await this.assertUniqueFree(tx, companyId, details, id);
-      const current = new Map(before.categoryOptions.map((v) => [v.categoryId, v.optionId]));
+      // Changed options start from the month given (AGENTS.md: Worker categories).
+      const from = details.categoriesFrom ?? monthOfDay(todayIn(auth.company.timezone));
+      const current = new Map(Object.entries(optionsAt(before.categoryOptions, from)));
       const categories = checkCategoryChoices(await listCategories(tx, companyId), details.categories, current, '');
+      if (categories.length > 0 && !details.categoriesFrom) {
+        throw badRequest('validation', { issues: [{ path: 'categoriesFrom', message: 'validation.required' }] });
+      }
       await tx.worker.update({ where: { id }, data: toColumns(details) });
-      await setCategoryChoices(tx, companyId, id, categories);
-      const old = toInput(before);
-      const changed = (Object.keys(details) as (keyof Worker)[]).filter((k) => k !== 'categories' && details[k] !== old[k]);
+      await setCategoryChoices(tx, companyId, id, from, categories, auth.user.id);
+      const old = toInput(auth, before);
+      const changed = (Object.keys(details) as (keyof Worker)[]).filter(
+        (k) => k !== 'categories' && k !== 'categoriesFrom' && details[k] !== old[k],
+      );
       await this.record(tx, auth, 'worker.update', id, {
         // Personal data is named, not copied, so the audit log doesn't become a second copy of it.
         changes: {
@@ -207,9 +245,13 @@ export class WorkersService {
           ),
           ...(categories.length > 0
             ? {
-                categories: Object.fromEntries(
-                  categories.map((c) => [c.categoryId, { from: current.get(c.categoryId) ?? null, to: c.optionId }]),
-                ),
+                categories: {
+                  fromYear: from.year,
+                  fromMonth: from.month,
+                  ...Object.fromEntries(
+                    categories.map((c) => [c.categoryId, { from: current.get(c.categoryId) ?? null, to: c.optionId }]),
+                  ),
+                },
               }
             : {}),
         },
@@ -506,7 +548,7 @@ export class WorkersService {
       firstName: w.firstName,
       patronymic: w.patronymic,
       position: w.position,
-      categories: Object.fromEntries(w.categoryOptions.map((v) => [v.categoryId, v.optionId])),
+      categories: optionsAt(w.categoryOptions, monthOfDay(todayIn(auth.company.timezone))),
       placement: p
         ? {
             id: p.id,
@@ -556,18 +598,19 @@ export class WorkersService {
 const fullName = (w: Pick<Worker, 'lastName' | 'firstName' | 'patronymic'>) =>
   [w.lastName, w.firstName, w.patronymic].filter(Boolean).join(' ');
 
-function toColumns({ categories: _categories, ...w }: Worker) {
+function toColumns({ categories: _categories, categoriesFrom: _from, ...w }: Worker) {
   return { ...w, birthDate: w.birthDate ? dayToDate(w.birthDate) : null };
 }
 
-function toInput(w: WorkerRow): Worker {
+function toInput(auth: CompanyAuthContext, w: WorkerRow): Worker {
   return {
     employeeNumber: w.employeeNumber,
     lastName: w.lastName,
     firstName: w.firstName,
     patronymic: w.patronymic,
     position: w.position,
-    categories: Object.fromEntries(w.categoryOptions.map((v) => [v.categoryId, v.optionId])),
+    categories: optionsAt(w.categoryOptions, monthOfDay(todayIn(auth.company.timezone))),
+    categoriesFrom: null,
     pinfl: w.pinfl,
     birthDate: w.birthDate ? isoDay(w.birthDate) : null,
     nationality: w.nationality,

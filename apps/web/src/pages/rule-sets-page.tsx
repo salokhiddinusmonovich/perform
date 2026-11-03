@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ruleSetSchema, type RuleSet, type RuleSetInput } from '@puantaj/schemas';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { CalendarCheck, MoreHorizontal, Pencil, Plus, Power, Scale } from 'lucide-react';
+import { CalendarCheck, MoreHorizontal, Pencil, Plus, Power, Scale, Shapes } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -129,6 +129,12 @@ function RuleSetsView({ me, creating, onCreatingChange }: { me: Me; creating: bo
                 <Link to={`/settings/rule-sets/${row.original.id}/working-days`}>
                   <CalendarCheck aria-hidden />
                   {t('nav.workingDays')}
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to={`/settings/rule-sets/${row.original.id}/categories`}>
+                  <Shapes aria-hidden />
+                  {t('ruleSetCategories.link')}
                 </Link>
               </DropdownMenuItem>
               {manages && (

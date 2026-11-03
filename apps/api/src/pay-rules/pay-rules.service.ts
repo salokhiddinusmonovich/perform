@@ -10,7 +10,7 @@ import {
 import type { PayRules, RuleSet, RuleSetPayRules, UpdateRuleSet } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
-import { conflict, notFound } from '../common/api-error';
+import { badRequest, conflict, notFound } from '../common/api-error';
 import { isoDay, todayIn } from '../common/dates';
 import { findFirm } from '../organisation/firms.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -39,6 +39,45 @@ export interface MonthRules {
 }
 
 type Db = Prisma.TransactionClient | PrismaService;
+
+/** Why a split rule set can't pay a worker (AGENTS.md: Rule sets split by categories). */
+export type CombinationProblem =
+  /** The worker's option is not set in these categories the set splits by */
+  | { code: 'categoryNotSet'; categoryIds: string[] }
+  /** The worker's combination (option ids in the split's order) has no rules for the month */
+  | { code: 'noCategoryRules'; optionIds: string[] };
+
+/** The rules that pay a worker's placement in a month (rulesForWorker). */
+export interface WorkerRules {
+  /** The set the site or firm uses, or the default; null before any rules are saved */
+  ruleSet: { id: string; name: string | null } | null;
+  /** The combination whose rules apply, when the set splits by categories */
+  combination: { id: string; optionIds: string[] } | null;
+  /** The month of the rules that apply: the combination's, else the set's own */
+  month: MonthRules | null;
+  problem: CombinationProblem | null;
+}
+
+/** A split rule set's combination of a split's options, by its option ids. */
+export interface RuleSetVariantView {
+  id: string;
+  /** One per category */
+  options: { categoryId: string; optionId: string }[];
+  /** The first month it has rules for, or null before they are set. */
+  rulesFrom: { year: number; month: number } | null;
+}
+
+export interface RuleSetSplitView {
+  fromYear: number;
+  fromMonth: number;
+  /** Empty: no split from this month */
+  categoryIds: string[];
+  setBy: { fullName: string };
+  setAt: Date;
+}
+
+/** A combination's key: its option ids sorted, so the order they are given in doesn't matter. */
+const variantKey = (optionIds: readonly string[]) => [...optionIds].sort().join(',');
 
 /** Who uses a rule set: a site or a firm. */
 export type RuleSetOwner = { siteId: string } | { firmId: string };
@@ -77,7 +116,7 @@ export class PayRulesService {
 
   /** The company default rule set, or null before its rules are first saved. */
   defaultRuleSet(companyId: string, db: Db = this.prisma) {
-    return db.payrollRuleSet.findFirst({ where: { companyId, name: null } });
+    return db.payrollRuleSet.findFirst({ where: { companyId, name: null, parentId: null } });
   }
 
   /** A named rule set of the company; the default has its own routes and isn't one. */
@@ -85,6 +124,70 @@ export class PayRulesService {
     const set = await db.payrollRuleSet.findFirst({ where: { id, companyId, name: { not: null } } });
     if (!set) throw notFound('ruleSet.notFound');
     return set;
+  }
+
+  /** The company default or a named set, which sites and firms choose and which split by categories; not a combination. */
+  async topRuleSet(companyId: string, id: string, db: Db = this.prisma) {
+    const set = await db.payrollRuleSet.findFirst({ where: { id, companyId, parentId: null } });
+    if (!set) throw notFound('ruleSet.notFound');
+    return set;
+  }
+
+  /**
+   * A set whose rules and working days are kept through its id: a named set or a combination
+   * of a split set. The company default has its own routes, which hold the rounding step.
+   */
+  private async ruleSetById(companyId: string, id: string, db: Db) {
+    const set = await db.payrollRuleSet.findFirst({
+      where: { id, companyId, OR: [{ name: { not: null } }, { parentId: { not: null } }] },
+    });
+    if (!set) throw notFound('ruleSet.notFound');
+    return set;
+  }
+
+  /** ruleSetById() for routes outside this service (working days). */
+  editableRuleSet(companyId: string, id: string, db: Db = this.prisma) {
+    return this.ruleSetById(companyId, id, db);
+  }
+
+  /** The categories a top rule set splits by in a month (AGENTS.md: Rule sets split by categories), in their order; empty: no split. */
+  async splitIn(companyId: string, ruleSetId: string, year: number, month: number, db: Db = this.prisma): Promise<string[]> {
+    const row = await db.ruleSetSplit.findFirst({
+      where: { companyId, ruleSetId, OR: [{ fromYear: { lt: year } }, { fromYear: year, fromMonth: { lte: month } }] },
+      orderBy: [{ fromYear: 'desc' }, { fromMonth: 'desc' }],
+    });
+    return row ? [row.firstCategoryId, row.secondCategoryId].filter((id) => id !== null) : [];
+  }
+
+  /**
+   * The rules that pay a worker's placement in a month: the placement's rule set
+   * (ruleSetForPlacement), and inside it the combination of the worker's options when the set
+   * splits by categories. `options` are the worker's options of the month by category id.
+   * Payroll and checks use only this, so they always agree.
+   */
+  async rulesForWorker(
+    companyId: string,
+    placement: { siteId: string; firmId: string | null },
+    options: Readonly<Record<string, string>>,
+    year: number,
+    month: number,
+    db: Db = this.prisma,
+  ): Promise<WorkerRules> {
+    const set = await this.ruleSetForPlacement(companyId, placement, year, month, db);
+    if (!set) return { ruleSet: null, combination: null, month: null, problem: null };
+    const own = await this.month(companyId, set.id, year, month, db);
+    const ruleSet = { id: set.id, name: set.name };
+    const split = await this.splitIn(companyId, set.id, year, month, db);
+    if (split.length === 0 || !own.rules) return { ruleSet, combination: null, month: own, problem: null };
+    const notSet = split.filter((c) => !options[c]);
+    if (notSet.length > 0) return { ruleSet, combination: null, month: own, problem: { code: 'categoryNotSet', categoryIds: notSet } };
+    const optionIds = split.map((c) => options[c]);
+    const variant = await db.payrollRuleSet.findFirst({ where: { companyId, parentId: set.id, variantKey: variantKey(optionIds) } });
+    const rules = variant && (await this.month(companyId, variant.id, year, month, db));
+    if (!variant || !rules?.rules) {
+      return { ruleSet, combination: null, month: own, problem: { code: 'noCategoryRules', optionIds } };
+    }
+    return { ruleSet, combination: { id: variant.id, optionIds }, month: rules, problem: null };
   }
 
   /** The rule set a site or firm itself uses in a month, or null when it has none of its own. */
@@ -122,7 +225,7 @@ export class PayRulesService {
     const companyId = auth.company.id;
     const [sets, uses] = await Promise.all([
       this.prisma.payrollRuleSet.findMany({
-        where: { companyId },
+        where: { companyId, parentId: null },
         include: { versions: { select: { fromYear: true, fromMonth: true }, orderBy: [{ fromYear: 'asc' }, { fromMonth: 'asc' }], take: 1 } },
         orderBy: { name: 'asc' },
       }),
@@ -254,6 +357,163 @@ export class PayRulesService {
     });
   }
 
+  /** The categories a set has split by, newest first (AGENTS.md: Rule sets split by categories). */
+  async listSplits(companyId: string, ruleSetId: string): Promise<RuleSetSplitView[]> {
+    const set = await this.topRuleSet(companyId, ruleSetId);
+    const rows = await this.prisma.ruleSetSplit.findMany({
+      where: { companyId, ruleSetId: set.id },
+      include: { setBy: { select: { fullName: true } } },
+      orderBy: [{ fromYear: 'desc' }, { fromMonth: 'desc' }],
+    });
+    return rows.map((r) => ({
+      fromYear: r.fromYear,
+      fromMonth: r.fromMonth,
+      categoryIds: [r.firstCategoryId, r.secondCategoryId].filter((id) => id !== null),
+      setBy: r.setBy,
+      setAt: r.setAt,
+    }));
+  }
+
+  /**
+   * Chooses the categories a set splits by from a month on, until its next choice; none: no
+   * split. A closed category can't be chosen anew.
+   */
+  async setSplit(auth: CompanyAuthContext, ruleSetId: string, from: { year: number; month: number }, categoryIds: readonly string[]): Promise<void> {
+    const companyId = auth.company.id;
+    await this.prisma.$transaction(async (tx) => {
+      const set = await this.topRuleSet(companyId, ruleSetId, tx);
+      await assertMonthsOpen(tx, companyId, from, await this.nextSplitStart(tx, set.id, from));
+      const categories = await tx.workerCategory.findMany({ where: { companyId, id: { in: [...categoryIds] } } });
+      for (const id of categoryIds) {
+        const category = categories.find((c) => c.id === id);
+        if (!category) throw notFound('workerCategory.notFound');
+        if (!category.isActive) throw conflict('workerCategory.inactive');
+      }
+      const key = { ruleSetId_fromYear_fromMonth: { ruleSetId: set.id, fromYear: from.year, fromMonth: from.month } };
+      const before = await tx.ruleSetSplit.findUnique({ where: key });
+      const data = {
+        firstCategoryId: categoryIds[0] ?? null,
+        secondCategoryId: categoryIds[1] ?? null,
+        setById: auth.user.id,
+        setAt: new Date(),
+      };
+      const row = await tx.ruleSetSplit.upsert({
+        where: key,
+        create: { companyId, ruleSetId: set.id, fromYear: from.year, fromMonth: from.month, ...data },
+        update: data,
+      });
+      await this.audit.record(
+        {
+          action: 'ruleSet.split',
+          companyId,
+          auth,
+          entityType: 'RuleSetSplit',
+          entityId: row.id,
+          data: {
+            ruleSetId: set.id,
+            fromYear: from.year,
+            fromMonth: from.month,
+            from: before ? [before.firstCategoryId, before.secondCategoryId].filter((id) => id !== null) : null,
+            to: [...categoryIds],
+          },
+        },
+        tx,
+      );
+    });
+  }
+
+  /** Removes a split choice: its months go back to the choice before it. */
+  async removeSplit(auth: CompanyAuthContext, ruleSetId: string, from: { year: number; month: number }): Promise<void> {
+    const companyId = auth.company.id;
+    await this.prisma.$transaction(async (tx) => {
+      const set = await this.topRuleSet(companyId, ruleSetId, tx);
+      const key = { ruleSetId_fromYear_fromMonth: { ruleSetId: set.id, fromYear: from.year, fromMonth: from.month } };
+      const row = await tx.ruleSetSplit.findUnique({ where: key });
+      if (!row) throw notFound('ruleSet.splitNotFound');
+      await assertMonthsOpen(tx, companyId, from, await this.nextSplitStart(tx, set.id, from));
+      await tx.ruleSetSplit.delete({ where: key });
+      await this.audit.record(
+        {
+          action: 'ruleSet.splitDelete',
+          companyId,
+          auth,
+          entityType: 'RuleSetSplit',
+          entityId: row.id,
+          data: {
+            ruleSetId: set.id,
+            fromYear: from.year,
+            fromMonth: from.month,
+            from: [row.firstCategoryId, row.secondCategoryId].filter((id) => id !== null),
+          },
+        },
+        tx,
+      );
+    });
+  }
+
+  /** A split set's combinations that have been added, each with its options. */
+  async listVariants(companyId: string, ruleSetId: string): Promise<RuleSetVariantView[]> {
+    const set = await this.topRuleSet(companyId, ruleSetId);
+    const rows = await this.prisma.payrollRuleSet.findMany({
+      where: { companyId, parentId: set.id },
+      include: {
+        variantOptions: { select: { categoryId: true, optionId: true } },
+        versions: { select: { fromYear: true, fromMonth: true }, orderBy: [{ fromYear: 'asc' }, { fromMonth: 'asc' }], take: 1 },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      options: r.variantOptions,
+      rulesFrom: r.versions[0] ? { year: r.versions[0].fromYear, month: r.versions[0].fromMonth } : null,
+    }));
+  }
+
+  /**
+   * Adds a combination of a set: one option of each of one or two categories. Its rules are
+   * then saved like a named set's (setNamed), starting as a copy the person chooses.
+   */
+  async createVariant(auth: CompanyAuthContext, ruleSetId: string, optionIds: readonly string[]): Promise<{ id: string }> {
+    const companyId = auth.company.id;
+    return this.prisma.$transaction(async (tx) => {
+      const set = await this.topRuleSet(companyId, ruleSetId, tx);
+      const options = await tx.workerCategoryOption.findMany({ where: { companyId, id: { in: [...optionIds] } } });
+      if (options.length !== optionIds.length) throw notFound('workerCategory.optionNotFound');
+      if (new Set(options.map((o) => o.categoryId)).size !== options.length) {
+        throw badRequest('validation', { issues: [{ path: 'optionIds', message: 'validation.categoryTwice' }] });
+      }
+      const key = variantKey(optionIds);
+      if (await tx.payrollRuleSet.findFirst({ where: { companyId, parentId: set.id, variantKey: key } })) {
+        throw conflict('ruleSet.variantExists');
+      }
+      const row = await tx.payrollRuleSet.create({ data: { companyId, parentId: set.id, variantKey: key } });
+      await tx.ruleSetVariantOption.createMany({
+        data: options.map((o) => ({ companyId, ruleSetId: row.id, categoryId: o.categoryId, optionId: o.id })),
+      });
+      await this.audit.record(
+        {
+          action: 'ruleSet.addVariant',
+          companyId,
+          auth,
+          entityType: 'PayrollRuleSet',
+          entityId: set.id,
+          data: { variantId: row.id, optionIds: [...optionIds] },
+        },
+        tx,
+      );
+      return { id: row.id };
+    });
+  }
+
+  /** Start of the set's split choice after `from`, i.e. the first month a choice at `from` doesn't reach. */
+  private async nextSplitStart(db: Db, ruleSetId: string, from: { year: number; month: number }) {
+    const next = await db.ruleSetSplit.findFirst({
+      where: { ruleSetId, OR: [{ fromYear: { gt: from.year } }, { fromYear: from.year, fromMonth: { gt: from.month } }] },
+      orderBy: [{ fromYear: 'asc' }, { fromMonth: 'asc' }],
+    });
+    return next && { year: next.fromYear, month: next.fromMonth };
+  }
+
   private async assertOwner(db: Db, companyId: string, owner: RuleSetOwner) {
     if ('firmId' in owner) {
       await findFirm(db, companyId, owner.firmId, owner.firmId);
@@ -298,7 +558,7 @@ export class PayRulesService {
 
   /** A named rule set's rules, newest first. */
   async listNamed(companyId: string, ruleSetId: string): Promise<PayRulesVersionView<RuleSetPayRules>[]> {
-    const set = await this.namedRuleSet(companyId, ruleSetId);
+    const set = await this.ruleSetById(companyId, ruleSetId, this.prisma);
     const rows = await this.prisma.payrollRules.findMany({
       where: { companyId, ruleSetId: set.id },
       include: { setBy: { select: { fullName: true } } },
@@ -314,7 +574,7 @@ export class PayRulesService {
   async setNamed(auth: CompanyAuthContext, ruleSetId: string, from: { year: number; month: number }, rules: RuleSetPayRules): Promise<void> {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
-      const set = await this.namedRuleSet(companyId, ruleSetId, tx);
+      const set = await this.ruleSetById(companyId, ruleSetId, tx);
       await assertMonthsOpen(tx, companyId, from, await this.nextVersionStart(tx, set.id, from));
 
       const key = { ruleSetId_fromYear_fromMonth: { ruleSetId: set.id, fromYear: from.year, fromMonth: from.month } };
@@ -351,7 +611,7 @@ export class PayRulesService {
   async removeNamed(auth: CompanyAuthContext, ruleSetId: string, from: { year: number; month: number }): Promise<void> {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
-      const set = await this.namedRuleSet(companyId, ruleSetId, tx);
+      const set = await this.ruleSetById(companyId, ruleSetId, tx);
       const key = { ruleSetId_fromYear_fromMonth: { ruleSetId: set.id, fromYear: from.year, fromMonth: from.month } };
       const row = await tx.payrollRules.findUnique({ where: key });
       if (!row) throw notFound('payRules.notFound');

@@ -23,6 +23,8 @@ import {
   updateDepartmentSchema,
   updateWorkerCategorySchema,
   workerCategorySchema,
+  ruleSetSplitSchema,
+  ruleSetVariantSchema,
   importMappingSchema,
   workerSchema,
   workingDaysOverrideSchema,
@@ -337,6 +339,26 @@ describe('worker categories', () => {
     expect(updateWorkerCategorySchema.parse({ isActive: false })).toEqual({ isActive: false });
     expect(updateCategoryOptionSchema.parse({ name: ' Yerel ' })).toEqual({ name: 'Yerel' });
     expect(messages(updateCategoryOptionSchema.safeParse({}))).toEqual(['validation.nothingToUpdate']);
+  });
+
+  it('starts changed options from a month, or none given', () => {
+    expect(workerSchema.parse({ lastName: 'A', firstName: 'B' }).categoriesFrom).toBeNull();
+    expect(workerSchema.parse({ lastName: 'A', firstName: 'B', categoriesFrom: { year: '2026', month: '10' } }).categoriesFrom).toEqual({
+      year: 2026,
+      month: 10,
+    });
+    expect(messages(workerSchema.safeParse({ lastName: 'A', firstName: 'B', categoriesFrom: { year: 2026, month: 13 } }))).toEqual([
+      'validation.invalid',
+    ]);
+  });
+
+  it('splits a rule set by at most two different categories, and a combination by one option of each', () => {
+    const [a, b, c] = ['7c9e6679-7425-40de-944b-e07fc1f90ae7', '16fd2706-8baf-433b-82eb-8c7fada847da', '886313e1-3b8a-5372-9b90-0c9aee199e5d'];
+    expect(ruleSetSplitSchema.parse({ categoryIds: [] })).toEqual({ categoryIds: [] });
+    expect(messages(ruleSetSplitSchema.safeParse({ categoryIds: [a, b, c] }))).toEqual(['validation.twoCategoriesAtMost']);
+    expect(messages(ruleSetSplitSchema.safeParse({ categoryIds: [a, a] }))).toEqual(['validation.categoryTwice']);
+    expect(messages(ruleSetVariantSchema.safeParse({ optionIds: [] }))).toEqual(['validation.required']);
+    expect(ruleSetVariantSchema.parse({ optionIds: [a, b] })).toEqual({ optionIds: [a, b] });
   });
 
   it('reads an import mapping saved before categories as having none', () => {

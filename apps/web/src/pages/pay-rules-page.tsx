@@ -11,11 +11,11 @@ import {
 } from '@puantaj/schemas';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Pencil, Scale, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Scale, Shapes, Trash2 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Controller, useForm, type FieldError, type Resolver } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
@@ -43,7 +43,7 @@ import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { canManageCompany, canViewPayRules, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { useRuleSets } from '@/lib/rule-sets';
+import { useCombinationLabel, useRuleSetLabel, useRuleSets } from '@/lib/rule-sets';
 
 interface Version {
   fromYear: number;
@@ -76,28 +76,56 @@ function versionFor(versions: Version[], { year, month }: YearMonth): Version | 
 
 export function PayRulesPage() {
   const { t } = useTranslation();
+  const defaultSet = useRuleSets().data?.find((s) => s.name === null);
   return (
     <>
-      <PageHeader title={t('payRules.title')} description={t('payRules.description')} />
+      <PageHeader
+        title={t('payRules.title')}
+        description={t('payRules.description')}
+        actions={defaultSet && <ByCategoryLink ruleSetId={defaultSet.id} />}
+      />
       <RequireAccess allowed={canViewPayRules}>{(me) => <PayRulesView me={me} />}</RequireAccess>
     </>
   );
 }
 
-/** A named rule set's rules (AGENTS.md: Pay rule sets). A change reaches every site and firm using it, so the page names them. */
+/**
+ * A named rule set's rules (AGENTS.md: Pay rule sets), or with variantId one combination's of a
+ * set split by categories. A change reaches every site and firm using the set, so the page names them.
+ */
 export function RuleSetPayRulesPage() {
   const { t } = useTranslation();
-  const { ruleSetId } = useParams<{ ruleSetId: string }>();
+  const { ruleSetId, variantId } = useParams<{ ruleSetId: string; variantId?: string }>();
   const set = useRuleSets().data?.find((s) => s.id === ruleSetId);
+  const name = useRuleSetLabel(ruleSetId);
+  const combination = useCombinationLabel(ruleSetId!, variantId);
   const users = set ? [...set.usedBy.sites, ...set.usedBy.firms].map((x) => x.name).join(', ') : '';
   return (
     <>
       <PageHeader
-        title={t('ruleSets.payRulesTitle', { name: set?.name ?? '' })}
+        title={
+          variantId
+            ? t('ruleSetCategories.combinationRulesTitle', { name, combination })
+            : t('ruleSets.payRulesTitle', { name: set?.name ?? '' })
+        }
         description={users ? t('ruleSets.usedBy', { names: users }) : t('ruleSets.notUsed')}
+        actions={!variantId && <ByCategoryLink ruleSetId={ruleSetId!} />}
       />
-      <RequireAccess allowed={canViewPayRules}>{(me) => <PayRulesView me={me} ruleSetId={ruleSetId!} />}</RequireAccess>
+      <RequireAccess allowed={canViewPayRules}>{(me) => <PayRulesView me={me} ruleSetId={variantId ?? ruleSetId!} />}</RequireAccess>
     </>
+  );
+}
+
+/** To a set's rules by worker category (AGENTS.md: Rule sets split by categories). */
+function ByCategoryLink({ ruleSetId }: { ruleSetId: string }) {
+  const { t } = useTranslation();
+  return (
+    <Button variant="outline" asChild>
+      <Link to={`/settings/rule-sets/${ruleSetId}/categories`}>
+        <Shapes aria-hidden />
+        {t('ruleSetCategories.link')}
+      </Link>
+    </Button>
   );
 }
 

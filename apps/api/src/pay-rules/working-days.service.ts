@@ -48,7 +48,7 @@ export class WorkingDaysService {
   ) {}
 
   async year(companyId: string, year: number, ruleSetId: string | null = null): Promise<WorkingDaysYearView> {
-    const set = ruleSetId ? await this.rules.namedRuleSet(companyId, ruleSetId) : await this.rules.defaultRuleSet(companyId);
+    const set = ruleSetId ? await this.rules.editableRuleSet(companyId, ruleSetId) : await this.rules.defaultRuleSet(companyId);
     const [holidays, locked, overrides] = await Promise.all([
       this.prisma.holiday.findMany({
         where: { companyId, date: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year + 1, 0, 1)) } },
@@ -91,7 +91,7 @@ export class WorkingDaysService {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
       await assertMonthsOpen(tx, companyId, { year, month });
-      const set = ruleSetId ? await this.rules.namedRuleSet(companyId, ruleSetId, tx) : await this.rules.defaultRuleSet(companyId, tx);
+      const set = ruleSetId ? await this.rules.editableRuleSet(companyId, ruleSetId, tx) : await this.rules.defaultRuleSet(companyId, tx);
       const current = set && (await this.rules.month(companyId, set.id, year, month, tx));
       if (!set || !current?.calendar || !current.workingDays) throw conflict('payRules.notSet');
       if (input.workingDays !== null && input.workingDays > current.calendar.length) {

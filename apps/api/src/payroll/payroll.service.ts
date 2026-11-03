@@ -20,11 +20,11 @@ import { conflict } from '../common/api-error';
 import { inMonth, isoDay, monthSpan, todayIn } from '../common/dates';
 import { seesPlacement } from '../organisation/access';
 import { subtreeIds } from '../organisation/departments.service';
-import { listCategories, type WorkerCategoryView } from '../organisation/worker-categories.service';
+import { categoriesInMonth, listCategories, type WorkerCategoryView } from '../organisation/worker-categories.service';
 import { placementDaysIn, shiftPartsOf, type ShiftPart } from '../organisation/worker-shifts';
 import { SALARY_ORDER, salaryForFirm } from '../organisation/workers.service';
 import { lockCompanyMonths } from '../pay-rules/months';
-import { PayRulesService, type MonthRules, type StoredPayRules } from '../pay-rules/pay-rules.service';
+import { PayRulesService, type MonthRules, type StoredPayRules, type WorkerRules } from '../pay-rules/pay-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { COUNTING_ADJUSTMENTS } from './adjustments.service';
 import { toTotals } from './monthly-hours.service';
@@ -46,6 +46,13 @@ export type PayrollProblem =
   | { code: 'placementWithoutHours'; assignmentId: string; siteName: string; from: string; until?: string }
   /** No pay rules for the month at these sites */
   | { code: 'noRules'; siteNames: string[] }
+  /**
+   * The rule set splits by these categories, and the worker's option isn't set in them
+   * (AGENTS.md: Rule sets split by categories). ruleSetName null: the company default.
+   */
+  | { code: 'categoryNotSet'; ruleSetName: string | null; categoryIds: string[] }
+  /** The worker's combination of the split rule set's categories (option ids in the split's order) has no rules for the month */
+  | { code: 'noCategoryRules'; ruleSetName: string | null; optionIds: string[] }
   /** The company default rules, which hold the rounding step, are not set for the month */
   | { code: 'noCompanyRules' }
   /** siteName null: the placements' totals together don't fit */
@@ -80,6 +87,11 @@ export interface PayrollPartView {
   /** Site whose own rules apply, or null: the company default or a firm's */
   /** Name of the rule set that applies; null: the company default */
   ruleSetName: string | null;
+  /**
+   * The combination of the worker's options whose rules apply, when the rule set splits by
+   * categories, saved by name so a locked month keeps it. Absent: the set's own rules.
+   */
+  combination?: { categoryName: string; optionName: string }[];
   /** The firm whose payslip the part is on; absent while the company doesn't use firms */
   firm?: FirmRef | null;
   /** The part's shift, or null: the rule set's normal hours. Absent in months locked before shifts. */
@@ -476,7 +488,7 @@ export class PayrollService {
     const assignmentIds = placements.map((p) => p.id);
     const workerIds = [...visible];
 
-    const [salaries, entries, editedDays, travelAmounts, adjustments, companyRules, shiftParts, categoryValues] = await Promise.all([
+    const [salaries, entries, editedDays, travelAmounts, adjustments, companyRules, shiftParts, categoryValues, categories] = await Promise.all([
       db.salary.findMany({
         where: {
           companyId,
@@ -507,33 +519,30 @@ export class PayrollService {
         .defaultRuleSet(companyId, db)
         .then((set) => (set ? this.rules.month(companyId, set.id, year, month, db) : null)),
       shiftPartsOf(db, companyId, workerIds, year, month),
-      db.workerCategoryValue.findMany({
-        where: { companyId, workerId: { in: workerIds } },
-        select: { workerId: true, categoryId: true, optionId: true },
-      }),
+      categoriesInMonth(db, companyId, workerIds, year, month),
+      listCategories(db, companyId),
     ]);
     const roundingStep = companyRules?.rules?.settings.payRoundingStep ?? null;
 
     /** While the company doesn't use firms, placements count as having none. */
     const firmOf = (p: Placement): FirmRef | null => (firmsOn ? p.firm : null);
-    const monthRules = new Map<
-      string,
-      Promise<{ ruleSetId: string | null; name: string | null; month: MonthRules | null }>
-    >();
-    const rulesOf = (p: Placement) => {
+    const monthRules = new Map<string, Promise<WorkerRules>>();
+    /** The rules of a placement for a worker with these options (AGENTS.md: Rule sets split by categories). */
+    const rulesOf = (p: Placement, options: Record<string, string>) => {
       const firmId = firmOf(p)?.id ?? null;
-      const key = `${p.siteId}/${firmId}`;
+      const key = `${p.siteId}/${firmId}/${JSON.stringify(Object.entries(options).sort())}`;
       let found = monthRules.get(key);
       if (!found) {
-        found = this.rules.ruleSetForPlacement(companyId, { siteId: p.siteId, firmId }, year, month, db).then(async (set) => ({
-          ruleSetId: set?.id ?? null,
-          name: set?.name ?? null,
-          month: set ? await this.rules.month(companyId, set.id, year, month, db) : null,
-        }));
+        found = this.rules.rulesForWorker(companyId, { siteId: p.siteId, firmId }, options, year, month, db);
         monthRules.set(key, found);
       }
       return found;
     };
+    /** A combination's options by name, in the order of their categories by name, as every page shows them. */
+    const combinationOf = (optionIds: readonly string[]) =>
+      categories.flatMap((c) =>
+        c.options.filter((o) => optionIds.includes(o.id)).map((o) => ({ categoryName: c.name, optionName: o.name })),
+      );
 
     const workers: PayrollWorkerView[] = [];
     for (const workerId of workerIds) {
@@ -549,9 +558,7 @@ export class PayrollService {
         department: own.at(-1)!.department,
         siteNames: [...new Set(own.map((p) => p.site.name))],
         ...(firmsOn ? { firms: ownFirms.filter((f) => f !== null) } : {}),
-        categories: Object.fromEntries(
-          categoryValues.filter((v) => v.workerId === workerId).map((v) => [v.categoryId, v.optionId]),
-        ),
+        categories: categoryValues.get(workerId)!,
         salary: salary && {
           fromYear: salary.fromYear,
           fromMonth: salary.fromMonth,
@@ -590,30 +597,38 @@ export class PayrollService {
         }
       }
 
-      // Group the placements by their firm and rule set.
-      const groups = new Map<string, { firm: FirmRef | null; rules: Awaited<ReturnType<typeof rulesOf>>; placements: Placement[] }>();
+      // Group the placements by their firm, rule set and combination.
+      const groups = new Map<string, { firm: FirmRef | null; rules: WorkerRules; placements: Placement[] }>();
       const withoutRules: string[] = [];
+      const combinationProblems = new Map<string, PayrollProblem>();
       for (const p of own) {
-        const r = await rulesOf(p);
-        if (!r.ruleSetId || !r.month?.rules) {
+        const r = await rulesOf(p, view.categories!);
+        if (!r.ruleSet || !r.month?.rules) {
           withoutRules.push(p.site.name);
           continue;
         }
+        if (r.problem) {
+          const problem: PayrollProblem = { ...r.problem, ruleSetName: r.ruleSet.name };
+          combinationProblems.set(JSON.stringify(problem), problem);
+          continue;
+        }
         const firm = firmOf(p);
-        const key = `${firm?.id ?? ''}/${r.ruleSetId}`;
+        const key = `${firm?.id ?? ''}/${r.ruleSet.id}/${r.combination?.id ?? ''}`;
         const group = groups.get(key);
         if (group) group.placements.push(p);
         else groups.set(key, { firm, rules: r, placements: [p] });
       }
       if (withoutRules.length > 0) view.problems.push({ code: 'noRules', siteNames: [...new Set(withoutRules)] });
       else if (roundingStep === null) view.problems.push({ code: 'noCompanyRules' });
+      view.problems.push(...combinationProblems.values());
       if (view.problems.length > 0) continue;
 
       for (const { firm, rules, placements: inGroup } of groups.values()) {
         for (const shiftPart of parts) {
           const inPart = inGroup.filter((p) => placementDaysIn(shiftPart, p));
           if (inPart.length === 0) continue;
-          const part = payPart(view, salaryOf(firm)!, rules, firm, firmsOn, rules.month!, shiftPart, inPart, ownEntries, travelAmounts);
+          const ruleSet = { name: rules.ruleSet!.name, combination: rules.combination && combinationOf(rules.combination.optionIds) };
+          const part = payPart(view, salaryOf(firm)!, ruleSet, firm, firmsOn, rules.month!, shiftPart, inPart, ownEntries, travelAmounts);
           if (part) view.parts.push(part);
         }
       }
@@ -675,7 +690,7 @@ export class PayrollService {
 function payPart(
   view: PayrollWorkerView,
   salary: { monthlySalary: Prisma.Decimal },
-  ruleSet: { name: string | null },
+  ruleSet: { name: string | null; combination: { categoryName: string; optionName: string }[] | null },
   firm: FirmRef | null,
   firmsOn: boolean,
   m: MonthRules,
@@ -743,6 +758,7 @@ function payPart(
   }
   return {
     ruleSetName: ruleSet.name,
+    ...(ruleSet.combination ? { combination: ruleSet.combination } : {}),
     ...(firmsOn ? { firm } : {}),
     shift: shiftPart.shiftInfo && { name: shiftPart.shiftInfo.name, normalHoursPerDay: shiftPart.shiftInfo.normalHoursPerDay },
     days,

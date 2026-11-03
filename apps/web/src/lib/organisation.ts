@@ -42,7 +42,7 @@ export interface WorkerItem {
   firstName: string;
   patronymic: string | null;
   position: string | null;
-  /** The worker's option in each category (AGENTS.md: Worker categories), by category id; a category not set is left out */
+  /** The worker's option in each category this month (AGENTS.md: Worker categories), by category id; a category not set is left out */
   categories: Record<string, string>;
   placement: {
     id: string;
@@ -191,6 +191,26 @@ export function useWorkerCategories({ enabled = true }: { enabled?: boolean } = 
     queryKey: WORKER_CATEGORIES_KEY,
     queryFn: () => api.get<WorkerCategoryItem[]>('/worker-categories'),
     enabled,
+  });
+}
+
+/** A worker's option in a category from a month on, until their next one in it (AGENTS.md: Worker categories). */
+export interface WorkerCategoryChange {
+  categoryId: string;
+  /** null: not set from this month */
+  optionId: string | null;
+  fromYear: number;
+  fromMonth: number;
+  /** null: from before options were set from a month */
+  setBy: { fullName: string } | null;
+  setAt: string;
+}
+
+/** A worker's options from each month on, newest first. */
+export function useWorkerCategoryHistory(workerId: string) {
+  return useQuery({
+    queryKey: [...WORKER_CATEGORIES_KEY, 'worker', workerId],
+    queryFn: () => api.get<WorkerCategoryChange[]>(`/workers/${workerId}/categories`),
   });
 }
 

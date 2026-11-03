@@ -778,7 +778,7 @@ function PayslipDialog({
                     part={part}
                     currency={currency}
                     showHeading={
-                      slip.parts.length > 1 || part.ruleSetName !== null || Boolean(part.shift)
+                      slip.parts.length > 1 || part.ruleSetName !== null || Boolean(part.combination) || Boolean(part.shift)
                     }
                   />
                 ))}
@@ -806,6 +806,7 @@ function PayslipDialog({
 function ProblemText({ problem }: { problem: PayrollProblem }) {
   const { t } = useTranslation();
   const format = useFormat();
+  const categories = useWorkerCategories();
   switch (problem.code) {
     case 'noSalary':
       return problem.firmName ? t('payroll.problems.noSalaryInFirm', { firm: problem.firmName }) : t('payroll.problems.noSalary');
@@ -819,6 +820,21 @@ function ProblemText({ problem }: { problem: PayrollProblem }) {
         : t('payroll.problems.placementWithoutHours', { site: problem.siteName, date: format.date(problem.from) });
     case 'noRules':
       return t('payroll.problems.noRules', { sites: problem.siteNames.join(', ') });
+    case 'categoryNotSet':
+      return t('payroll.problems.categoryNotSet', {
+        rules: problem.ruleSetName ?? t('ruleSetCategories.defaultName'),
+        categories: problem.categoryIds.map((id) => categories.data?.find((c) => c.id === id)?.name ?? '').join(', '),
+      });
+    case 'noCategoryRules':
+      return t('payroll.problems.noCategoryRules', {
+        rules: problem.ruleSetName ?? t('ruleSetCategories.defaultName'),
+        // In the order of their categories by name, as every page shows a combination.
+        options: (categories.data ?? [])
+          .flatMap((c) => c.options)
+          .filter((o) => problem.optionIds.includes(o.id))
+          .map((o) => o.name)
+          .join(' + '),
+      });
     case 'totalsInvalid':
       return (
         <>
@@ -892,6 +908,7 @@ function PartView({ part, currency, showHeading }: { part: PayrollPart; currency
         <h3 className="text-sm font-medium">
           {[
             part.ruleSetName ? t('payroll.ruleSetRules', { name: part.ruleSetName }) : t('payroll.defaultRules'),
+            part.combination?.map((c) => c.optionName).join(' + '),
             part.days && t('monthlyHours.fromUntil', { from: format.date(part.days.from), until: format.date(part.days.until) }),
             part.shift && t('workers.shiftWithHours', { name: part.shift.name, hours: format.number(part.shift.normalHoursPerDay) }),
           ]
