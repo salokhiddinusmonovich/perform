@@ -10,17 +10,20 @@ import {
   placementDepartmentSchema,
   placementFirmSchema,
   placementSchema,
+  placementTravelRouteSchema,
   salarySchema,
   shiftSchema,
   siteSchema,
   staffSchema,
   teamSchema,
+  travelRouteSchema,
   updateCategoryOptionSchema,
   updateDepartmentSchema,
   updateFirmSchema,
   updateSiteSchema,
   updateShiftSchema,
   updateTeamSchema,
+  updateTravelRouteSchema,
   updateWorkerCategorySchema,
   workerCategorySchema,
   workerSchema,
@@ -36,16 +39,19 @@ import {
   type Placement,
   type PlacementDepartment,
   type PlacementFirm,
+  type PlacementTravelRoute,
   type Salary,
   type Shift,
   type Site,
   type Team,
+  type TravelRoute,
   type UpdateCategoryOption,
   type UpdateDepartment,
   type UpdateFirm,
   type UpdateSite,
   type UpdateShift,
   type UpdateTeam,
+  type UpdateTravelRoute,
   type UpdateWorkerCategory,
   type Worker,
   type WorkerCategory,
@@ -58,6 +64,7 @@ import { DepartmentsService, type DepartmentView } from './departments.service';
 import { FirmsService, type FirmView } from './firms.service';
 import { ShiftsService, type ShiftView, type WorkerShiftView } from './shifts.service';
 import { SitesService, type SiteView, type StaffView } from './sites.service';
+import { TravelRoutesService, type TravelRouteView } from './travel-routes.service';
 import { WorkerCategoriesService, type WorkerCategoryView } from './worker-categories.service';
 import { WorkersService, type SalaryView, type WorkerCategoryChangeView, type WorkerView } from './workers.service';
 
@@ -254,6 +261,22 @@ export class WorkersController {
     return this.workers.fillFirm(auth, id, placementId, body.firmId);
   }
 
+  /**
+   * Sets or changes the travel route of a placement (AGENTS.md: Travel pay) while none of its
+   * months is locked; otherwise a new placement from a day changes it.
+   */
+  @Put(':id/placements/:placementId/travel-route')
+  @Roles('OWNER', 'ADMIN', 'PROJECT_MANAGER')
+  @HttpCode(204)
+  placementTravelRoute(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('placementId', ParseUUIDPipe) placementId: string,
+    @Body(new ZodPipe(placementTravelRouteSchema)) body: PlacementTravelRoute,
+  ): Promise<void> {
+    return this.workers.setTravelRoute(auth, id, placementId, body.travelRouteId);
+  }
+
   /** Salary history. Timekeepers and foremen never see salaries. */
   @Get(':id/salaries')
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER')
@@ -344,6 +367,39 @@ export class ShiftsController {
     @Body(new ZodPipe(updateShiftSchema)) body: UpdateShift,
   ): Promise<void> {
     return this.shifts.update(auth, id, body);
+  }
+}
+
+/**
+ * The company's travel routes and their pay per day worked (AGENTS.md: Travel pay). Timekeepers
+ * and foremen never see pay amounts, so they aren't offered these; owners and admins define them.
+ */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER')
+@Controller('travel-routes')
+export class TravelRoutesController {
+  constructor(private readonly routes: TravelRoutesService) {}
+
+  @Get()
+  list(@CompanyAuth() auth: CompanyAuthContext): Promise<TravelRouteView[]> {
+    return this.routes.list(auth);
+  }
+
+  @Post()
+  @Roles('OWNER', 'ADMIN')
+  create(@CompanyAuth() auth: CompanyAuthContext, @Body(new ZodPipe(travelRouteSchema)) body: TravelRoute): Promise<{ id: string }> {
+    return this.routes.create(auth, body);
+  }
+
+  @Patch(':id')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  update(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(updateTravelRouteSchema)) body: UpdateTravelRoute,
+  ): Promise<void> {
+    return this.routes.update(auth, id, body);
   }
 }
 

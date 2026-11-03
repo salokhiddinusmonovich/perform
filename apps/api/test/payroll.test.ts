@@ -208,7 +208,7 @@ describe('payroll', () => {
     await dailyEntry(c.id, placementA, siteA, '2026-09-02');
     const [w] = (await agent.get('/api/payroll/2026/9').expect(200)).body.workers;
     expect(w).toMatchObject({ source: 'DAILY', total: '300000.00', problems: [] });
-    expect(w.parts[0].places).toEqual({ [siteA]: { siteName: 'Site A', teamName: null, from: null, until: null } });
+    expect(w.parts[0].places).toEqual({ [`${placementA}/${siteA}`]: { siteName: 'Site A', teamName: null, from: null, until: null } });
     expect(w.parts[0].result.summary).toMatchObject({ normalHours: '9.00', workdaysWorked: 1 });
   });
 

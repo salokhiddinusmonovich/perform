@@ -36,7 +36,9 @@
     "import": "Excel’dan import",
     "firms": "Firmalar",
     "workerCategories": "Ishchi toifalari",
-    "ruleSets": "Qoidalar toʻplamlari"
+    "ruleSets": "Qoidalar toʻplamlari",
+    "travelRoutes": "Yoʻnalishlar",
+    "travelAmounts": "Yoʻl haqi summalari"
   },
   "settings": {
     "language": "Til",
@@ -319,7 +321,8 @@
     "optionTwice": "Har bir variantning nomi boshqacha boʻlsin.",
     "optionClosed": "Bu variant yopilgan.",
     "twoCategoriesAtMost": "Koʻpi bilan ikkita toifa tanlang.",
-    "categoryTwice": "Har bir toifani faqat bir marta tanlash mumkin."
+    "categoryTwice": "Har bir toifani faqat bir marta tanlash mumkin.",
+    "routeAmountRange": "0 dan katta boʻlishi kerak"
   },
   "errors": {
     "unknown": "Xatolik yuz berdi. Qayta urinib koʻring.",
@@ -430,7 +433,8 @@
       "hasDepartment": "Bu joylashuvning boʻlimi allaqachon bor. Boshqasiga oʻtish — biror kundan boshlab koʻchirish.",
       "departmentFromTeam": "Bu ishchi brigadada: oʻrniga brigadaning boʻlimini belgilang.",
       "hasFirm": "Bu joylashuvda firma allaqachon bor. Boshqasiga oʻtish — maʼlum kundan koʻchirish.",
-      "noFirm": "Bu oydagi joylashuvda hali firma yoʻq. Avval uni belgilang."
+      "noFirm": "Bu oydagi joylashuvda hali firma yoʻq. Avval uni belgilang.",
+      "routeUnchanged": "Bu joylashuvda allaqachon shu yoʻnalish bor."
     },
     "monthlyHours": {
       "notInMonth": "Ishchi bu oyda ushbu obyektda ishlamagan.",
@@ -536,6 +540,16 @@
       "noCategoryRules": "Bu toʻlov qoidalarida bu oy ishchining variantlari uchun qoidalar yoʻq. Ularni “Toifalar boʻyicha qoidalar”da qoʻshing.",
       "variantExists": "Bu birikmaning qoidalari allaqachon bor.",
       "splitNotFound": "Bu boʻlinish endi mavjud emas."
+    },
+    "travelRoute": {
+      "notFound": "Bunday yoʻnalish yoʻq.",
+      "nameTaken": "Bu nomli yoʻnalish allaqachon bor.",
+      "inUse": "Bu yoʻnalish joylashuvga berilgan, shuning uchun summasi oʻzgarmaydi. Oʻrniga yangi yoʻnalish qoʻshing.",
+      "inactive": "Bu yoʻnalish arxivda, uni joylashuvlarga berib boʻlmaydi."
+    },
+    "travelAmount": {
+      "notInMonth": "Ishchi bu oyda bu obyektda boʻlmagan.",
+      "unchanged": "Bu summa bu oy uchun allaqachon kiritilgan."
     }
   },
   "payRules": {
@@ -605,8 +619,8 @@
     },
     "travelModeHint": {
       "NONE": "Kompaniya yoʻl haqi toʻlamaydi.",
-      "PER_DAY_WORKED": "Ishlangan har bir ish kuni uchun ishchi yoʻnalishining summasi toʻlanadi. Dam olish va bayram kunlari hisobga olinmaydi.",
-      "MONTHLY_AMOUNT": "Buxgalter har oy har bir ishchi uchun yoʻl haqi summasini kiritadi."
+      "PER_DAY_WORKED": "Har bir ishlangan ish kuni ishchi yoʻnalishining summasini toʻlaydi (Sozlamalar → Yoʻnalishlar, har bir joylashuvga beriladi). Dam olish va bayram kunlari hisoblanmaydi.",
+      "MONTHLY_AMOUNT": "Buxgalter har oy har bir joylashuv uchun yoʻl haqi summasini „Yoʻl haqi summalari“ sahifasida kiritadi."
     },
     "rounding": "Yaxlitlash",
     "roundingStep": "Toʻlanadigan summani yaxlitlash qadami ({{currency}})",
@@ -857,7 +871,12 @@
     "salaryFirmHint": "Firmadan firmaga oʻtgan ishchiga yangi firmada oylik kerak.",
     "categoriesFrom": "Yangi variantlar qaysi oydan",
     "categoriesFromHint": "Oldingi oylar oʻz variantlarini saqlaydi.",
-    "categoryHistory": "Oylar boʻyicha variantlar"
+    "categoryHistory": "Oylar boʻyicha variantlar",
+    "travelRoute": "Yoʻnalish",
+    "noTravelRoute": "Yoʻl haqisiz",
+    "travelRouteHint": "Ishlangan kun uchun yoʻl haqi shu yoʻnalish summasiga teng.",
+    "travelRouteAction": "Yoʻnalish",
+    "travelRouteDialogHint": "Yoʻnalish bu joylashuvning har bir kuniga tegishli. Agar uning biror oyi yopilgan boʻlsa, ishchini maʼlum kundan yangi yoʻnalish bilan koʻchiring."
   },
   "impersonation": {
     "banner": "Siz {{name}} nomidan kirgansiz.",
@@ -1602,5 +1621,55 @@
     "sourceEmpty": "Bu qoidalarning hali versiyasi yoʻq. Boshqa qoidalarni yoki boʻsh shaklni tanlang.",
     "combinationEmptyTitle": "Bu birikmaning hali qoidalari yoʻq",
     "combinationEmptyDescription": "Ularni kiriting: bu birikmadagi ishchilarga shu qoidalar boʻyicha toʻlanadi."
+  },
+  "travelRoutes": {
+    "title": "Yoʻnalishlar",
+    "description": "Ishchilar obyektga qatnaydigan yoʻnalishlar, har birining ishlangan ish kuni uchun yoʻl haqi bilan. Har bir joylashuvga bittasi berilishi mumkin.",
+    "create": "Yoʻnalish qoʻshish",
+    "edit": "Yoʻnalishni tahrirlash",
+    "name": "Nomi",
+    "amountPerDay": "Ishlangan kun uchun haq",
+    "amountPerDayIn": "Ishlangan kun uchun haq ({{currency}})",
+    "amountHint": "Qoidalar yoʻl haqini ishlangan kun boʻyicha toʻlaganda har bir ishlangan ish kuni uchun toʻlanadi. Dam olish va bayram kunlari hisoblanmaydi.",
+    "offered": "Faol",
+    "archived": "Arxivda",
+    "archive": "Arxivlash",
+    "restore": "Qaytarish",
+    "empty": "Hali yoʻnalishlar yoʻq",
+    "emptyDescription": "Ish haqi qoidalari yoʻl haqini ishlangan kun boʻyicha toʻlasa, yoʻnalish qoʻshing.",
+    "dialogDescription": "Ikki obyektda ishlangan kun bir marta, keyinroq kiritilgan obyekt yoʻnalishi boʻyicha hisoblanadi.",
+    "amountFixed": "Bu yoʻnalish joylashuvga berilgan, shuning uchun summasi oʻzgarmaydi: aks holda ishlangan oylar oʻzgarardi. Boshqa summa uchun yangi yoʻnalish qoʻshing.",
+    "withAmount": "{{name}} · kuniga {{amount}}",
+    "confirm": {
+      "archive": {
+        "title": "Yoʻnalishni arxivlaysizmi?",
+        "description": "“{{name}}” endi taklif qilinmaydi. Unga ega joylashuvlarda u qoladi.",
+        "button": "Arxivlash"
+      },
+      "restore": {
+        "title": "Yoʻnalishni qaytarasizmi?",
+        "description": "“{{name}}” yana joylashuvlarga berilishi mumkin.",
+        "button": "Qaytarish"
+      }
+    }
+  },
+  "travelAmounts": {
+    "title": "Yoʻl haqi summalari",
+    "description": "Ish haqi qoidalari yoʻl haqini oylik summa sifatida toʻlaganda har bir joylashuv va oy uchun kiritiladigan yoʻl haqi.",
+    "amount": "Yoʻl haqi",
+    "amountIn": "Yoʻl haqi ({{currency}})",
+    "amountHint": "Bu joylashuvning butun oylik yoʻl haqi. 0 hech narsa toʻlamaydi.",
+    "entered": "Kiritilgan",
+    "notEntered": "Kiritilmagan",
+    "notPaid": "Bu qoidalar toʻlamaydi",
+    "noRules": "Ish haqi qoidalari yoʻq",
+    "notPaidHint": "Bu oy joylashuvning ish haqi qoidalari yoʻl haqini oylik summa sifatida toʻlamaydi, shuning uchun bu yerda kiritilgan summa toʻlanmaydi.",
+    "noRulesHint": "Bu oy bu joylashuvni hali hech qanday ish haqi qoidasi toʻlay olmaydi. Nima yetishmasligini ish haqi hisobi sahifasi koʻrsatadi.",
+    "enterFor": "{{name}} yoʻl haqini kiritish",
+    "dialogTitle": "Yoʻl haqi: {{month}}",
+    "dialogHint": "Tuzatish — yangi summa; eng yangisi hisoblanadi.",
+    "lockedHint": "Oy yopilgan, yoʻl haqi summalarini oʻzgartirib boʻlmaydi.",
+    "emptyTitle": "Bu oy ishchilar yoʻq",
+    "emptyDescription": "Oyda joylashtirilgan ishchilar shu yerda koʻrinadi."
   }
 }

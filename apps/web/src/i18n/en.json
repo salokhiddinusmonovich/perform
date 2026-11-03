@@ -36,7 +36,9 @@
     "import": "Excel import",
     "firms": "Firms",
     "workerCategories": "Worker categories",
-    "ruleSets": "Rule sets"
+    "ruleSets": "Rule sets",
+    "travelRoutes": "Travel routes",
+    "travelAmounts": "Travel amounts"
   },
   "settings": {
     "language": "Language",
@@ -319,7 +321,8 @@
     "optionTwice": "Each option needs its own name.",
     "optionClosed": "This option is closed.",
     "twoCategoriesAtMost": "Choose at most two categories.",
-    "categoryTwice": "Each category can be chosen only once."
+    "categoryTwice": "Each category can be chosen only once.",
+    "routeAmountRange": "Must be more than 0"
   },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
@@ -430,7 +433,8 @@
       "hasDepartment": "This placement already has a department. Moving to another one is a move from a day.",
       "departmentFromTeam": "This worker is in a brigade: set the brigade’s department instead.",
       "hasFirm": "This placement already has a firm. Moving to another one is a move from a day.",
-      "noFirm": "A placement this month has no firm yet. Set it first."
+      "noFirm": "A placement this month has no firm yet. Set it first.",
+      "routeUnchanged": "This placement already has this route."
     },
     "monthlyHours": {
       "notInMonth": "The worker wasn’t at this site in this month.",
@@ -536,6 +540,16 @@
       "noCategoryRules": "These pay rules have no rules for this worker’s options this month. Add them under Rules by category.",
       "variantExists": "This combination already has its rules.",
       "splitNotFound": "This split doesn’t exist any more."
+    },
+    "travelRoute": {
+      "notFound": "This travel route doesn’t exist.",
+      "nameTaken": "A route with this name already exists.",
+      "inUse": "A placement has had this route, so its amount can’t change. Add a new route instead.",
+      "inactive": "This route is archived and can’t be given to placements."
+    },
+    "travelAmount": {
+      "notInMonth": "The worker wasn’t at this site in this month.",
+      "unchanged": "This amount is already entered for this month."
     }
   },
   "payRules": {
@@ -605,8 +619,8 @@
     },
     "travelModeHint": {
       "NONE": "The company doesn't pay for travel.",
-      "PER_DAY_WORKED": "Each working day worked pays the amount of the worker's route. Rest days and holidays worked don't count.",
-      "MONTHLY_AMOUNT": "The accountant enters a travel amount for each worker every month."
+      "PER_DAY_WORKED": "Each working day worked pays the amount of the worker’s route (Settings → Travel routes, given to each placement). Rest days and holidays worked don’t count.",
+      "MONTHLY_AMOUNT": "The accountant enters a travel amount for each placement every month, on the Travel amounts page."
     },
     "rounding": "Rounding",
     "roundingStep": "Round the amount to pay out to the nearest ({{currency}})",
@@ -857,7 +871,12 @@
     "salaryFirmHint": "A worker who moves firms needs a salary in the new firm.",
     "categoriesFrom": "The new options start from",
     "categoriesFromHint": "Earlier months keep the options they had.",
-    "categoryHistory": "Options by month"
+    "categoryHistory": "Options by month",
+    "travelRoute": "Travel route",
+    "noTravelRoute": "No travel pay",
+    "travelRouteHint": "Travel pay per day worked is the amount of this route.",
+    "travelRouteAction": "Travel route",
+    "travelRouteDialogHint": "The route counts for every day of this placement. If one of its months is locked, move the worker from a day with the new route instead."
   },
   "impersonation": {
     "banner": "You are logged in as {{name}}.",
@@ -1602,5 +1621,55 @@
     "sourceEmpty": "These rules have no versions yet. Choose other rules or an empty form.",
     "combinationEmptyTitle": "This combination has no rules yet",
     "combinationEmptyDescription": "Set them up: its workers are paid by them."
+  },
+  "travelRoutes": {
+    "title": "Travel routes",
+    "description": "Routes workers travel to a site, each with its pay per working day worked. Each placement can be given one.",
+    "create": "Add route",
+    "edit": "Edit route",
+    "name": "Name",
+    "amountPerDay": "Pay per day worked",
+    "amountPerDayIn": "Pay per day worked ({{currency}})",
+    "amountHint": "Paid for each working day worked while the rules pay travel per day worked. Rest days and holidays worked don’t count.",
+    "offered": "In use",
+    "archived": "Archived",
+    "archive": "Archive",
+    "restore": "Bring back",
+    "empty": "No travel routes yet",
+    "emptyDescription": "Add a route when the pay rules pay travel per day worked.",
+    "dialogDescription": "A day worked at two sites counts once, at the route of the site entered later.",
+    "amountFixed": "A placement has had this route, so its amount can’t change: that would change months already worked. For another amount, add a new route.",
+    "withAmount": "{{name}} · {{amount}} per day",
+    "confirm": {
+      "archive": {
+        "title": "Archive the route?",
+        "description": "“{{name}}” will no longer be offered. Placements that have it keep it.",
+        "button": "Archive"
+      },
+      "restore": {
+        "title": "Bring the route back?",
+        "description": "“{{name}}” can be given to placements again.",
+        "button": "Bring back"
+      }
+    }
+  },
+  "travelAmounts": {
+    "title": "Travel amounts",
+    "description": "Travel pay entered for each placement and month, where the pay rules pay travel as a monthly amount.",
+    "amount": "Travel amount",
+    "amountIn": "Travel amount ({{currency}})",
+    "amountHint": "The whole month’s travel pay for this placement. 0 pays none.",
+    "entered": "Entered",
+    "notEntered": "Not entered",
+    "notPaid": "Not paid by these rules",
+    "noRules": "No pay rules",
+    "notPaidHint": "The pay rules of this placement don’t pay travel as a monthly amount this month, so an amount entered here isn’t paid.",
+    "noRulesHint": "No pay rules can pay this placement this month yet. The pay calculation page says what is missing.",
+    "enterFor": "Enter the travel amount of {{name}}",
+    "dialogTitle": "Travel amount: {{month}}",
+    "dialogHint": "A correction is a new amount; the newest one counts.",
+    "lockedHint": "The month is locked, so travel amounts can’t change.",
+    "emptyTitle": "No workers this month",
+    "emptyDescription": "Workers placed in the month are listed here."
   }
 }

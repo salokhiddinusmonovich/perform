@@ -115,6 +115,8 @@ export const placementSchema = z.object({
   departmentId: optionalUuid,
   /** The employer (AGENTS.md: Firms); required by the API while the company uses firms. */
   firmId: optionalUuid,
+  /** The route whose travel pay per day worked the placement earns (AGENTS.md: Travel pay); none: no route. */
+  travelRouteId: optionalUuid,
   /** First day at this site (the hire date for a new worker). */
   from: isoDateSchema,
 });
@@ -255,6 +257,14 @@ export const placementFirmSchema = z.object({ firmId: uuid });
 export type PlacementFirmInput = z.input<typeof placementFirmSchema>;
 export type PlacementFirm = z.output<typeof placementFirmSchema>;
 
+/**
+ * Sets or changes the travel route of a placement (none: no route). Refused by the API when a
+ * month of the placement is locked; then a new placement from a day changes it.
+ */
+export const placementTravelRouteSchema = z.object({ travelRouteId: optionalUuid });
+export type PlacementTravelRouteInput = z.input<typeof placementTravelRouteSchema>;
+export type PlacementTravelRoute = z.output<typeof placementTravelRouteSchema>;
+
 export const createWorkerSchema = z.object({ worker: workerSchema, placement: placementSchema });
 export type CreateWorkerInput = z.input<typeof createWorkerSchema>;
 export type CreateWorker = z.output<typeof createWorkerSchema>;
@@ -298,6 +308,24 @@ export const updateShiftSchema = shiftSchema
   .extend({ isActive: z.boolean().optional() })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
 export type UpdateShift = z.output<typeof updateShiftSchema>;
+
+/**
+ * A route workers travel to a site, with its travel pay per day worked (AGENTS.md: Travel pay).
+ * Fits Decimal(14,2).
+ */
+export const travelRouteSchema = z.object({
+  name: requiredName(80),
+  amountPerDay: decimalSchema({ min: 0, minExclusive: true, max: 999_999_999_999, rangeError: 'validation.routeAmountRange' }),
+});
+export type TravelRouteInput = z.input<typeof travelRouteSchema>;
+export type TravelRoute = z.output<typeof travelRouteSchema>;
+
+/** Renaming a route, changing its amount while no placement has had it, or (de)activating it. */
+export const updateTravelRouteSchema = travelRouteSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
+export type UpdateTravelRoute = z.output<typeof updateTravelRouteSchema>;
 
 /** A worker's shift from a day on, until a newer one. No shift (null): the rule set's normal hours. */
 export const workerShiftSchema = z.object({

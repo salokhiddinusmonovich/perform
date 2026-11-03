@@ -402,9 +402,10 @@ describe('payroll from daily entries', () => {
     const payroll = (await agent.get('/api/payroll/2026/9').expect(200)).body;
     const w = payroll.workers.find((x: { worker: { id: string } }) => x.worker.id === workerId);
     expect(w).toMatchObject({ source: 'DAILY', problems: [] });
+    const placement = (await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId } })).id;
     expect(w.parts[0].places).toEqual({
-      [`${siteA}/${teamA}`]: { siteName: 'Site A', teamName: 'Team A', from: null, until: null },
-      [`${siteA}/${teamB}`]: { siteName: 'Site A', teamName: 'Team B', from: null, until: null },
+      [`${placement}/${siteA}/${teamA}`]: { siteName: 'Site A', teamName: 'Team A', from: null, until: null },
+      [`${placement}/${siteA}/${teamB}`]: { siteName: 'Site A', teamName: 'Team B', from: null, until: null },
     });
     // 9 normal hours across the day; the team entered later gets the 2 hours above them.
     const summary = w.parts[0].result.summary;

@@ -57,6 +57,9 @@ export interface WorkerItem {
     firmId: string | null;
     firmName: string | null;
     firmType: FirmType | null;
+    /** The route whose travel pay the placement earns; null: none */
+    travelRouteId: string | null;
+    travelRouteName: string | null;
     from: string;
     until: string | null;
   } | null;
@@ -170,6 +173,22 @@ export const SHIFTS_KEY = ['shifts'] as const;
 
 export function useShifts() {
   return useQuery({ queryKey: SHIFTS_KEY, queryFn: () => api.get<ShiftItem[]>('/shifts') });
+}
+
+/** A travel route and its pay per day worked (AGENTS.md: Travel pay). Timekeepers and foremen don't get these. */
+export interface TravelRouteItem {
+  id: string;
+  name: string;
+  amountPerDay: string;
+  isActive: boolean;
+  /** A placement has had it, so its amount can't change any more */
+  inUse: boolean;
+}
+
+export const TRAVEL_ROUTES_KEY = ['travel-routes'] as const;
+
+export function useTravelRoutes({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery({ queryKey: TRAVEL_ROUTES_KEY, queryFn: () => api.get<TravelRouteItem[]>('/travel-routes'), enabled });
 }
 
 export const DEPARTMENTS_KEY = ['departments'] as const;
