@@ -54,6 +54,11 @@ interface DataTableProps<TData> {
 }
 
 const SKELETON_ROWS = 5;
+/**
+ * Rows while `data` is undefined (loading). One shared list: a new `[]` on each render is new
+ * data to the table, which resets the page and renders again, without end.
+ */
+const NO_ROWS: never[] = [];
 
 /** The one table used by every list page (AGENTS.md). */
 export function DataTable<TData>({
@@ -81,7 +86,7 @@ export function DataTable<TData>({
     : undefined;
 
   const table = useReactTable<TData>({
-    data: data ?? [],
+    data: data ?? NO_ROWS,
     columns,
     state: { sorting, globalFilter },
     onSortingChange: setSorting,

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ColumnDef } from '@tanstack/react-table';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -85,6 +85,26 @@ describe('DataTable', () => {
     render(<DataTable columns={columns} data={undefined} isLoading />);
     expect(screen.queryByText('Nothing here yet')).toBeNull();
     expect(screen.getAllByRole('row', { hidden: true }).length).toBeGreaterThan(1);
+  });
+
+  it('settles when the page renders again while loading', async () => {
+    let renders = 0;
+    const counted: ColumnDef<Row, unknown>[] = [
+      {
+        accessorKey: 'name',
+        header: () => {
+          // Without one shared empty list, each render resets the page and renders again.
+          if (++renders > 20) throw new Error('DataTable keeps rendering');
+          return 'Name';
+        },
+      },
+    ];
+    const { rerender } = render(<DataTable columns={counted} data={undefined} isLoading />);
+    // Another query on the page resolves while this one loads.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    rerender(<DataTable columns={counted} data={undefined} isLoading />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(renders).toBeLessThanOrEqual(4);
   });
 
   it('paginates', async () => {
