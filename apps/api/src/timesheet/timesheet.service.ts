@@ -7,6 +7,7 @@ import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict, forbidden, notFound } from '../common/api-error';
 import { currentOn, dayToDate, inMonth, isoDay, monthOfDay, monthSpan } from '../common/dates';
 import { entersHoursAt, isCompanyManager, seesPlacement, visibleSites } from '../organisation/access';
+import { categoriesInMonth } from '../organisation/worker-categories.service';
 import { assertMonthsOpen, lockWorkerMonth } from '../pay-rules/months';
 import { PayRulesService } from '../pay-rules/pay-rules.service';
 import { timesheetIn } from '../platform/company-plan';
@@ -45,6 +46,11 @@ export interface TimesheetRowView {
   editedDays: string[];
   /** The caller may enter hours on this row (Settings and their sites or teams). */
   canEnter: boolean;
+  /**
+   * The worker's own days while the site's rule set is split by categories: by the rules of
+   * their combination. null: the month's calendar (or none, while their option or rules are missing).
+   */
+  calendar: { date: string; kind: DayKind }[] | null;
   entries: TimesheetEntryView[];
 }
 
@@ -55,7 +61,10 @@ export interface TimesheetMonthView {
   locked: boolean;
   /** This month's plan has the Timesheet module; without it no hours are entered. */
   timesheetModule: boolean;
-  /** Kind of each day under the site's rules; null while no rules are set for the month. */
+  /**
+   * Kind of each day under the site's rules; null while no rules are set for the month. While
+   * the site's rule set is split by worker categories, only holidays: each row has its own.
+   */
   calendar: { date: string; kind: DayKind }[] | null;
   rows: TimesheetRowView[];
 }
@@ -84,6 +93,9 @@ function entryView(e: EntryRow): TimesheetEntryView {
     updatedAt: e.updatedAt,
   };
 }
+
+type DayView = { date: string; kind: DayKind };
+const dayView = (d: DayView): DayView => ({ date: d.date, kind: d.kind });
 
 /** What an entry says, as the audit log records it. */
 const content = (e: { status: DayStatus; hours: Prisma.Decimal | string; note: string | null }) => ({
@@ -118,7 +130,7 @@ export class TimesheetService {
     if (!site) throw notFound('site.notFound');
     const { first, last } = monthSpan(year, month);
 
-    const [placements, entries, locked, entryRoles, calendar, timesheetModule] = await Promise.all([
+    const [placements, entries, locked, entryRoles, { calendar, split }, timesheetModule] = await Promise.all([
       this.prisma.assignment.findMany({
         where: { AND: [{ companyId, siteId }, inMonth(year, month)] },
         include: { worker: { select: WORKER_SELECT }, team: { select: { name: true } } },
@@ -153,6 +165,7 @@ export class TimesheetService {
           hasImportedHours: false,
           editedDays: [],
           canEnter: timesheetModule && locked === 0 && entersHoursAt(auth, entryRoles, siteId, teamId),
+          calendar: null,
           entries: [],
         };
         rows.set(key, row);
@@ -189,6 +202,21 @@ export class TimesheetService {
         orderBy: { date: 'asc' },
       }),
     ]);
+    if (split) {
+      const options = await categoriesInMonth(this.prisma, companyId, workerIds, year, month);
+      const own = new Map<string, Promise<DayView[] | null>>();
+      const daysOf = (workerId: string) => {
+        const opts = options.get(workerId)!;
+        const key = JSON.stringify(Object.entries(opts).sort());
+        let found = own.get(key);
+        if (!found) {
+          found = this.rules.rulesInSet(companyId, split, opts, year, month).then((r) => r.month?.calendar?.map(dayView) ?? null);
+          own.set(key, found);
+        }
+        return found;
+      };
+      for (const row of rows.values()) row.calendar = await daysOf(row.worker.id);
+    }
     const withTotals = new Set(totals.map((t) => t.assignment.workerId));
     const withImport = new Set(imported.map((t) => t.assignment.workerId));
     for (const row of rows.values()) {
@@ -381,10 +409,18 @@ export class TimesheetService {
     if (total.greaterThan(MAX_HOURS_PER_DAY)) throw conflict('timesheet.dayTooManyHours');
   }
 
+  /**
+   * The site's days for the month (its rule set's, AGENTS.md: The daily grid). While the set is
+   * split by categories, only holidays, and the set is returned so each row gets its own days.
+   */
   private async calendar(companyId: string, siteId: string, year: number, month: number) {
     const set = await this.rules.ruleSetForSite(companyId, siteId, year, month);
-    const m = set && (await this.rules.month(companyId, set.id, year, month));
-    return m?.calendar?.map((d) => ({ date: d.date, kind: d.kind })) ?? null;
+    if (!set) return { calendar: null, split: null };
+    if ((await this.rules.splitIn(companyId, set.id, year, month)).length > 0) {
+      return { calendar: (await this.rules.calendar(companyId, year, month, [])).map(dayView), split: set };
+    }
+    const m = await this.rules.month(companyId, set.id, year, month);
+    return { calendar: m.calendar?.map(dayView) ?? null, split: null };
   }
 
   private record(

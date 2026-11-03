@@ -37,6 +37,8 @@ export interface TimesheetRow {
   /** Days of the imported month changed by hand since the import, cleared days too */
   editedDays: string[];
   canEnter: boolean;
+  /** The worker's own days while the site's rule set is split by categories; null: the month's calendar */
+  calendar: { date: string; kind: DayKind }[] | null;
   entries: TimesheetEntryItem[];
 }
 
@@ -47,7 +49,7 @@ export interface TimesheetMonth {
   locked: boolean;
   /** This month's plan has the Timesheet module; without it no hours are entered */
   timesheetModule: boolean;
-  /** null while no pay rules are set for the month */
+  /** null while no pay rules are set for the month; only holidays while the site's rule set is split by categories (rows have their own) */
   calendar: { date: string; kind: DayKind }[] | null;
   rows: TimesheetRow[];
 }

@@ -603,13 +603,13 @@ export class PayrollService {
       const combinationProblems = new Map<string, PayrollProblem>();
       for (const p of own) {
         const r = await rulesOf(p, view.categories!);
-        if (!r.ruleSet || !r.month?.rules) {
-          withoutRules.push(p.site.name);
-          continue;
-        }
-        if (r.problem) {
+        if (r.ruleSet && r.problem) {
           const problem: PayrollProblem = { ...r.problem, ruleSetName: r.ruleSet.name };
           combinationProblems.set(JSON.stringify(problem), problem);
+          continue;
+        }
+        if (!r.ruleSet || !r.month?.rules) {
+          withoutRules.push(p.site.name);
           continue;
         }
         const firm = firmOf(p);

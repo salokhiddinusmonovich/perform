@@ -1587,13 +1587,20 @@
     "firstCategory": "Toifa",
     "secondCategory": "Ikkinchi toifa (ixtiyoriy)",
     "addRulesFor": "“{{combination}}” uchun qoidalar",
-    "copyDescription": "Qoidalar nusxa sifatida boshlanadi. Keyin bu birikma uchun farq qiladiganini oʻzgartiring.",
-    "copyFrom": "Qaysi qoidalardan nusxa olinsin",
-    "ownRules": "Boʻlinishsiz shu qoidalar",
+    "copyDescription": "Boʻsh shakldan boshlang yoki qoidalardan nusxa olib, bu birikma uchun farq qiladiganini oʻzgartiring.",
     "copyAndOpen": "Nusxa olish va ochish",
     "copied": "Nusxa olindi. Endi farq qiladiganini oʻzgartiring.",
-    "sourceNoRules": "Nusxa olish uchun tanlangan qoidalar oʻsha oyda amal qilmaydi.",
     "combinationRulesTitle": "Toʻlov qoidalari: {{name}}, {{combination}}",
-    "combinationWorkingDaysTitle": "Ish kunlari: {{name}}, {{combination}}"
+    "combinationWorkingDaysTitle": "Ish kunlari: {{name}}, {{combination}}",
+    "startWith": "Nimadan boshlash",
+    "emptyForm": "Boʻsh shakl",
+    "copyCombination": "Boshqa birikmaning nusxasi",
+    "copyRuleSet": "Qoidalar toʻplamining nusxasi",
+    "copyMonthHint": "Shu oyda amal qiladigan qoidalardan nusxa olinadi va shu oydan amal qiladi.",
+    "openForm": "Shaklni ochish",
+    "sourceStartsLater": "Bu qoidalar faqat {{month}} dan amal qiladi. Oʻsha yoki keyingi oyni tanlang.",
+    "sourceEmpty": "Bu qoidalarning hali versiyasi yoʻq. Boshqa qoidalarni yoki boʻsh shaklni tanlang.",
+    "combinationEmptyTitle": "Bu birikmaning hali qoidalari yoʻq",
+    "combinationEmptyDescription": "Ularni kiriting: bu birikmadagi ishchilarga shu qoidalar boʻyicha toʻlanadi."
   }
 }

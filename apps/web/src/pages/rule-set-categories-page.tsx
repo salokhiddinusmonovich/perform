@@ -22,7 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { canManageCompany, canViewPayRules, type Me } from '@/lib/auth';
@@ -322,10 +322,10 @@ function Combinations({
           optionIds={adding}
           label={combinationLabel(categories, adding)}
           split={split}
-          sources={combinations
+          combinations={combinations
             .map((ids) => ({ ids, variant: variantOf(ids) }))
             .filter((s) => s.variant?.rulesFrom)
-            .map((s) => ({ id: s.variant!.id, label: combinationLabel(categories, s.ids) }))}
+            .map((s) => ({ path: `/rule-sets/${s.variant!.id}/pay-rules`, label: combinationLabel(categories, s.ids) }))}
           existing={variantOf(adding) ?? null}
           onClose={() => setAdding(null)}
         />
@@ -409,16 +409,19 @@ function SplitDialog({
   );
 }
 
+/** "Start from an empty form" in the add-rules dialog; can't be mistaken for a path. */
+const EMPTY = 'empty';
+
 /**
- * Gives a combination its first rules, as a copy of the set's own rules or of another
- * combination's for a month, then opens them to change what differs.
+ * Gives a combination its first rules: an empty form, or a copy of another combination's or
+ * any rule set's rules for a month. Then opens them to fill in or change what differs.
  */
 function CopyRulesDialog({
   ruleSetId,
   optionIds,
   label,
   split,
-  sources,
+  combinations,
   existing,
   onClose,
 }: {
@@ -426,31 +429,52 @@ function CopyRulesDialog({
   optionIds: string[];
   label: string;
   split: RuleSetSplitItem;
-  sources: { id: string; label: string }[];
+  /** This set's combinations with rules, by the path of their rules */
+  combinations: { path: string; label: string }[];
   existing: RuleSetVariantItem | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const format = useFormat();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const isDefault = useRuleSets().data?.find((s) => s.id === ruleSetId)?.name === null;
+  const sets = useRuleSets().data ?? [];
+  // Every rule set's own rules, the company's first.
+  const ownRules = [...sets]
+    .filter((s) => s.rulesFrom)
+    .sort((a, b) => (a.name === null ? -1 : b.name === null ? 1 : a.name.localeCompare(b.name)))
+    .map((s) => ({
+      path: s.name === null ? '/pay-rules' : `/rule-sets/${s.id}/pay-rules`,
+      label: s.name ?? t('ruleSetCategories.defaultName'),
+    }));
   const [from, setFrom] = useState<YearMonth>({ year: split.fromYear, month: split.fromMonth });
-  const [source, setSource] = useState('own');
+  const [source, setSource] = useState(EMPTY);
   const [formError, setFormError] = useState<string>();
   const save = useMutation({
     mutationFn: async () => {
-      const path = source === 'own' ? (isDefault ? '/pay-rules' : `/rule-sets/${ruleSetId}/pay-rules`) : `/rule-sets/${source}/pay-rules`;
-      const versions = await api.get<{ fromYear: number; fromMonth: number; rules: Record<string, unknown> }[]>(path);
-      const version = versions.find((v) => monthIndex(v.fromYear, v.fromMonth) <= monthIndex(from.year, from.month));
-      if (!version) throw new Error(t('ruleSetCategories.sourceNoRules'));
-      const { payRoundingStep: _, ...rules } = version.rules;
+      let rules: Record<string, unknown> | null = null;
+      if (source !== EMPTY) {
+        const versions = await api.get<{ fromYear: number; fromMonth: number; rules: Record<string, unknown> }[]>(source);
+        const version = versions.find((v) => monthIndex(v.fromYear, v.fromMonth) <= monthIndex(from.year, from.month));
+        if (!version) {
+          // Newest first: the last is where they start.
+          const first = versions.at(-1);
+          throw new Error(
+            first
+              ? t('ruleSetCategories.sourceStartsLater', { month: format.month(first.fromYear, first.fromMonth) })
+              : t('ruleSetCategories.sourceEmpty'),
+          );
+        }
+        const { payRoundingStep: _, ...own } = version.rules;
+        rules = own;
+      }
       const id = existing?.id ?? (await api.post<{ id: string }>(`/rule-sets/${ruleSetId}/variants`, { optionIds })).id;
-      await api.put(`/rule-sets/${id}/pay-rules/${from.year}/${from.month}`, rules);
-      return id;
+      if (rules) await api.put(`/rule-sets/${id}/pay-rules/${from.year}/${from.month}`, rules);
+      return { id, copied: rules !== null };
     },
-    onSuccess: async (id) => {
+    onSuccess: async ({ id, copied }) => {
       await queryClient.invalidateQueries({ queryKey: [...RULE_SETS_KEY, ruleSetId] });
-      toast.success(t('ruleSetCategories.copied'));
+      if (copied) toast.success(t('ruleSetCategories.copied'));
       navigate(`/settings/rule-sets/${ruleSetId}/combinations/${id}/pay-rules`);
     },
     onError: (error) => setFormError(error instanceof Error && !('status' in error) ? error.message : errorMessage(t, error)),
@@ -473,23 +497,44 @@ function CopyRulesDialog({
           }}
         >
           <FormError message={formError} />
-          <MonthField legend={t('payRules.from')} value={from} onChange={setFrom} />
-          <Field id="copy-source" label={t('ruleSetCategories.copyFrom')}>
+          <Field id="copy-source" label={t('ruleSetCategories.startWith')}>
             <Select value={source} onValueChange={setSource}>
               <SelectTrigger id="copy-source" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="own">{t('ruleSetCategories.ownRules')}</SelectItem>
-                {sources.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.label}
-                  </SelectItem>
-                ))}
+                <SelectItem value={EMPTY}>{t('ruleSetCategories.emptyForm')}</SelectItem>
+                {combinations.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>{t('ruleSetCategories.copyCombination')}</SelectLabel>
+                    {combinations.map((s) => (
+                      <SelectItem key={s.path} value={s.path}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {ownRules.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>{t('ruleSetCategories.copyRuleSet')}</SelectLabel>
+                    {ownRules.map((s) => (
+                      <SelectItem key={s.path} value={s.path}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
               </SelectContent>
             </Select>
           </Field>
-          <FormActions submitLabel={t('ruleSetCategories.copyAndOpen')} pending={save.isPending} onCancel={onClose} />
+          {source !== EMPTY && (
+            <MonthField legend={t('payRules.from')} value={from} onChange={setFrom} hint={t('ruleSetCategories.copyMonthHint')} />
+          )}
+          <FormActions
+            submitLabel={source === EMPTY ? t('ruleSetCategories.openForm') : t('ruleSetCategories.copyAndOpen')}
+            pending={save.isPending}
+            onCancel={onClose}
+          />
         </form>
       </DialogContent>
     </Dialog>

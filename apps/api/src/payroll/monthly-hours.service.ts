@@ -277,8 +277,8 @@ export class MonthlyHoursService {
   ) {
     const options = (await categoriesInMonth(tx, companyId, [workerId], year, month)).get(workerId)!;
     const { month: m, problem } = await this.rules.rulesForWorker(companyId, placement, options, year, month, tx);
-    if (!m?.rules || !m.calendar) throw conflict('payRules.notSet');
     if (problem) throw conflict(problem.code === 'categoryNotSet' ? 'ruleSet.categoryNotSet' : 'ruleSet.noCategoryRules');
+    if (!m?.rules || !m.calendar) throw conflict('payRules.notSet');
     const normalHoursPerDay = part.shiftInfo?.normalHoursPerDay ?? m.rules.settings.normalHoursPerDay;
     const issues = checkTotals([{ place: placement.siteId, totals }], spanCalendar(m.calendar, part), normalHoursPerDay);
     if (issues.length > 0) throw badRequest('validation', { issues: issues.map((i) => PROBLEM_FIELDS[i.problem]) });

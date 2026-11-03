@@ -1587,13 +1587,20 @@
     "firstCategory": "Kategori",
     "secondCategory": "İkinci kategori (isteğe bağlı)",
     "addRulesFor": "“{{combination}}” için kurallar",
-    "copyDescription": "Kurallar bir kopya olarak başlar. Sonra bu birleşim için farklı olanı değiştirin.",
-    "copyFrom": "Şunun kopyası olarak başla",
-    "ownRules": "Bölmesiz bu kurallar",
+    "copyDescription": "Boş bir formla başlayın ya da kuralları kopyalayıp bu birleşim için farklı olanı değiştirin.",
     "copyAndOpen": "Kopyala ve aç",
     "copied": "Kopyalandı. Şimdi farklı olanı değiştirin.",
-    "sourceNoRules": "Kopyalamak için seçtiğiniz kurallar o ayda geçerli değil.",
     "combinationRulesTitle": "Ücret kuralları: {{name}}, {{combination}}",
-    "combinationWorkingDaysTitle": "Çalışma günleri: {{name}}, {{combination}}"
+    "combinationWorkingDaysTitle": "Çalışma günleri: {{name}}, {{combination}}",
+    "startWith": "Başlangıç",
+    "emptyForm": "Boş form",
+    "copyCombination": "Başka bir birleşimin kopyası",
+    "copyRuleSet": "Bir kural setinin kurallarının kopyası",
+    "copyMonthHint": "Bu ayda geçerli kurallar kopyalanır ve bu aydan itibaren geçerli olur.",
+    "openForm": "Formu aç",
+    "sourceStartsLater": "Bu kurallar ancak {{month}} ayından itibaren geçerli. O ayı veya sonraki bir ayı seçin.",
+    "sourceEmpty": "Bu kuralların henüz bir sürümü yok. Başka kurallar veya boş form seçin.",
+    "combinationEmptyTitle": "Bu birleşimin henüz kuralı yok",
+    "combinationEmptyDescription": "Kuralları girin: çalışanları bunlarla ödenir."
   }
 }

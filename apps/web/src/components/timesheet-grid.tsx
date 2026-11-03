@@ -219,6 +219,8 @@ export function TimesheetGrid({ data, codes: companyCodes, myName }: TimesheetGr
     const dayColumn = (day: string): ColDef<GridRow> => {
       const kind: DayKind = kinds.get(day) ?? 'WORKDAY';
       const offDay = kind !== 'WORKDAY';
+      /** The day's kind for a worker: by their own rules where the site's are split by categories (AGENTS.md: Rule sets split by categories). */
+      const kindFor = (r: GridRow): DayKind => r.row.calendar?.find((d) => d.date === day)?.kind ?? kind;
       return {
         colId: day,
         headerName: String(Number(day.slice(8))),
@@ -274,9 +276,12 @@ export function TimesheetGrid({ data, codes: companyCodes, myName }: TimesheetGr
           const entry = p.data?.cells[day];
           if (p.data?.pending.has(day)) return null;
           const edited = p.data?.row.editedDays.includes(day) ? t('timesheet.editedByHand') : null;
-          if (!entry) return edited;
+          // A worker's own day off shows by name too, not only by colour.
+          const own = p.data ? kindFor(p.data) : kind;
+          const dayOff = own !== kind && own !== 'WORKDAY' ? t(`timesheet.dayKind.${own}`) : null;
+          if (!entry) return [dayOff, edited].filter(Boolean).join('\n') || null;
           const what = entry.status === 'WORKED' ? t('timesheet.hoursWorked', { hours: format.number(entry.hours) }) : t(`timesheet.status.${entry.status}`);
-          return [what, entry.note, edited, t('timesheet.changedBy', { name: entry.updatedBy.fullName, date: format.date(entry.updatedAt) })]
+          return [what, dayOff, entry.note, edited, t('timesheet.changedBy', { name: entry.updatedBy.fullName, date: format.date(entry.updatedAt) })]
             .filter(Boolean)
             .join('\n');
         },
@@ -286,7 +291,7 @@ export function TimesheetGrid({ data, codes: companyCodes, myName }: TimesheetGr
           const entry = r.cells[day];
           return cn(
             'text-center tabular-nums',
-            offDay && 'bg-muted',
+            kindFor(r) !== 'WORKDAY' && 'bg-muted',
             !open(r, day) && 'cursor-not-allowed text-muted-foreground',
             r.pending.has(day) && 'opacity-60',
             r.row.editedDays.includes(day) && 'underline decoration-dotted underline-offset-4',

@@ -174,20 +174,42 @@ export class PayRulesService {
     db: Db = this.prisma,
   ): Promise<WorkerRules> {
     const set = await this.ruleSetForPlacement(companyId, placement, year, month, db);
+    return this.rulesInSet(companyId, set, options, year, month, db);
+  }
+
+  /**
+   * The rules of a set for a worker with these options in a month: the set's own while it
+   * isn't split, else only its combination's (a split set needs no rules of its own).
+   */
+  async rulesInSet(
+    companyId: string,
+    set: { id: string; name: string | null } | null,
+    options: Readonly<Record<string, string>>,
+    year: number,
+    month: number,
+    db: Db = this.prisma,
+  ): Promise<WorkerRules> {
     if (!set) return { ruleSet: null, combination: null, month: null, problem: null };
-    const own = await this.month(companyId, set.id, year, month, db);
     const ruleSet = { id: set.id, name: set.name };
     const split = await this.splitIn(companyId, set.id, year, month, db);
-    if (split.length === 0 || !own.rules) return { ruleSet, combination: null, month: own, problem: null };
+    if (split.length === 0) return { ruleSet, combination: null, month: await this.month(companyId, set.id, year, month, db), problem: null };
     const notSet = split.filter((c) => !options[c]);
-    if (notSet.length > 0) return { ruleSet, combination: null, month: own, problem: { code: 'categoryNotSet', categoryIds: notSet } };
+    if (notSet.length > 0) return { ruleSet, combination: null, month: null, problem: { code: 'categoryNotSet', categoryIds: notSet } };
     const optionIds = split.map((c) => options[c]);
     const variant = await db.payrollRuleSet.findFirst({ where: { companyId, parentId: set.id, variantKey: variantKey(optionIds) } });
     const rules = variant && (await this.month(companyId, variant.id, year, month, db));
-    if (!variant || !rules?.rules) {
-      return { ruleSet, combination: null, month: own, problem: { code: 'noCategoryRules', optionIds } };
-    }
+    if (!variant || !rules?.rules) return { ruleSet, combination: null, month: null, problem: { code: 'noCategoryRules', optionIds } };
     return { ruleSet, combination: { id: variant.id, optionIds }, month: rules, problem: null };
+  }
+
+  /** Whether a set has rules for a month: its own, or, while split, a combination's. Sites and firms choose it only then. */
+  async hasRulesFor(companyId: string, ruleSetId: string, from: { year: number; month: number }, db: Db = this.prisma): Promise<boolean> {
+    const upTo = { OR: [{ fromYear: { lt: from.year } }, { fromYear: from.year, fromMonth: { lte: from.month } }] };
+    const split = await this.splitIn(companyId, ruleSetId, from.year, from.month, db);
+    const version = await db.payrollRules.findFirst({
+      where: { companyId, ...upTo, ...(split.length > 0 ? { ruleSet: { parentId: ruleSetId } } : { ruleSetId }) },
+    });
+    return version !== null;
   }
 
   /** The rule set a site or firm itself uses in a month, or null when it has none of its own. */
@@ -310,10 +332,7 @@ export class PayRulesService {
       if (ruleSetId) {
         const set = await this.namedRuleSet(companyId, ruleSetId, tx);
         if (!set.isActive) throw conflict('ruleSet.inactive');
-        const version = await tx.payrollRules.findFirst({
-          where: { ruleSetId, OR: [{ fromYear: { lt: from.year } }, { fromYear: from.year, fromMonth: { lte: from.month } }] },
-        });
-        if (!version) throw conflict('ruleSet.noRulesForMonth');
+        if (!(await this.hasRulesFor(companyId, ruleSetId, from, tx))) throw conflict('ruleSet.noRulesForMonth');
       }
       const before = await tx.ruleSetUse.findFirst({ where: { companyId, ...owner, fromYear: from.year, fromMonth: from.month } });
       const data = { ruleSetId, setById: auth.user.id, setAt: new Date() };

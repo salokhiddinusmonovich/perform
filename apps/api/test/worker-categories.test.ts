@@ -1,6 +1,6 @@
 import type { Role } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { addMember, createUser, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
+import { addMember, createPlan, createUser, givePlan, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
 
 let ctx: TestContext;
 beforeAll(async () => (ctx = await startApp()));
@@ -355,6 +355,46 @@ describe('rule sets split by categories', () => {
       orderBy: { createdAt: 'asc' },
     });
     expect(log.map((l) => l.action)).toEqual(['ruleSet.split', 'ruleSet.addVariant', 'ruleSet.addVariant', 'ruleSet.split', 'ruleSet.splitDelete']);
+  });
+
+  it('needs no rules of its own once split, and the grid marks each worker’s own rest days', async () => {
+    const c = await company();
+    const plan = await createPlan(ctx.prisma, { timesheetModule: true });
+    await givePlan(ctx.prisma, c.company.id, plan.id);
+    const { Direkt, Endirekt } = c.type.options;
+    const { id: set } = (await c.agent.post('/api/rule-sets').send({ name: 'By category' }).expect(201)).body;
+    const choose = () => c.agent.put(`/api/sites/${c.site}/rule-set/2026/9`).send({ ruleSetId: set });
+    // Neither rules of its own nor a combination's: it can't be chosen yet.
+    expect((await choose().expect(409)).body.code).toBe('ruleSet.noRulesForMonth');
+    await c.agent.put(`/api/rule-sets/${set}/splits/2026/9`).send({ categoryIds: [c.type.id] }).expect(204);
+    expect((await choose().expect(409)).body.code).toBe('ruleSet.noRulesForMonth');
+    // Direkt: Saturdays and Sundays off, so September 2026 has 21 working days.
+    const direkt = (await c.agent.post(`/api/rule-sets/${set}/variants`).send({ optionIds: [Direkt] }).expect(201)).body.id;
+    await c.agent.put(`/api/rule-sets/${direkt}/pay-rules/2026/9`).send({ ...OWN_RULES, restWeekdays: [6, 7] }).expect(204);
+    await choose().expect(204);
+
+    const aliyev = await hired(c, 'Aliyev', { [c.type.id]: Direkt });
+    const karimov = await hired(c, 'Karimov', { [c.type.id]: Endirekt });
+    const grid = (await c.agent.get(`/api/timesheet/2026/9?siteId=${c.site}`).expect(200)).body;
+    const kind = (days: { date: string; kind: string }[] | null, date: string) => days?.find((d) => d.date === date)?.kind;
+    // The headers: holidays only (September 1), no rest days.
+    expect(kind(grid.calendar, '2026-09-01')).toBe('HOLIDAY');
+    expect(kind(grid.calendar, '2026-09-06')).toBe('WORKDAY');
+    const rowOf = (id: string) => grid.rows.find((r: { worker: { id: string } }) => r.worker.id === id);
+    expect(kind(rowOf(aliyev.id).calendar, '2026-09-05')).toBe('REST_DAY');
+    expect(kind(rowOf(aliyev.id).calendar, '2026-09-07')).toBe('WORKDAY');
+    // Endirekt has no rules here: holidays only.
+    expect(rowOf(karimov.id).calendar).toBeNull();
+
+    // Paid by the combination's rules alone: a full month of 21 days is exactly the salary.
+    const placement = await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId: aliyev.id } });
+    await c.agent
+      .post(`/api/monthly-hours/2026/9/${placement.id}`)
+      .send({ ...FULL_MONTH, normalHours: '189', workdaysWorked: 21 })
+      .expect(201);
+    const month = (await c.agent.get('/api/payroll/2026/9').expect(200)).body;
+    expect(workerIn(month, aliyev.id).total).toBe('7500000.00');
+    expect(workerIn(month, karimov.id).problems).toContainEqual({ code: 'noCategoryRules', ruleSetName: 'By category', optionIds: [Endirekt] });
   });
 
   it('checks the categories of a split and keeps another company’s apart', async () => {

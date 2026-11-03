@@ -1587,13 +1587,20 @@
     "firstCategory": "Category",
     "secondCategory": "Second category (optional)",
     "addRulesFor": "Rules for {{combination}}",
-    "copyDescription": "The rules start as a copy. Then change what differs for this combination.",
-    "copyFrom": "Start as a copy of",
-    "ownRules": "These rules without a split",
+    "copyDescription": "Start from an empty form, or copy rules and change what differs for this combination.",
     "copyAndOpen": "Copy and open",
     "copied": "Copied. Now change what differs.",
-    "sourceNoRules": "The rules you chose to copy don’t apply in that month.",
     "combinationRulesTitle": "Pay rules: {{name}}, {{combination}}",
-    "combinationWorkingDaysTitle": "Working days: {{name}}, {{combination}}"
+    "combinationWorkingDaysTitle": "Working days: {{name}}, {{combination}}",
+    "startWith": "Start with",
+    "emptyForm": "An empty form",
+    "copyCombination": "A copy of another combination",
+    "copyRuleSet": "A copy of a rule set’s rules",
+    "copyMonthHint": "The rules in force in this month are copied, and apply from it.",
+    "openForm": "Open the form",
+    "sourceStartsLater": "These rules start only from {{month}}. Choose that month or a later one.",
+    "sourceEmpty": "These rules have no versions yet. Choose other rules or an empty form.",
+    "combinationEmptyTitle": "This combination has no rules yet",
+    "combinationEmptyDescription": "Set them up: its workers are paid by them."
   }
 }

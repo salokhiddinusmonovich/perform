@@ -1587,13 +1587,20 @@
     "firstCategory": "Категория",
     "secondCategory": "Вторая категория (необязательно)",
     "addRulesFor": "Правила для «{{combination}}»",
-    "copyDescription": "Правила начинаются с копии. Затем измените то, что отличается для этого сочетания.",
-    "copyFrom": "Скопировать из",
-    "ownRules": "Эти правила без разделения",
+    "copyDescription": "Начните с пустой формы или скопируйте правила и измените то, что отличается для этого сочетания.",
     "copyAndOpen": "Скопировать и открыть",
     "copied": "Скопировано. Теперь измените то, что отличается.",
-    "sourceNoRules": "Выбранные для копии правила не действуют в этом месяце.",
     "combinationRulesTitle": "Правила оплаты: {{name}}, {{combination}}",
-    "combinationWorkingDaysTitle": "Рабочие дни: {{name}}, {{combination}}"
+    "combinationWorkingDaysTitle": "Рабочие дни: {{name}}, {{combination}}",
+    "startWith": "Начать с",
+    "emptyForm": "Пустая форма",
+    "copyCombination": "Копия другого сочетания",
+    "copyRuleSet": "Копия правил набора",
+    "copyMonthHint": "Копируются правила, действующие в этом месяце, и действуют с него.",
+    "openForm": "Открыть форму",
+    "sourceStartsLater": "Эти правила действуют только с {{month}}. Выберите этот или более поздний месяц.",
+    "sourceEmpty": "У этих правил ещё нет версий. Выберите другие правила или пустую форму.",
+    "combinationEmptyTitle": "У этого сочетания ещё нет правил",
+    "combinationEmptyDescription": "Задайте их: по ним оплачиваются его работники."
   }
 }

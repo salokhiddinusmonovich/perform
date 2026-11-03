@@ -108,10 +108,10 @@ export function RuleSetPayRulesPage() {
             ? t('ruleSetCategories.combinationRulesTitle', { name, combination })
             : t('ruleSets.payRulesTitle', { name: set?.name ?? '' })
         }
-        description={users ? t('ruleSets.usedBy', { names: users }) : t('ruleSets.notUsed')}
+        description={set?.name === null ? t('payRules.description') : users ? t('ruleSets.usedBy', { names: users }) : t('ruleSets.notUsed')}
         actions={!variantId && <ByCategoryLink ruleSetId={ruleSetId!} />}
       />
-      <RequireAccess allowed={canViewPayRules}>{(me) => <PayRulesView me={me} ruleSetId={variantId ?? ruleSetId!} />}</RequireAccess>
+      <RequireAccess allowed={canViewPayRules}>{(me) => <PayRulesView me={me} ruleSetId={variantId ?? ruleSetId!} combination={Boolean(variantId)} />}</RequireAccess>
     </>
   );
 }
@@ -133,7 +133,7 @@ function ByCategoryLink({ ruleSetId }: { ruleSetId: string }) {
 type Editing = { from: YearMonth; fixedFrom: boolean; initial: Omit<PayRulesInput, 'payRoundingStep'> & { payRoundingStep?: string } | typeof NEW_PAY_RULES };
 
 /** The company default rules, or with ruleSetId that named set's. */
-function PayRulesView({ me, ruleSetId = null }: { me: Me; ruleSetId?: string | null }) {
+function PayRulesView({ me, ruleSetId = null, combination = false }: { me: Me; ruleSetId?: string | null; combination?: boolean }) {
   const { t } = useTranslation();
   const format = useFormat();
   const queryClient = useQueryClient();
@@ -256,10 +256,10 @@ function PayRulesView({ me, ruleSetId = null }: { me: Me; ruleSetId?: string | n
       <Card>
         <EmptyState
           icon={Scale}
-          title={ruleSetId ? t('ruleSets.rulesEmptyTitle') : t('payRules.emptyTitle')}
+          title={combination ? t('ruleSetCategories.combinationEmptyTitle') : ruleSetId ? t('ruleSets.rulesEmptyTitle') : t('payRules.emptyTitle')}
           description={
             ruleSetId
-              ? t('ruleSets.rulesEmptyDescription')
+              ? t(combination ? 'ruleSetCategories.combinationEmptyDescription' : 'ruleSets.rulesEmptyDescription')
               : canChange
                 ? t('payRules.emptyDescription')
                 : t('payRules.emptyDescriptionReadOnly')
