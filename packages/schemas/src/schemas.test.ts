@@ -23,7 +23,9 @@ import {
   updateDepartmentSchema,
   updateWorkerCategorySchema,
   workerCategorySchema,
-  ruleSetSplitSchema,
+  payCategoriesSchema,
+  companyRuleSetUseSchema,
+  payRoundingSchema,
   ruleSetVariantSchema,
   importMappingSchema,
   workerSchema,
@@ -136,11 +138,10 @@ describe('payRulesSchema', () => {
         TRAVEL: { paid: true, hoursPerDay: null },
       },
       travelPayMode: 'NONE',
-      payRoundingStep: '1000',
     });
   });
 
-  it('starts a new company with the decided defaults only', () => {
+  it('starts a new combination with the decided defaults only', () => {
     // Multipliers, normal hours and travel pay have no default: the admin must enter them.
     const result = payRulesSchema.safeParse(NEW_PAY_RULES);
     const paths = result.error?.issues.map((i) => i.path.join('.'));
@@ -159,11 +160,17 @@ describe('payRulesSchema', () => {
     expect(bad({ overtimeMultiplier: '-1' })).toEqual(['validation.decimalInvalid']);
     expect(bad({ holidayMultiplier: '100' })).toEqual(['validation.multiplierRange']);
     expect(bad({ restWeekdays: [1, 2, 3, 4, 5, 6, 7] })).toEqual(['validation.restWeekdaysAllWeek']);
-    expect(bad({ payRoundingStep: '0' })).toEqual(['validation.roundingStepRange']);
-    expect(payRulesSchema.parse({ ...valid, payRoundingStep: '1 000' }).payRoundingStep).toBe('1000');
     expect(bad({ absence: { ...valid.absence, SICK: { paid: true, hoursPerDay: '25' } } })).toEqual([
       'validation.hoursRange',
     ]);
+  });
+});
+
+describe('payRoundingSchema', () => {
+  it('takes a step above zero, written the way people write numbers', () => {
+    expect(payRoundingSchema.parse({ step: '1 000' })).toEqual({ step: '1000' });
+    expect(messages(payRoundingSchema.safeParse({ step: '0' }))).toEqual(['validation.roundingStepRange']);
+    expect(messages(payRoundingSchema.safeParse({ step: '' }))).toEqual(['validation.required']);
   });
 });
 
@@ -353,11 +360,13 @@ describe('worker categories', () => {
     ]);
   });
 
-  it('splits a rule set by at most two different categories, and a combination by one option of each', () => {
+  it('pays by one or two different categories, and a combination has one option of each', () => {
     const [a, b, c] = ['7c9e6679-7425-40de-944b-e07fc1f90ae7', '16fd2706-8baf-433b-82eb-8c7fada847da', '886313e1-3b8a-5372-9b90-0c9aee199e5d'];
-    expect(ruleSetSplitSchema.parse({ categoryIds: [] })).toEqual({ categoryIds: [] });
-    expect(messages(ruleSetSplitSchema.safeParse({ categoryIds: [a, b, c] }))).toEqual(['validation.twoCategoriesAtMost']);
-    expect(messages(ruleSetSplitSchema.safeParse({ categoryIds: [a, a] }))).toEqual(['validation.categoryTwice']);
+    expect(payCategoriesSchema.parse({ categoryIds: [a, b] })).toEqual({ categoryIds: [a, b] });
+    expect(messages(payCategoriesSchema.safeParse({ categoryIds: [] }))).toEqual(['validation.required']);
+    expect(messages(payCategoriesSchema.safeParse({ categoryIds: [a, b, c] }))).toEqual(['validation.twoCategoriesAtMost']);
+    expect(messages(payCategoriesSchema.safeParse({ categoryIds: [a, a] }))).toEqual(['validation.categoryTwice']);
+    expect(messages(companyRuleSetUseSchema.safeParse({ ruleSetId: null }))).toEqual(['validation.required']);
     expect(messages(ruleSetVariantSchema.safeParse({ optionIds: [] }))).toEqual(['validation.required']);
     expect(ruleSetVariantSchema.parse({ optionIds: [a, b] })).toEqual({ optionIds: [a, b] });
   });

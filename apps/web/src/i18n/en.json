@@ -38,7 +38,8 @@
     "workerCategories": "Worker categories",
     "ruleSets": "Rule sets",
     "travelRoutes": "Travel routes",
-    "travelAmounts": "Travel amounts"
+    "travelAmounts": "Travel amounts",
+    "activity": "Activity"
   },
   "settings": {
     "language": "Language",
@@ -527,19 +528,20 @@
       "nameTaken": "A category with this name already exists.",
       "optionTaken": "This category already has an option with this name.",
       "optionNotFound": "This option doesn’t exist.",
-      "inUse": "A rule set is split by this category now or from a later month. Remove that split first."
+      "inUse": "The company pays by this category now or from a later month. Choose other pay categories first."
     },
     "ruleSet": {
       "notFound": "This rule set doesn’t exist.",
       "nameTaken": "A rule set with this name already exists.",
       "inactive": "This rule set is switched off.",
-      "inUse": "A site or firm uses this rule set. Move them to another one first.",
-      "noRulesForMonth": "This rule set has no rules for that month. Set them up first.",
+      "inUse": "The company, a site or a firm uses this rule set. Choose another one for them first.",
+      "noRulesForMonth": "No combination of this month’s pay categories has rules in this rule set yet. Set them up first.",
       "useNotFound": "This choice no longer exists.",
-      "categoryNotSet": "These pay rules differ by a worker category that isn’t set for this worker. Set it on the worker first.",
-      "noCategoryRules": "These pay rules have no rules for this worker’s options this month. Add them under Rules by category.",
+      "categoryNotSet": "The company pays by a worker category that isn’t set for this worker. Set it on the worker first.",
+      "noCategoryRules": "This rule set has no rules for this worker’s options this month. Add them on the rule set’s page.",
       "variantExists": "This combination already has its rules.",
-      "splitNotFound": "This split doesn’t exist any more."
+      "noPayCategories": "The company hasn’t chosen the categories its pay rules go by for this month. Choose them on the Pay rules page.",
+      "notPayCategories": "These options aren’t a combination of the company’s pay categories. Choose the pay categories first."
     },
     "travelRoute": {
       "notFound": "This travel route doesn’t exist.",
@@ -550,13 +552,17 @@
     "travelAmount": {
       "notInMonth": "The worker wasn’t at this site in this month.",
       "unchanged": "This amount is already entered for this month."
+    },
+    "payCategories": {
+      "notFound": "This choice of pay categories no longer exists."
+    },
+    "payRounding": {
+      "notFound": "This rounding step no longer exists."
     }
   },
   "payRules": {
     "title": "Pay rules",
-    "description": "How hours, absences and travel are paid. Changes apply from a month you choose; earlier months keep their rules.",
-    "emptyTitle": "No pay rules yet",
-    "emptyDescription": "Payroll can't be calculated until the pay rules are set up. Some values, like the overtime multiplier, have no default: you enter them.",
+    "description": "How the company pays: the worker categories its pay rules go by, the rule set it uses, and the rounding step. Each applies from a month; earlier months keep theirs.",
     "emptyDescriptionReadOnly": "Payroll can't be calculated until an owner or administrator sets up the pay rules.",
     "setUp": "Set up pay rules",
     "inForce": "Rules for {{month}}",
@@ -624,12 +630,31 @@
     },
     "rounding": "Rounding",
     "roundingStep": "Round the amount to pay out to the nearest ({{currency}})",
-    "roundingHint": "The amount to pay out (pay plus bonuses, minus advances and deductions) is rounded once to the nearest multiple of this amount, halves up. It applies to the whole company, also at sites with their own rules. The difference is shown as its own line.",
+    "roundingHint": "The amount to pay out (pay plus bonuses, minus advances and deductions) is rounded once to the nearest multiple of this amount, halves up. It applies to the whole company, whatever the rule set. The difference is shown as its own line.",
     "confirmDelete": {
       "title": "Delete these rules?",
       "description": "The rules from {{month}} will be removed. From then on, the rules from {{previous}} will apply.",
       "descriptionNoPrevious": "The rules from {{month}} will be removed. From then on there will be no pay rules until new ones are set."
-    }
+    },
+    "since": "since {{month}}",
+    "categoriesTitle": "Pay categories",
+    "categoriesHint": "Every rule set has its own rules for each combination of these categories’ options, e.g. Direct / Indirect × Local / Foreign. A worker is paid by the rules of their own options.",
+    "categoriesMissing": "Not chosen: nobody can be paid",
+    "categoriesDialogDescription": "Choose one or two categories. Workers whose option isn’t set, and combinations without rules, can’t be paid until they are fixed.",
+    "categoriesFromHint": "From this month on, every rule set needs rules for the new combinations. Earlier months keep their categories. Locked months can’t be changed.",
+    "firstCategory": "Category",
+    "secondCategory": "Second category (optional)",
+    "chooseCategory": "Choose a category",
+    "noSecondCategory": "None",
+    "addCategoriesFirst": "Add worker categories first",
+    "confirmRemoveCategories": "The pay categories from {{month}} will be removed. Those months go back to the choice before it.",
+    "ruleSetTitle": "The company’s rule set",
+    "ruleSetHint": "Pays every placement whose firm and site have no rule set of their own.",
+    "ruleSetMissing": "Not chosen: only sites and firms with their own set are paid",
+    "roundingMissing": "Not set: nobody can be paid",
+    "confirmRemoveRounding": "The rounding step from {{month}} will be removed. Those months go back to the step before it.",
+    "changeChoice": "Change",
+    "inForceIn": "In force in {{month}}"
   },
   "holidays": {
     "title": "Holidays",
@@ -679,7 +704,6 @@
     }
   },
   "workingDays": {
-    "title": "Working days",
     "description": "Working days per month: calculated from the rest days and holidays, or set by hand. Hourly rates use the \"Used for pay\" column.",
     "calculated": "Calculated",
     "override": "Set by hand",
@@ -1098,14 +1122,15 @@
       "twoSources": "This month has both daily timesheet entries and monthly hours. Keep only one.",
       "placementWithoutHours": "No hours for {{site}} (from {{date}}).",
       "noRules": "No pay rules for this month: {{sites}}.",
-      "noCompanyRules": "The company’s pay rules for this month are missing. They hold the rounding step.",
       "totalsInvalid": "The monthly hours don’t fit the month (the pay rules may have changed):",
       "invalidHours": "The daily timesheet entries contradict each other.",
       "daysWithoutHours": "No hours for {{site}} ({{from}} – {{until}}).",
       "noSalaryInFirm": "No salary in {{firm}} for this month.",
       "adjustmentWithoutFirm": "An adjustment isn’t on any firm’s payslip. Cancel it and add it again with its firm.",
       "categoryNotSet": "The pay rules “{{rules}}” differ by {{categories}}, and it isn’t set for this worker.",
-      "noCategoryRules": "The pay rules “{{rules}}” have no rules for {{options}} this month."
+      "noCategoryRules": "The pay rules “{{rules}}” have no rules for {{options}} this month.",
+      "noRounding": "The company’s rounding step for this month is missing (Pay rules).",
+      "noPayCategories": "The company hasn’t chosen the categories its pay rules go by for this month, so “{{rules}}” can’t pay anyone."
     },
     "totalsProblems": {
       "NORMAL_ABOVE_DAYS_WORKED": "more normal hours than the working days worked × normal hours per day",
@@ -1541,7 +1566,7 @@
   },
   "ruleSets": {
     "title": "Rule sets",
-    "description": "Pay rules that several sites and firms share. A firm’s set comes before its site’s, and a site’s before the company’s rules.",
+    "description": "Pay rules, each with its own rules for every combination of the pay categories’ options. The company, sites and firms each choose one: a firm’s set comes before its site’s, and a site’s before the company’s.",
     "create": "Add rule set",
     "rename": "Rename",
     "deactivate": "Switch off",
@@ -1554,15 +1579,11 @@
     "usedByColumn": "Used by",
     "noRules": "No rules",
     "empty": "No rule sets yet",
-    "emptyDescription": "Add one if some sites or firms pay differently. The others stay on the company’s rules.",
+    "emptyDescription": "Add a rule set, give its combinations their rules, then choose it for the company on the Pay rules page.",
     "dialogDescription": "Use a name everyone understands, such as “6-day week”.",
-    "payRulesTitle": "Pay rules: {{name}}",
-    "workingDaysTitle": "Working days: {{name}}",
-    "workingDaysDescription": "Working days under this rule set. A change reaches everyone using it.",
-    "usedBy": "Used by: {{names}}. A change reaches all of them. Rounding stays the company’s.",
-    "notUsed": "Nobody uses it yet. Rounding stays the company’s.",
-    "rulesEmptyTitle": "This rule set has no rules yet",
-    "rulesEmptyDescription": "Set up its rules so sites and firms can choose it.",
+    "workingDaysDescription": "A change reaches everyone this rule set pays.",
+    "usedBy": "Used by: {{names}}. A change reaches all of them.",
+    "notUsed": "Nobody uses it yet.",
     "useTitle": "Pay rules: {{name}}",
     "useDescription": "Which rule set applies from the month you choose. Earlier months keep their rules.",
     "noneFirm": "No set of its own: the site’s or company’s rules",
@@ -1582,45 +1603,36 @@
     "confirmReactivate": {
       "title": "Switch this rule set on again?",
       "description": "“{{name}}” will be offered again."
-    }
+    },
+    "company": "The company",
+    "noneCompany": "No rule set chosen",
+    "chooseRuleSet": "Choose a rule set",
+    "useCompanyDescription": "The rule set that pays the company’s workers from the month you choose, where their firm and site have none of their own. Earlier months keep theirs."
   },
   "ruleSetCategories": {
-    "title": "Rules by category: {{name}}",
-    "description": "Pay the workers of these rules differently by their categories, e.g. Direct / Indirect × Local / Foreign. Each combination has its own full rules.",
-    "defaultName": "Company rules",
-    "link": "Rules by category",
-    "splitBy": "Split by",
-    "noSplit": "No split",
-    "splitSince": "Split by {{categories}} since {{month}}.",
-    "notSplit": "Not split by categories: everyone is paid by these rules.",
-    "changeSplit": "Change split",
-    "historyHint": "Each split applies from its month until the next one. Locked months keep theirs.",
-    "confirmRemove": "The split from {{month}} will be removed. Those months go back to the split before it.",
+    "title": "Rule set: {{name}}",
+    "link": "Combinations and rules",
     "combinationsTitle": "Combinations: {{categories}}",
     "combinationsHint": "Every combination has its rules.",
     "missing": "Combinations without rules: {{count}}. Their workers can’t be paid until rules are added.",
     "addRules": "Add rules",
-    "none": "None",
-    "splitDialogDescription": "Choose one or two categories, or none to stop splitting. Workers whose option isn’t set can’t be paid until it is.",
-    "fromHint": "Earlier months keep their split.",
-    "firstCategory": "Category",
-    "secondCategory": "Second category (optional)",
     "addRulesFor": "Rules for {{combination}}",
-    "copyDescription": "Start from an empty form, or copy rules and change what differs for this combination.",
+    "copyDescription": "Start from an empty form, or copy another combination’s rules and change what differs for this one.",
     "copyAndOpen": "Copy and open",
     "copied": "Copied. Now change what differs.",
     "combinationRulesTitle": "Pay rules: {{name}}, {{combination}}",
     "combinationWorkingDaysTitle": "Working days: {{name}}, {{combination}}",
     "startWith": "Start with",
     "emptyForm": "An empty form",
-    "copyCombination": "A copy of another combination",
-    "copyRuleSet": "A copy of a rule set’s rules",
     "copyMonthHint": "The rules in force in this month are copied, and apply from it.",
     "openForm": "Open the form",
     "sourceStartsLater": "These rules start only from {{month}}. Choose that month or a later one.",
     "sourceEmpty": "These rules have no versions yet. Choose other rules or an empty form.",
     "combinationEmptyTitle": "This combination has no rules yet",
-    "combinationEmptyDescription": "Set them up: its workers are paid by them."
+    "combinationEmptyDescription": "Set them up: the workers with these options are paid by them.",
+    "noPayCategoriesTitle": "The pay categories aren’t chosen yet",
+    "noPayCategoriesDescription": "Choose the worker categories the company pays by on the Pay rules page. Then each of their combinations gets its rules here.",
+    "copyFrom": "From “{{name}}”"
   },
   "travelRoutes": {
     "title": "Travel routes",
@@ -1671,5 +1683,230 @@
     "lockedHint": "The month is locked, so travel amounts can’t change.",
     "emptyTitle": "No workers this month",
     "emptyDescription": "Workers placed in the month are listed here."
+  },
+  "audit": {
+    "title": "Activity",
+    "description": "Every recorded change on the platform: who did what, in which company, and when.",
+    "history": "History",
+    "when": "When",
+    "action": "What",
+    "who": "Who",
+    "area": "Area",
+    "person": "Person",
+    "allCompanies": "All companies",
+    "everyone": "Everyone",
+    "allAreas": "All areas",
+    "from": "From",
+    "to": "To",
+    "showLogins": "Show sign-ins",
+    "clearFilters": "Clear filters",
+    "loadOlder": "Load older entries",
+    "system": "System",
+    "asUser": "{{admin}} as {{user}}",
+    "impersonated": "Logged in as the user",
+    "noCompany": "Platform",
+    "details": "Details",
+    "detailsFor": "Details: {{action}}",
+    "record": "Record",
+    "ip": "IP address",
+    "code": "Action code",
+    "noDetails": "No further details were recorded.",
+    "field": "Field",
+    "before": "Before",
+    "after": "After",
+    "value": "Value",
+    "blank": "empty",
+    "empty": "Nothing has been recorded yet.",
+    "unknownAction": "Older action ({{code}})",
+    "areas": {
+      "adjustment": "Adjustments",
+      "auth": "Sign-in and passwords",
+      "company": "Companies",
+      "department": "Departments",
+      "firm": "Firms",
+      "holiday": "Holidays",
+      "impersonation": "Logging in as a user",
+      "importMapping": "Import columns",
+      "member": "Company users",
+      "monthlyHours": "Monthly hours",
+      "payCategories": "Pay categories",
+      "payRounding": "Rounding",
+      "payRules": "Pay rules",
+      "period": "Month locks",
+      "plan": "Plans",
+      "platform": "Platform admins",
+      "ruleSet": "Rule sets",
+      "salary": "Salaries",
+      "shift": "Shifts",
+      "site": "Sites",
+      "team": "Teams",
+      "timesheetCodes": "Codes",
+      "timesheetEntry": "Timesheet hours",
+      "timesheetImport": "Hours imports",
+      "timesheetSettings": "Timesheet entry settings",
+      "travelAmount": "Travel amounts",
+      "travelRoute": "Travel routes",
+      "user": "Accounts",
+      "worker": "Workers",
+      "workerCategory": "Worker categories",
+      "workerImport": "Worker imports",
+      "workerShift": "Workers’ shifts",
+      "workingDays": "Working days"
+    },
+    "actions": {
+      "adjustment": {
+        "add": "Adjustment added",
+        "cancel": "Adjustment cancelled"
+      },
+      "auth": {
+        "login": "Signed in",
+        "passwordChanged": "Password changed",
+        "sessionRevoked": "Session signed out"
+      },
+      "company": {
+        "activate": "Company activated",
+        "create": "Company created",
+        "deactivate": "Company deactivated",
+        "departments": "Departments turned on or off",
+        "firms": "Firms turned on or off",
+        "payment": "Payment recorded",
+        "planChange": "Plan changed",
+        "update": "Company edited"
+      },
+      "department": {
+        "create": "Department created",
+        "update": "Department edited"
+      },
+      "firm": {
+        "create": "Firm created",
+        "update": "Firm edited"
+      },
+      "holiday": {
+        "create": "Holiday added",
+        "delete": "Holiday removed",
+        "update": "Holiday edited"
+      },
+      "impersonation": {
+        "end": "Stopped logging in as the user",
+        "start": "Logged in as the user"
+      },
+      "importMapping": {
+        "set": "Import columns saved"
+      },
+      "member": {
+        "add": "User added to the company",
+        "invitationAccepted": "Invitation accepted",
+        "invitationDeclined": "Invitation declined",
+        "invite": "User invited",
+        "passwordReset": "Password reset",
+        "update": "User’s role or access changed"
+      },
+      "monthlyHours": {
+        "add": "Monthly hours added"
+      },
+      "payCategories": {
+        "delete": "Pay categories choice removed",
+        "set": "Pay categories chosen"
+      },
+      "payRounding": {
+        "delete": "Rounding choice removed",
+        "set": "Rounding set"
+      },
+      "payRules": {
+        "delete": "Pay rules removed",
+        "set": "Pay rules set"
+      },
+      "period": {
+        "lock": "Month locked",
+        "unlock": "Month unlocked"
+      },
+      "plan": {
+        "create": "Plan created",
+        "update": "Plan edited"
+      },
+      "platform": {
+        "adminCreated": "Platform admin created",
+        "adminGranted": "Platform admin rights changed"
+      },
+      "ruleSet": {
+        "addVariant": "Combination rules added",
+        "create": "Rule set created",
+        "update": "Rule set edited",
+        "use": "Rule set chosen",
+        "useDelete": "Rule set choice removed"
+      },
+      "salary": {
+        "add": "Salary added"
+      },
+      "shift": {
+        "create": "Shift created",
+        "update": "Shift edited"
+      },
+      "site": {
+        "create": "Site created",
+        "staffAdd": "Staff assigned to the site",
+        "staffRemove": "Staff removed from the site",
+        "update": "Site edited"
+      },
+      "team": {
+        "create": "Team created",
+        "foremanAdd": "Foreman assigned to the team",
+        "foremanRemove": "Foreman removed from the team",
+        "update": "Team edited"
+      },
+      "timesheetCodes": {
+        "set": "Codes saved"
+      },
+      "timesheetEntry": {
+        "create": "Hours entered",
+        "delete": "Hours cleared",
+        "update": "Hours changed"
+      },
+      "timesheetImport": {
+        "create": "Hours imported",
+        "worker": "Imported hours replaced"
+      },
+      "timesheetSettings": {
+        "set": "Timesheet entry settings saved"
+      },
+      "travelAmount": {
+        "add": "Travel amount added"
+      },
+      "travelRoute": {
+        "create": "Travel route created",
+        "update": "Travel route edited"
+      },
+      "user": {
+        "create": "Account created",
+        "passwordReset": "Password reset",
+        "update": "Account edited"
+      },
+      "worker": {
+        "create": "Worker added",
+        "leave": "Worker left",
+        "place": "Worker placed",
+        "placementDepartment": "Placement department set",
+        "placementFirm": "Placement firm set",
+        "placementTravelRoute": "Placement travel route set",
+        "update": "Worker edited"
+      },
+      "workerCategory": {
+        "addOption": "Category option added",
+        "create": "Worker category created",
+        "update": "Worker category edited",
+        "updateOption": "Category option edited"
+      },
+      "workerImport": {
+        "create": "Workers imported"
+      },
+      "workerShift": {
+        "add": "Shift assigned",
+        "correct": "Shift corrected",
+        "remove": "Shift removed"
+      },
+      "workingDays": {
+        "override": "Working days overridden"
+      }
+    }
   }
 }

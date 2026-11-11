@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { CategoryOption, UpdateCategoryOption, UpdateWorkerCategory, WorkerCategory } from '@puantaj/schemas';
+import type { AuditAction, CategoryOption, UpdateCategoryOption, UpdateWorkerCategory, WorkerCategory } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
@@ -62,7 +62,7 @@ export class WorkerCategoriesService {
       if (input.name !== undefined && input.name.toLowerCase() !== before.name.toLowerCase()) {
         await this.assertNameFree(tx, companyId, input.name, id);
       }
-      if (input.isActive === false && before.isActive) await this.assertNotSplitBy(tx, auth, id);
+      if (input.isActive === false && before.isActive) await this.assertNotPayCategory(tx, auth, id);
       await tx.workerCategory.update({ where: { id }, data: input });
       await this.record(tx, auth, 'workerCategory.update', id, { changes: changesOf(before, input) });
     });
@@ -97,23 +97,18 @@ export class WorkerCategoriesService {
   }
 
   /**
-   * A category a rule set splits by now or from a later month can't be deactivated (AGENTS.md:
-   * Rule sets split by categories): each set's split of the current month, and all its later ones.
+   * A pay category of now or a later month can't be deactivated (AGENTS.md: Pay rule sets): the
+   * company's choice of the current month, and all its later ones.
    */
-  private async assertNotSplitBy(tx: Tx, auth: CompanyAuthContext, categoryId: string) {
+  private async assertNotPayCategory(tx: Tx, auth: CompanyAuthContext, categoryId: string) {
     const today = todayIn(auth.company.timezone);
     const now = monthIndex(Number(today.slice(0, 4)), Number(today.slice(5, 7)));
-    const splits = await tx.ruleSetSplit.findMany({
+    const choices = await tx.payCategoryChoice.findMany({
       where: { companyId: auth.company.id },
       orderBy: [{ fromYear: 'desc' }, { fromMonth: 'desc' }],
     });
-    const seen = new Set<string>();
-    const live = splits.filter((s) => {
-      if (monthIndex(s.fromYear, s.fromMonth) > now) return true;
-      if (seen.has(s.ruleSetId)) return false;
-      seen.add(s.ruleSetId);
-      return true;
-    });
+    const current = choices.find((c) => monthIndex(c.fromYear, c.fromMonth) <= now);
+    const live = choices.filter((c) => c === current || monthIndex(c.fromYear, c.fromMonth) > now);
     if (live.some((s) => s.firstCategoryId === categoryId || s.secondCategoryId === categoryId)) {
       throw conflict('workerCategory.inUse');
     }
@@ -141,7 +136,7 @@ export class WorkerCategoriesService {
     if (other) throw conflict('workerCategory.optionTaken');
   }
 
-  private record(tx: Tx, auth: CompanyAuthContext, action: string, id: string, data: Prisma.InputJsonObject) {
+  private record(tx: Tx, auth: CompanyAuthContext, action: AuditAction, id: string, data: Prisma.InputJsonObject) {
     return this.audit.record(
       { action, companyId: auth.company.id, auth, entityType: 'WorkerCategory', entityId: id, data },
       tx,

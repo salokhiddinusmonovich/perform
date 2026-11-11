@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma, Role } from '@prisma/client';
-import type { Site, Team, UpdateSite, UpdateTeam } from '@puantaj/schemas';
+import type { AuditAction, Site, Team, UpdateSite, UpdateTeam } from '@puantaj/schemas';
 import { AuditService, diff } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { USABLE_MEMBERSHIP } from '../auth/memberships';
@@ -286,7 +286,7 @@ export class SitesService {
     assertManagesSite(auth, siteId);
   }
 
-  private record(tx: Tx, auth: CompanyAuthContext, action: string, entityType: string, entityId: string, data: Prisma.InputJsonObject) {
+  private record(tx: Tx, auth: CompanyAuthContext, action: AuditAction, entityType: string, entityId: string, data: Prisma.InputJsonObject) {
     return this.audit.record(
       { action, companyId: auth.company.id, auth, entityType, entityId, data },
       tx,

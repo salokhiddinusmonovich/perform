@@ -38,7 +38,8 @@
     "workerCategories": "Ishchi toifalari",
     "ruleSets": "Qoidalar toʻplamlari",
     "travelRoutes": "Yoʻnalishlar",
-    "travelAmounts": "Yoʻl haqi summalari"
+    "travelAmounts": "Yoʻl haqi summalari",
+    "activity": "Faoliyat"
   },
   "settings": {
     "language": "Til",
@@ -527,19 +528,20 @@
       "nameTaken": "Bunday nomli toifa allaqachon bor.",
       "optionTaken": "Bu toifada bunday nomli variant allaqachon bor.",
       "optionNotFound": "Bunday variant yoʻq.",
-      "inUse": "Qoidalar toʻplami hozir yoki keyingi oydan shu toifa boʻyicha boʻlingan. Avval oʻsha boʻlinishni olib tashlang."
+      "inUse": "Kompaniya hozir yoki keyingi oydan shu toifaga qarab toʻlaydi. Avval boshqa toʻlov toifalarini tanlang."
     },
     "ruleSet": {
       "notFound": "Bunday qoidalar toʻplami yoʻq.",
       "nameTaken": "Bu nomli qoidalar toʻplami allaqachon bor.",
       "inactive": "Bu qoidalar toʻplami oʻchirilgan.",
-      "inUse": "Bu qoidalar toʻplami obyekt yoki firmada ishlatilmoqda. Avval ularni boshqasiga oʻtkazing.",
-      "noRulesForMonth": "Bu toʻplamda shu oy uchun qoidalar yoʻq. Avval ularni kiriting.",
+      "inUse": "Bu qoidalar toʻplamini kompaniya, obyekt yoki firma ishlatmoqda. Avval ular uchun boshqasini tanlang.",
+      "noRulesForMonth": "Bu toʻplamda shu oyning toʻlov toifalari birikmalaridan hech biriga hali qoidalar kiritilmagan. Avval ularni kiriting.",
       "useNotFound": "Bu tanlov endi mavjud emas.",
-      "categoryNotSet": "Bu toʻlov qoidalari ishchida belgilanmagan toifaga qarab farq qiladi. Avval uni ishchida belgilang.",
-      "noCategoryRules": "Bu toʻlov qoidalarida bu oy ishchining variantlari uchun qoidalar yoʻq. Ularni “Toifalar boʻyicha qoidalar”da qoʻshing.",
+      "categoryNotSet": "Kompaniya ishchida belgilanmagan toifaga qarab toʻlaydi. Avval uni ishchida belgilang.",
+      "noCategoryRules": "Bu toʻplamda bu oy ishchining variantlari uchun qoidalar yoʻq. Ularni toʻplam sahifasida qoʻshing.",
       "variantExists": "Bu birikmaning qoidalari allaqachon bor.",
-      "splitNotFound": "Bu boʻlinish endi mavjud emas."
+      "noPayCategories": "Kompaniya shu oy uchun toʻlov qoidalari qaysi toifalarga qarab boʻlinishini tanlamagan. Ularni “Ish haqi qoidalari” sahifasida tanlang.",
+      "notPayCategories": "Bu variantlar kompaniya toʻlov toifalarining birikmasi emas. Avval toʻlov toifalarini tanlang."
     },
     "travelRoute": {
       "notFound": "Bunday yoʻnalish yoʻq.",
@@ -550,13 +552,17 @@
     "travelAmount": {
       "notInMonth": "Ishchi bu oyda bu obyektda boʻlmagan.",
       "unchanged": "Bu summa bu oy uchun allaqachon kiritilgan."
+    },
+    "payCategories": {
+      "notFound": "Toʻlov toifalarining bu tanlovi endi mavjud emas."
+    },
+    "payRounding": {
+      "notFound": "Bu yaxlitlash qadami endi mavjud emas."
     }
   },
   "payRules": {
     "title": "Ish haqi qoidalari",
-    "description": "Soatlar, ishga chiqilmagan kunlar va yoʻl haqi qanday toʻlanadi. Oʻzgarishlar siz tanlagan oydan boshlab amal qiladi; oldingi oylar oʻz qoidalarida qoladi.",
-    "emptyTitle": "Ish haqi qoidalari hali kiritilmagan",
-    "emptyDescription": "Qoidalar kiritilmaguncha ish haqini hisoblab boʻlmaydi. Baʼzi qiymatlar, masalan qoʻshimcha ish koeffitsiyenti, oldindan berilmaydi: ularni siz kiritasiz.",
+    "description": "Kompaniya qanday toʻlaydi: toʻlov qoidalari qaysi ishchi toifalariga qarab boʻlinadi, qaysi qoidalar toʻplami ishlatiladi va yaxlitlash qadami. Har biri tanlangan oydan amal qiladi; oldingi oylar oʻzinikini saqlaydi.",
     "emptyDescriptionReadOnly": "Egasi yoki administrator qoidalarni kiritmaguncha ish haqini hisoblab boʻlmaydi.",
     "setUp": "Qoidalarni kiritish",
     "inForce": "Qoidalar: {{month}}",
@@ -624,12 +630,31 @@
     },
     "rounding": "Yaxlitlash",
     "roundingStep": "Toʻlanadigan summani yaxlitlash qadami ({{currency}})",
-    "roundingHint": "Toʻlanadigan summa (ish haqi va mukofotlar, ayirilgan avans va ushlanmalar) bir marta shu summaning eng yaqin karralisiga yaxlitlanadi (yarmi yuqoriga). Butun kompaniyaga, oʻz qoidalari bor obyektlarga ham amal qiladi. Farq alohida qatorda koʻrsatiladi.",
+    "roundingHint": "Toʻlanadigan summa (ish haqi va mukofotlar, ayirilgan avans va ushlanmalar) bir marta shu summaning eng yaqin karralisiga yaxlitlanadi (yarmi yuqoriga). Qaysi qoidalar toʻplami boʻlishidan qatʼi nazar, butun kompaniyaga amal qiladi. Farq alohida qatorda koʻrsatiladi.",
     "confirmDelete": {
       "title": "Bu qoidalarni oʻchirasizmi?",
       "description": "Boshlanishi {{month}} boʻlgan qoidalar oʻchiriladi. Oʻsha oydan boshlab oldingi qoidalar (boshlanishi: {{previous}}) amal qiladi.",
       "descriptionNoPrevious": "Boshlanishi {{month}} boʻlgan qoidalar oʻchiriladi. Oʻsha oydan boshlab yangi qoidalar kiritilmaguncha ish haqi qoidalari boʻlmaydi."
-    }
+    },
+    "since": "{{month}} dan",
+    "categoriesTitle": "Toʻlov toifalari",
+    "categoriesHint": "Har bir qoidalar toʻplamida shu toifalar variantlarining har bir birikmasi uchun oʻz qoidalari bor, masalan Direkt / Endirekt × Mahalliy / Xorijiy. Ishchiga oʻz variantlarining qoidalari boʻyicha toʻlanadi.",
+    "categoriesMissing": "Tanlanmagan: hech kimga toʻlab boʻlmaydi",
+    "categoriesDialogDescription": "Bitta yoki ikkita toifani tanlang. Varianti belgilanmagan ishchilarga va qoidasiz birikmalarga ular tuzatilmaguncha toʻlab boʻlmaydi.",
+    "categoriesFromHint": "Shu oydan boshlab har bir qoidalar toʻplamiga yangi birikmalar uchun qoidalar kerak. Oldingi oylar oʻz toifalarini saqlaydi. Yopilgan oylarni oʻzgartirib boʻlmaydi.",
+    "firstCategory": "Toifa",
+    "secondCategory": "Ikkinchi toifa (ixtiyoriy)",
+    "chooseCategory": "Toifani tanlang",
+    "noSecondCategory": "Yoʻq",
+    "addCategoriesFirst": "Avval ishchi toifalarini qoʻshing",
+    "confirmRemoveCategories": "{{month}} dan boshlangan toʻlov toifalari olib tashlanadi. Bu oylar oldingi tanlovga qaytadi.",
+    "ruleSetTitle": "Kompaniyaning qoidalar toʻplami",
+    "ruleSetHint": "Firmasi va obyektida oʻz toʻplami boʻlmagan har bir joylashuvga shu toʻplam boʻyicha toʻlanadi.",
+    "ruleSetMissing": "Tanlanmagan: faqat oʻz toʻplami bor obyekt va firmalarga toʻlanadi",
+    "roundingMissing": "Belgilanmagan: hech kimga toʻlab boʻlmaydi",
+    "confirmRemoveRounding": "{{month}} dan boshlangan yaxlitlash qadami olib tashlanadi. Bu oylar oldingi qadamga qaytadi.",
+    "changeChoice": "Oʻzgartirish",
+    "inForceIn": "Amalda: {{month}}"
   },
   "holidays": {
     "title": "Bayram kunlari",
@@ -679,7 +704,6 @@
     }
   },
   "workingDays": {
-    "title": "Ish kunlari",
     "description": "Har oydagi ish kunlari: dam olish va bayram kunlaridan hisoblanadi yoki qoʻlda belgilanadi. Soatlik stavka \"Hisobda ishlatiladi\" ustunidagi qiymatdan olinadi.",
     "calculated": "Hisoblangan",
     "override": "Qoʻlda belgilangan",
@@ -1098,14 +1122,15 @@
       "twoSources": "Bu oy uchun ham kunlik tabel, ham oylik soatlar bor. Bittasini qoldiring.",
       "placementWithoutHours": "{{site}} ({{date}} dan) uchun soatlar kiritilmagan.",
       "noRules": "Bu oy uchun toʻlov qoidalari yoʻq: {{sites}}.",
-      "noCompanyRules": "Kompaniyaning shu oy uchun toʻlov qoidalari yoʻq. Yaxlitlash qadami ularda.",
       "totalsInvalid": "Oylik soatlar oyga mos kelmaydi (balki toʻlov qoidalari oʻzgargandir):",
       "invalidHours": "Kunlik tabel yozuvlari bir-biriga zid.",
       "daysWithoutHours": "{{site}} uchun soatlar yoʻq ({{from}} – {{until}}).",
       "noSalaryInFirm": "Bu oy uchun {{firm}} firmasida oylik yoʻq.",
       "adjustmentWithoutFirm": "Tuzatma hech qaysi firma hisob-varagʻiga tushmayapti. Uni bekor qilib, firmasi bilan qayta qoʻshing.",
       "categoryNotSet": "“{{rules}}” toʻlov qoidalari “{{categories}}” toifasiga qarab farq qiladi, bu ishchida esa u belgilanmagan.",
-      "noCategoryRules": "“{{rules}}” toʻlov qoidalarida bu oy “{{options}}” uchun qoidalar yoʻq."
+      "noCategoryRules": "“{{rules}}” toʻlov qoidalarida bu oy “{{options}}” uchun qoidalar yoʻq.",
+      "noRounding": "Kompaniyaning shu oy uchun yaxlitlash qadami yoʻq (Ish haqi qoidalari).",
+      "noPayCategories": "Kompaniya shu oy uchun toʻlov qoidalari qaysi toifalarga qarab boʻlinishini tanlamagan, shuning uchun “{{rules}}” hech kimga toʻlay olmaydi."
     },
     "totalsProblems": {
       "NORMAL_ABOVE_DAYS_WORKED": "normal soatlar ishlangan ish kunlari × kunlik normadan koʻp",
@@ -1541,7 +1566,7 @@
   },
   "ruleSets": {
     "title": "Qoidalar toʻplamlari",
-    "description": "Bir nechta obyekt va firma birga ishlatadigan ish haqi qoidalari. Firma toʻplami obyektnikidan, obyektniki kompaniyanikidan ustun.",
+    "description": "Toʻlov qoidalari: har birida toʻlov toifalari variantlarining har bir birikmasi uchun oʻz qoidalari bor. Kompaniya, obyektlar va firmalar har biri bittasini tanlaydi: firma toʻplami obyektnikidan, obyektniki kompaniyanikidan ustun.",
     "create": "Toʻplam qoʻshish",
     "rename": "Nomini oʻzgartirish",
     "deactivate": "Oʻchirish",
@@ -1554,15 +1579,11 @@
     "usedByColumn": "Kim ishlatadi",
     "noRules": "Qoidalar yoʻq",
     "empty": "Hali toʻplamlar yoʻq",
-    "emptyDescription": "Ayrim obyekt yoki firmalar boshqacha toʻlasa, toʻplam qoʻshing. Qolganlari kompaniya qoidalari boʻyicha ishlaydi.",
+    "emptyDescription": "Qoidalar toʻplamini qoʻshing, uning birikmalariga qoidalar kiriting, soʻng uni “Ish haqi qoidalari” sahifasida kompaniya uchun tanlang.",
     "dialogDescription": "Nomni hamma tushunadigan qilib yozing, masalan “6 kunlik hafta”.",
-    "payRulesTitle": "Ish haqi qoidalari: {{name}}",
-    "workingDaysTitle": "Ish kunlari: {{name}}",
-    "workingDaysDescription": "Bu qoidalar toʻplami boʻyicha ish kunlari. Oʻzgarish uni ishlatadigan hammaga taʼsir qiladi.",
-    "usedBy": "Ishlatadi: {{names}}. Oʻzgarish ularning hammasiga taʼsir qiladi. Yaxlitlash kompaniyaniki boʻlib qoladi.",
-    "notUsed": "Hali hech kim ishlatmaydi. Yaxlitlash kompaniyaniki boʻlib qoladi.",
-    "rulesEmptyTitle": "Bu toʻplamda hali qoidalar yoʻq",
-    "rulesEmptyDescription": "Obyekt yoki firma tanlashi uchun avval qoidalarni kiriting.",
+    "workingDaysDescription": "Oʻzgarish shu toʻplam boʻyicha toʻlanadigan hammaga taʼsir qiladi.",
+    "usedBy": "Ishlatadi: {{names}}. Oʻzgarish ularning hammasiga taʼsir qiladi.",
+    "notUsed": "Hali hech kim ishlatmaydi.",
     "useTitle": "Ish haqi qoidalari: {{name}}",
     "useDescription": "Qaysi qoidalar toʻplami tanlangan oydan boshlab qoʻllanadi. Oldingi oylar oʻz qoidalarida qoladi.",
     "noneFirm": "Oʻz toʻplami yoʻq: obyekt yoki kompaniya qoidalari",
@@ -1582,45 +1603,36 @@
     "confirmReactivate": {
       "title": "Toʻplam qayta yoqilsinmi?",
       "description": "“{{name}}” yana tanlash uchun taklif qilinadi."
-    }
+    },
+    "company": "Kompaniya",
+    "noneCompany": "Qoidalar toʻplami tanlanmagan",
+    "chooseRuleSet": "Qoidalar toʻplamini tanlang",
+    "useCompanyDescription": "Firmasi va obyektida oʻz toʻplami boʻlmagan ishchilarga tanlangan oydan boshlab shu toʻplam boʻyicha toʻlanadi. Oldingi oylar oʻzinikini saqlaydi."
   },
   "ruleSetCategories": {
-    "title": "Toifalar boʻyicha qoidalar: {{name}}",
-    "description": "Bu qoidalardagi ishchilarga toifalariga qarab har xil toʻlang, masalan Direkt / Endirekt × Mahalliy / Xorijiy. Har bir birikmaning oʻz toʻliq qoidalari bor.",
-    "defaultName": "Kompaniya qoidalari",
-    "link": "Toifalar boʻyicha qoidalar",
-    "splitBy": "Boʻlinish",
-    "noSplit": "Boʻlinmagan",
-    "splitSince": "{{month}} dan “{{categories}}” boʻyicha boʻlingan.",
-    "notSplit": "Toifalar boʻyicha boʻlinmagan: hammaga shu qoidalar boʻyicha toʻlanadi.",
-    "changeSplit": "Boʻlinishni oʻzgartirish",
-    "historyHint": "Har bir boʻlinish oʻz oyidan keyingisigacha amal qiladi. Yopilgan oylar oʻzinikini saqlaydi.",
-    "confirmRemove": "{{month}} dan boshlangan boʻlinish olib tashlanadi. Bu oylar oldingi boʻlinishga qaytadi.",
+    "title": "Qoidalar toʻplami: {{name}}",
+    "link": "Birikmalar va qoidalar",
     "combinationsTitle": "Birikmalar: {{categories}}",
     "combinationsHint": "Har bir birikmaning qoidalari bor.",
     "missing": "Qoidasiz birikmalar: {{count}}. Qoidalar qoʻshilmaguncha ularning ishchilariga toʻlab boʻlmaydi.",
     "addRules": "Qoidalar qoʻshish",
-    "none": "Yoʻq",
-    "splitDialogDescription": "Bitta yoki ikkita toifani tanlang yoki boʻlinishni toʻxtatish uchun “Yoʻq”ni tanlang. Varianti belgilanmagan ishchilarga u belgilanmaguncha toʻlab boʻlmaydi.",
-    "fromHint": "Oldingi oylar oʻz boʻlinishini saqlaydi.",
-    "firstCategory": "Toifa",
-    "secondCategory": "Ikkinchi toifa (ixtiyoriy)",
     "addRulesFor": "“{{combination}}” uchun qoidalar",
-    "copyDescription": "Boʻsh shakldan boshlang yoki qoidalardan nusxa olib, bu birikma uchun farq qiladiganini oʻzgartiring.",
+    "copyDescription": "Boʻsh shakldan boshlang yoki boshqa birikmaning qoidalaridan nusxa olib, bunisi uchun farq qiladiganini oʻzgartiring.",
     "copyAndOpen": "Nusxa olish va ochish",
     "copied": "Nusxa olindi. Endi farq qiladiganini oʻzgartiring.",
     "combinationRulesTitle": "Toʻlov qoidalari: {{name}}, {{combination}}",
     "combinationWorkingDaysTitle": "Ish kunlari: {{name}}, {{combination}}",
     "startWith": "Nimadan boshlash",
     "emptyForm": "Boʻsh shakl",
-    "copyCombination": "Boshqa birikmaning nusxasi",
-    "copyRuleSet": "Qoidalar toʻplamining nusxasi",
     "copyMonthHint": "Shu oyda amal qiladigan qoidalardan nusxa olinadi va shu oydan amal qiladi.",
     "openForm": "Shaklni ochish",
     "sourceStartsLater": "Bu qoidalar faqat {{month}} dan amal qiladi. Oʻsha yoki keyingi oyni tanlang.",
     "sourceEmpty": "Bu qoidalarning hali versiyasi yoʻq. Boshqa qoidalarni yoki boʻsh shaklni tanlang.",
     "combinationEmptyTitle": "Bu birikmaning hali qoidalari yoʻq",
-    "combinationEmptyDescription": "Ularni kiriting: bu birikmadagi ishchilarga shu qoidalar boʻyicha toʻlanadi."
+    "combinationEmptyDescription": "Ularni kiriting: shu variantlardagi ishchilarga ular boʻyicha toʻlanadi.",
+    "noPayCategoriesTitle": "Toʻlov toifalari hali tanlanmagan",
+    "noPayCategoriesDescription": "Kompaniya qaysi ishchi toifalariga qarab toʻlashini “Ish haqi qoidalari” sahifasida tanlang. Soʻng ularning har bir birikmasiga shu yerda qoidalar kiritiladi.",
+    "copyFrom": "“{{name}}” dan"
   },
   "travelRoutes": {
     "title": "Yoʻnalishlar",
@@ -1671,5 +1683,230 @@
     "lockedHint": "Oy yopilgan, yoʻl haqi summalarini oʻzgartirib boʻlmaydi.",
     "emptyTitle": "Bu oy ishchilar yoʻq",
     "emptyDescription": "Oyda joylashtirilgan ishchilar shu yerda koʻrinadi."
+  },
+  "audit": {
+    "title": "Faoliyat",
+    "description": "Platformadagi barcha qayd etilgan oʻzgarishlar: kim, qaysi kompaniyada, nima qildi va qachon.",
+    "history": "Tarix",
+    "when": "Qachon",
+    "action": "Nima",
+    "who": "Kim",
+    "area": "Boʻlim",
+    "person": "Shaxs",
+    "allCompanies": "Barcha kompaniyalar",
+    "everyone": "Hamma",
+    "allAreas": "Barcha boʻlimlar",
+    "from": "Dan",
+    "to": "Gacha",
+    "showLogins": "Kirishlarni koʻrsatish",
+    "clearFilters": "Filtrlarni tozalash",
+    "loadOlder": "Avvalgilarini yuklash",
+    "system": "Tizim",
+    "asUser": "{{admin}} — {{user}} nomidan",
+    "impersonated": "Foydalanuvchi sifatida kirilgan",
+    "noCompany": "Platforma",
+    "details": "Batafsil",
+    "detailsFor": "Batafsil: {{action}}",
+    "record": "Yozuv",
+    "ip": "IP manzil",
+    "code": "Amal kodi",
+    "noDetails": "Boshqa maʼlumot qayd etilmagan.",
+    "field": "Maydon",
+    "before": "Avval",
+    "after": "Keyin",
+    "value": "Qiymat",
+    "blank": "boʻsh",
+    "empty": "Hali hech narsa qayd etilmagan.",
+    "unknownAction": "Eski amal ({{code}})",
+    "areas": {
+      "adjustment": "Qoʻshimcha va ushlanmalar",
+      "auth": "Kirish va parollar",
+      "company": "Kompaniyalar",
+      "department": "Boʻlimlar",
+      "firm": "Firmalar",
+      "holiday": "Bayram kunlari",
+      "impersonation": "Foydalanuvchi sifatida kirish",
+      "importMapping": "Import ustunlari",
+      "member": "Kompaniya foydalanuvchilari",
+      "monthlyHours": "Oylik soatlar",
+      "payCategories": "Ish haqi toifalari",
+      "payRounding": "Yaxlitlash",
+      "payRules": "Ish haqi qoidalari",
+      "period": "Oylarni yopish",
+      "plan": "Tariflar",
+      "platform": "Platforma administratorlari",
+      "ruleSet": "Qoidalar toʻplamlari",
+      "salary": "Oylik maoshlar",
+      "shift": "Smenalar",
+      "site": "Obyektlar",
+      "team": "Brigadalar",
+      "timesheetCodes": "Kodlar",
+      "timesheetEntry": "Tabel soatlari",
+      "timesheetImport": "Soatlar importi",
+      "timesheetSettings": "Tabel kiritish sozlamalari",
+      "travelAmount": "Yoʻl haqi summalari",
+      "travelRoute": "Yoʻnalishlar",
+      "user": "Hisoblar",
+      "worker": "Ishchilar",
+      "workerCategory": "Ishchi toifalari",
+      "workerImport": "Ishchilar importi",
+      "workerShift": "Ishchilar smenalari",
+      "workingDays": "Ish kunlari"
+    },
+    "actions": {
+      "adjustment": {
+        "add": "Qoʻshimcha yoki ushlanma qoʻshildi",
+        "cancel": "Qoʻshimcha yoki ushlanma bekor qilindi"
+      },
+      "auth": {
+        "login": "Tizimga kirdi",
+        "passwordChanged": "Parol oʻzgartirildi",
+        "sessionRevoked": "Seans yopildi"
+      },
+      "company": {
+        "activate": "Kompaniya faollashtirildi",
+        "create": "Kompaniya yaratildi",
+        "deactivate": "Kompaniya oʻchirildi",
+        "departments": "Boʻlimlar yoqildi yoki oʻchirildi",
+        "firms": "Firmalar yoqildi yoki oʻchirildi",
+        "payment": "Toʻlov qayd etildi",
+        "planChange": "Tarif oʻzgartirildi",
+        "update": "Kompaniya tahrirlandi"
+      },
+      "department": {
+        "create": "Boʻlim yaratildi",
+        "update": "Boʻlim tahrirlandi"
+      },
+      "firm": {
+        "create": "Firma yaratildi",
+        "update": "Firma tahrirlandi"
+      },
+      "holiday": {
+        "create": "Bayram kuni qoʻshildi",
+        "delete": "Bayram kuni olib tashlandi",
+        "update": "Bayram kuni tahrirlandi"
+      },
+      "impersonation": {
+        "end": "Foydalanuvchi sifatida kirish tugatildi",
+        "start": "Foydalanuvchi sifatida kirildi"
+      },
+      "importMapping": {
+        "set": "Import ustunlari saqlandi"
+      },
+      "member": {
+        "add": "Foydalanuvchi kompaniyaga qoʻshildi",
+        "invitationAccepted": "Taklif qabul qilindi",
+        "invitationDeclined": "Taklif rad etildi",
+        "invite": "Foydalanuvchi taklif qilindi",
+        "passwordReset": "Parol tiklandi",
+        "update": "Foydalanuvchi roli yoki kirishi oʻzgartirildi"
+      },
+      "monthlyHours": {
+        "add": "Oylik soatlar qoʻshildi"
+      },
+      "payCategories": {
+        "delete": "Ish haqi toifalari tanlovi olib tashlandi",
+        "set": "Ish haqi toifalari tanlandi"
+      },
+      "payRounding": {
+        "delete": "Yaxlitlash tanlovi olib tashlandi",
+        "set": "Yaxlitlash belgilandi"
+      },
+      "payRules": {
+        "delete": "Ish haqi qoidalari olib tashlandi",
+        "set": "Ish haqi qoidalari belgilandi"
+      },
+      "period": {
+        "lock": "Oy yopildi",
+        "unlock": "Oy ochildi"
+      },
+      "plan": {
+        "create": "Tarif yaratildi",
+        "update": "Tarif tahrirlandi"
+      },
+      "platform": {
+        "adminCreated": "Platforma administratori yaratildi",
+        "adminGranted": "Platforma administratori huquqlari oʻzgartirildi"
+      },
+      "ruleSet": {
+        "addVariant": "Kombinatsiya qoidalari qoʻshildi",
+        "create": "Qoidalar toʻplami yaratildi",
+        "update": "Qoidalar toʻplami tahrirlandi",
+        "use": "Qoidalar toʻplami tanlandi",
+        "useDelete": "Qoidalar toʻplami tanlovi olib tashlandi"
+      },
+      "salary": {
+        "add": "Oylik maosh qoʻshildi"
+      },
+      "shift": {
+        "create": "Smena yaratildi",
+        "update": "Smena tahrirlandi"
+      },
+      "site": {
+        "create": "Obyekt yaratildi",
+        "staffAdd": "Xodim obyektga biriktirildi",
+        "staffRemove": "Xodim obyektdan olib tashlandi",
+        "update": "Obyekt tahrirlandi"
+      },
+      "team": {
+        "create": "Brigada yaratildi",
+        "foremanAdd": "Brigadir brigadaga biriktirildi",
+        "foremanRemove": "Brigadir brigadadan olib tashlandi",
+        "update": "Brigada tahrirlandi"
+      },
+      "timesheetCodes": {
+        "set": "Kodlar saqlandi"
+      },
+      "timesheetEntry": {
+        "create": "Soatlar kiritildi",
+        "delete": "Soatlar tozalandi",
+        "update": "Soatlar oʻzgartirildi"
+      },
+      "timesheetImport": {
+        "create": "Soatlar import qilindi",
+        "worker": "Import qilingan soatlar almashtirildi"
+      },
+      "timesheetSettings": {
+        "set": "Tabel kiritish sozlamalari saqlandi"
+      },
+      "travelAmount": {
+        "add": "Yoʻl haqi summasi qoʻshildi"
+      },
+      "travelRoute": {
+        "create": "Yoʻnalish yaratildi",
+        "update": "Yoʻnalish tahrirlandi"
+      },
+      "user": {
+        "create": "Hisob yaratildi",
+        "passwordReset": "Parol tiklandi",
+        "update": "Hisob tahrirlandi"
+      },
+      "worker": {
+        "create": "Ishchi qoʻshildi",
+        "leave": "Ishchi ishdan ketdi",
+        "place": "Ishchi joylashtirildi",
+        "placementDepartment": "Joylashuv boʻlimi belgilandi",
+        "placementFirm": "Joylashuv firmasi belgilandi",
+        "placementTravelRoute": "Joylashuv yoʻnalishi belgilandi",
+        "update": "Ishchi tahrirlandi"
+      },
+      "workerCategory": {
+        "addOption": "Toifa varianti qoʻshildi",
+        "create": "Ishchi toifasi yaratildi",
+        "update": "Ishchi toifasi tahrirlandi",
+        "updateOption": "Toifa varianti tahrirlandi"
+      },
+      "workerImport": {
+        "create": "Ishchilar import qilindi"
+      },
+      "workerShift": {
+        "add": "Smena belgilandi",
+        "correct": "Smena tuzatildi",
+        "remove": "Smena olib tashlandi"
+      },
+      "workingDays": {
+        "override": "Ish kunlari qoʻlda oʻzgartirildi"
+      }
+    }
   }
 }

@@ -7,7 +7,7 @@ import {
   type CalendarDay,
   type WorkingDays,
 } from '@puantaj/payroll';
-import type { PayRules, RuleSet, RuleSetPayRules, UpdateRuleSet } from '@puantaj/schemas';
+import type { PayRules, RuleSet, UpdateRuleSet } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
@@ -16,49 +16,45 @@ import { findFirm } from '../organisation/firms.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertMonthsOpen, monthIndex } from './months';
 
-export interface PayRulesVersionView<R = PayRules> {
+export interface PayRulesVersionView {
   fromYear: number;
   fromMonth: number;
-  rules: R;
+  rules: PayRules;
   setBy: { fullName: string };
   setAt: Date;
 }
 
-/**
- * Rules as stored. Rounding is company-wide (AGENTS.md: Pay model): only the company
- * default rule set has a rounding step; named rule sets have null.
- */
-export type StoredPayRules = Omit<PayRules, 'payRoundingStep'> & { payRoundingStep: string | null };
-
-/** One month of a rule set, with everything its working days were worked out from. */
+/** One month of a combination's rules, with everything its working days were worked out from. */
 export interface MonthRules {
   /** The version that applies, or null when no rules are set for the month yet. */
-  rules: { fromYear: number; fromMonth: number; settings: StoredPayRules } | null;
+  rules: { fromYear: number; fromMonth: number; settings: PayRules } | null;
   calendar: CalendarDay[] | null;
   workingDays: WorkingDays | null;
 }
 
 type Db = Prisma.TransactionClient | PrismaService;
 
-/** Why a split rule set can't pay a worker (AGENTS.md: Rule sets split by categories). */
+/** Why a rule set can't pay a worker (AGENTS.md: Pay rule sets). */
 export type CombinationProblem =
-  /** The worker's option is not set in these categories the set splits by */
+  /** The company hasn't chosen its pay categories for the month */
+  | { code: 'noPayCategories' }
+  /** The worker's option is not set in these pay categories */
   | { code: 'categoryNotSet'; categoryIds: string[] }
-  /** The worker's combination (option ids in the split's order) has no rules for the month */
+  /** The worker's combination (option ids in the pay categories' order) has no rules for the month */
   | { code: 'noCategoryRules'; optionIds: string[] };
 
 /** The rules that pay a worker's placement in a month (rulesForWorker). */
 export interface WorkerRules {
-  /** The set the site or firm uses, or the default; null before any rules are saved */
-  ruleSet: { id: string; name: string | null } | null;
-  /** The combination whose rules apply, when the set splits by categories */
+  /** The set the firm, site or company uses; null while none is chosen */
+  ruleSet: { id: string; name: string } | null;
+  /** The combination whose rules apply */
   combination: { id: string; optionIds: string[] } | null;
-  /** The month of the rules that apply: the combination's, else the set's own */
+  /** The month of the combination's rules */
   month: MonthRules | null;
   problem: CombinationProblem | null;
 }
 
-/** A split rule set's combination of a split's options, by its option ids. */
+/** A rule set's combination of the pay categories' options, by its option ids. */
 export interface RuleSetVariantView {
   id: string;
   /** One per category */
@@ -67,11 +63,19 @@ export interface RuleSetVariantView {
   rulesFrom: { year: number; month: number } | null;
 }
 
-export interface RuleSetSplitView {
+export interface PayCategoriesView {
   fromYear: number;
   fromMonth: number;
-  /** Empty: no split from this month */
+  /** One or two, in their order */
   categoryIds: string[];
+  setBy: { fullName: string };
+  setAt: Date;
+}
+
+export interface PayRoundingView {
+  fromYear: number;
+  fromMonth: number;
+  step: string;
   setBy: { fullName: string };
   setAt: Date;
 }
@@ -79,33 +83,45 @@ export interface RuleSetSplitView {
 /** A combination's key: its option ids sorted, so the order they are given in doesn't matter. */
 const variantKey = (optionIds: readonly string[]) => [...optionIds].sort().join(',');
 
-/** Who uses a rule set: a site or a firm. */
-export type RuleSetOwner = { siteId: string } | { firmId: string };
+/** Who chooses a rule set: the company, a site or a firm. */
+export type RuleSetOwner = { company: true } | { siteId: string } | { firmId: string };
+
+/** The company's choices are the uses without a site or firm. */
+const ownerWhere = (owner: RuleSetOwner) => ('company' in owner ? { siteId: null, firmId: null } : owner);
+
+type Month = { year: number; month: number };
+/** Rows versioned by month that apply in a month: from it or earlier. */
+const upTo = (year: number, month: number) => ({ OR: [{ fromYear: { lt: year } }, { fromYear: year, fromMonth: { lte: month } }] });
+/** Rows versioned by month that start after a month. */
+const after = (from: Month) => ({ OR: [{ fromYear: { gt: from.year } }, { fromYear: from.year, fromMonth: { gt: from.month } }] });
+const NEWEST_FIRST = [{ fromYear: 'desc' }, { fromMonth: 'desc' }] satisfies Prisma.PayrollRulesOrderByWithRelationInput[];
+const OLDEST_FIRST = [{ fromYear: 'asc' }, { fromMonth: 'asc' }] satisfies Prisma.PayrollRulesOrderByWithRelationInput[];
+/** The month a version starts in, or null: the first month a version at `from` doesn't reach. */
+const startOf = (row: { fromYear: number; fromMonth: number } | null) => row && { year: row.fromYear, month: row.fromMonth };
 
 export interface RuleSetView {
   id: string;
-  /** null: the company default */
-  name: string | null;
+  name: string;
   isActive: boolean;
-  /** The first month it has rules for, or null before they are set. */
+  /** The first month one of its combinations has rules for, or null before they are set. */
   rulesFrom: { year: number; month: number } | null;
-  /** Sites and firms using it now, or from a later month. */
-  usedBy: { sites: { id: string; name: string }[]; firms: { id: string; name: string }[] };
+  /** The company, sites and firms using it now, or from a later month. */
+  usedBy: { company: boolean; sites: { id: string; name: string }[]; firms: { id: string; name: string }[] };
 }
 
 export interface RuleSetUseView {
   fromYear: number;
   fromMonth: number;
-  /** null: none of its own from this month */
+  /** null: none of its own from this month (sites and firms only) */
   ruleSet: { id: string; name: string | null } | null;
   setBy: { fullName: string };
   setAt: Date;
 }
 
-
 /**
- * Pay rules, versioned by month: a version applies from its month until the next one. The
- * company default rule set, and the named ones sites and firms share (AGENTS.md: Pay rule sets).
+ * Pay rules (AGENTS.md: Pay rule sets): named rule sets that the company, sites and firms
+ * choose from a month, each with rules per combination of the company's pay categories,
+ * versioned by month. Also the company's pay categories and rounding step.
  */
 @Injectable()
 export class PayRulesService {
@@ -114,56 +130,37 @@ export class PayRulesService {
     private readonly audit: AuditService,
   ) {}
 
-  /** The company default rule set, or null before its rules are first saved. */
-  defaultRuleSet(companyId: string, db: Db = this.prisma) {
-    return db.payrollRuleSet.findFirst({ where: { companyId, name: null, parentId: null } });
-  }
-
-  /** A named rule set of the company; the default has its own routes and isn't one. */
-  async namedRuleSet(companyId: string, id: string, db: Db = this.prisma) {
-    const set = await db.payrollRuleSet.findFirst({ where: { id, companyId, name: { not: null } } });
-    if (!set) throw notFound('ruleSet.notFound');
-    return set;
-  }
-
-  /** The company default or a named set, which sites and firms choose and which split by categories; not a combination. */
-  async topRuleSet(companyId: string, id: string, db: Db = this.prisma) {
+  /** A rule set of the company, which the company, sites and firms choose; not a combination. */
+  async ruleSet(companyId: string, id: string, db: Db = this.prisma) {
     const set = await db.payrollRuleSet.findFirst({ where: { id, companyId, parentId: null } });
     if (!set) throw notFound('ruleSet.notFound');
     return set;
   }
 
-  /**
-   * A set whose rules and working days are kept through its id: a named set or a combination
-   * of a split set. The company default has its own routes, which hold the rounding step.
-   */
-  private async ruleSetById(companyId: string, id: string, db: Db) {
-    const set = await db.payrollRuleSet.findFirst({
-      where: { id, companyId, OR: [{ name: { not: null } }, { parentId: { not: null } }] },
-    });
+  /** A combination of a rule set, which holds rules and working-days overrides. */
+  async combination(companyId: string, id: string, db: Db = this.prisma) {
+    const set = await db.payrollRuleSet.findFirst({ where: { id, companyId, parentId: { not: null } } });
     if (!set) throw notFound('ruleSet.notFound');
     return set;
   }
 
-  /** ruleSetById() for routes outside this service (working days). */
-  editableRuleSet(companyId: string, id: string, db: Db = this.prisma) {
-    return this.ruleSetById(companyId, id, db);
+  /** The company's pay categories in a month, in their order; empty before it has chosen them. */
+  async payCategoriesIn(companyId: string, year: number, month: number, db: Db = this.prisma): Promise<string[]> {
+    const row = await db.payCategoryChoice.findFirst({ where: { companyId, ...upTo(year, month) }, orderBy: NEWEST_FIRST });
+    return row ? [row.firstCategoryId, row.secondCategoryId].filter((id) => id !== null) : [];
   }
 
-  /** The categories a top rule set splits by in a month (AGENTS.md: Rule sets split by categories), in their order; empty: no split. */
-  async splitIn(companyId: string, ruleSetId: string, year: number, month: number, db: Db = this.prisma): Promise<string[]> {
-    const row = await db.ruleSetSplit.findFirst({
-      where: { companyId, ruleSetId, OR: [{ fromYear: { lt: year } }, { fromYear: year, fromMonth: { lte: month } }] },
-      orderBy: [{ fromYear: 'desc' }, { fromMonth: 'desc' }],
-    });
-    return row ? [row.firstCategoryId, row.secondCategoryId].filter((id) => id !== null) : [];
+  /** The company's rounding step of the amount to pay out in a month, or null before it is set. */
+  async roundingIn(companyId: string, year: number, month: number, db: Db = this.prisma): Promise<string | null> {
+    const row = await db.payRounding.findFirst({ where: { companyId, ...upTo(year, month) }, orderBy: NEWEST_FIRST });
+    return row?.step.toString() ?? null;
   }
 
   /**
    * The rules that pay a worker's placement in a month: the placement's rule set
-   * (ruleSetForPlacement), and inside it the combination of the worker's options when the set
-   * splits by categories. `options` are the worker's options of the month by category id.
-   * Payroll and checks use only this, so they always agree.
+   * (ruleSetForPlacement), and inside it the combination of the worker's options in the pay
+   * categories. `options` are the worker's options of the month by category id. Payroll and
+   * checks use only this, so they always agree.
    */
   async rulesForWorker(
     companyId: string,
@@ -177,10 +174,7 @@ export class PayRulesService {
     return this.rulesInSet(companyId, set, options, year, month, db);
   }
 
-  /**
-   * The rules of a set for a worker with these options in a month: the set's own while it
-   * isn't split, else only its combination's (a split set needs no rules of its own).
-   */
+  /** The rules of a set for a worker with these options in a month: its combination's. */
   async rulesInSet(
     companyId: string,
     set: { id: string; name: string | null } | null,
@@ -190,46 +184,57 @@ export class PayRulesService {
     db: Db = this.prisma,
   ): Promise<WorkerRules> {
     if (!set) return { ruleSet: null, combination: null, month: null, problem: null };
-    const ruleSet = { id: set.id, name: set.name };
-    const split = await this.splitIn(companyId, set.id, year, month, db);
-    if (split.length === 0) return { ruleSet, combination: null, month: await this.month(companyId, set.id, year, month, db), problem: null };
-    const notSet = split.filter((c) => !options[c]);
+    const ruleSet = { id: set.id, name: set.name! };
+    const categories = await this.payCategoriesIn(companyId, year, month, db);
+    if (categories.length === 0) return { ruleSet, combination: null, month: null, problem: { code: 'noPayCategories' } };
+    const notSet = categories.filter((c) => !options[c]);
     if (notSet.length > 0) return { ruleSet, combination: null, month: null, problem: { code: 'categoryNotSet', categoryIds: notSet } };
-    const optionIds = split.map((c) => options[c]);
+    const optionIds = categories.map((c) => options[c]);
     const variant = await db.payrollRuleSet.findFirst({ where: { companyId, parentId: set.id, variantKey: variantKey(optionIds) } });
     const rules = variant && (await this.month(companyId, variant.id, year, month, db));
     if (!variant || !rules?.rules) return { ruleSet, combination: null, month: null, problem: { code: 'noCategoryRules', optionIds } };
     return { ruleSet, combination: { id: variant.id, optionIds }, month: rules, problem: null };
   }
 
-  /** Whether a set has rules for a month: its own, or, while split, a combination's. Sites and firms choose it only then. */
-  async hasRulesFor(companyId: string, ruleSetId: string, from: { year: number; month: number }, db: Db = this.prisma): Promise<boolean> {
-    const upTo = { OR: [{ fromYear: { lt: from.year } }, { fromYear: from.year, fromMonth: { lte: from.month } }] };
-    const split = await this.splitIn(companyId, ruleSetId, from.year, from.month, db);
+  /**
+   * Whether a set has rules for a month: a combination of the month's pay categories has them.
+   * The company, sites and firms choose it only then.
+   */
+  async hasRulesFor(companyId: string, ruleSetId: string, from: Month, db: Db = this.prisma): Promise<boolean> {
+    const categories = await this.payCategoriesIn(companyId, from.year, from.month, db);
+    if (categories.length === 0) return false;
     const version = await db.payrollRules.findFirst({
-      where: { companyId, ...upTo, ...(split.length > 0 ? { ruleSet: { parentId: ruleSetId } } : { ruleSetId }) },
+      where: {
+        companyId,
+        ...upTo(from.year, from.month),
+        ruleSet: {
+          parentId: ruleSetId,
+          variantOptions: { every: { categoryId: { in: categories } } },
+          AND: categories.map((categoryId) => ({ variantOptions: { some: { categoryId } } })),
+        },
+      },
     });
     return version !== null;
   }
 
-  /** The rule set a site or firm itself uses in a month, or null when it has none of its own. */
+  /** The rule set the company, a site or a firm itself chose for a month, or null when it has none of its own. */
   private async usedIn(companyId: string, owner: RuleSetOwner, year: number, month: number, db: Db) {
     const use = await db.ruleSetUse.findFirst({
-      where: { companyId, ...owner, OR: [{ fromYear: { lt: year } }, { fromYear: year, fromMonth: { lte: month } }] },
-      orderBy: [{ fromYear: 'desc' }, { fromMonth: 'desc' }],
+      where: { companyId, ...ownerWhere(owner), ...upTo(year, month) },
+      orderBy: NEWEST_FIRST,
       include: { ruleSet: true },
     });
     return use?.ruleSet ?? null;
   }
 
-  /** The rule set that applies at a site in a month: the one it uses, or the default. null before any rules are saved. */
+  /** The rule set that applies at a site in a month: its own, else the company's. null while none is chosen. */
   async ruleSetForSite(companyId: string, siteId: string, year: number, month: number, db: Db = this.prisma) {
-    return (await this.usedIn(companyId, { siteId }, year, month, db)) ?? this.defaultRuleSet(companyId, db);
+    return (await this.usedIn(companyId, { siteId }, year, month, db)) ?? this.usedIn(companyId, { company: true }, year, month, db);
   }
 
   /**
    * The rule set of a placement in a month (AGENTS.md: Pay rule sets): its firm's, else its
-   * site's, else the default. Pass firmId null while the company doesn't use firms. Payroll
+   * site's, else the company's. Pass firmId null while the company doesn't use firms. Payroll
    * and checks use only this.
    */
   async ruleSetForPlacement(
@@ -248,7 +253,9 @@ export class PayRulesService {
     const [sets, uses] = await Promise.all([
       this.prisma.payrollRuleSet.findMany({
         where: { companyId, parentId: null },
-        include: { versions: { select: { fromYear: true, fromMonth: true }, orderBy: [{ fromYear: 'asc' }, { fromMonth: 'asc' }], take: 1 } },
+        include: {
+          variants: { select: { versions: { select: { fromYear: true, fromMonth: true }, orderBy: OLDEST_FIRST, take: 1 } } },
+        },
         orderBy: { name: 'asc' },
       }),
       this.prisma.ruleSetUse.findMany({
@@ -259,13 +266,16 @@ export class PayRulesService {
     const live = liveUses(uses, currentMonth(auth));
     return sets.map((set) => {
       const own = live.filter((u) => u.ruleSetId === set.id);
-      const first = set.versions[0];
+      const first = set.variants
+        .flatMap((v) => v.versions)
+        .sort((x, y) => monthIndex(x.fromYear, x.fromMonth) - monthIndex(y.fromYear, y.fromMonth))[0];
       return {
         id: set.id,
-        name: set.name,
+        name: set.name!,
         isActive: set.isActive,
         rulesFrom: first ? { year: first.fromYear, month: first.fromMonth } : null,
         usedBy: {
+          company: own.some((u) => !u.siteId && !u.firmId),
           sites: unique(own.flatMap((u) => (u.site ? [u.site] : []))),
           firms: unique(own.flatMap((u) => (u.firm ? [u.firm] : []))),
         },
@@ -289,7 +299,7 @@ export class PayRulesService {
   async updateRuleSet(auth: CompanyAuthContext, id: string, input: UpdateRuleSet): Promise<void> {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
-      const before = await this.namedRuleSet(companyId, id, tx);
+      const before = await this.ruleSet(companyId, id, tx);
       if (input.name !== undefined && input.name.toLowerCase() !== before.name!.toLowerCase()) {
         await this.assertNameFree(tx, companyId, input.name, id);
       }
@@ -312,33 +322,36 @@ export class PayRulesService {
     });
   }
 
-  /** The rule sets a site or firm has used, newest first. */
+  /** The rule sets the company, a site or a firm has chosen, newest first. */
   async listUses(companyId: string, owner: RuleSetOwner): Promise<RuleSetUseView[]> {
     await this.assertOwner(this.prisma, companyId, owner);
     const rows = await this.prisma.ruleSetUse.findMany({
-      where: { companyId, ...owner },
+      where: { companyId, ...ownerWhere(owner) },
       include: { ruleSet: { select: { id: true, name: true } }, setBy: { select: { fullName: true } } },
-      orderBy: [{ fromYear: 'desc' }, { fromMonth: 'desc' }],
+      orderBy: NEWEST_FIRST,
     });
     return rows.map((u) => ({ fromYear: u.fromYear, fromMonth: u.fromMonth, ruleSet: u.ruleSet, setBy: u.setBy, setAt: u.setAt }));
   }
 
-  /** Chooses the rule set a site or firm uses from a month on, until its next choice. */
-  async setUse(auth: CompanyAuthContext, owner: RuleSetOwner, from: { year: number; month: number }, ruleSetId: string | null): Promise<void> {
+  /**
+   * Chooses the rule set the company, a site or a firm uses from a month on, until its next
+   * choice. null (sites and firms only): none of its own.
+   */
+  async setUse(auth: CompanyAuthContext, owner: RuleSetOwner, from: Month, ruleSetId: string | null): Promise<void> {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
       await this.assertOwner(tx, companyId, owner);
       await assertMonthsOpen(tx, companyId, from, await this.nextUseStart(tx, companyId, owner, from));
       if (ruleSetId) {
-        const set = await this.namedRuleSet(companyId, ruleSetId, tx);
+        const set = await this.ruleSet(companyId, ruleSetId, tx);
         if (!set.isActive) throw conflict('ruleSet.inactive');
         if (!(await this.hasRulesFor(companyId, ruleSetId, from, tx))) throw conflict('ruleSet.noRulesForMonth');
       }
-      const before = await tx.ruleSetUse.findFirst({ where: { companyId, ...owner, fromYear: from.year, fromMonth: from.month } });
+      const before = await tx.ruleSetUse.findFirst({ where: { companyId, ...ownerWhere(owner), fromYear: from.year, fromMonth: from.month } });
       const data = { ruleSetId, setById: auth.user.id, setAt: new Date() };
       const row = before
         ? await tx.ruleSetUse.update({ where: { id: before.id }, data })
-        : await tx.ruleSetUse.create({ data: { companyId, ...owner, fromYear: from.year, fromMonth: from.month, ...data } });
+        : await tx.ruleSetUse.create({ data: { companyId, ...ownerWhere(owner), fromYear: from.year, fromMonth: from.month, ...data } });
       await this.audit.record(
         {
           action: 'ruleSet.use',
@@ -354,11 +367,11 @@ export class PayRulesService {
   }
 
   /** Removes a choice: its months go back to the choice before it. */
-  async removeUse(auth: CompanyAuthContext, owner: RuleSetOwner, from: { year: number; month: number }): Promise<void> {
+  async removeUse(auth: CompanyAuthContext, owner: RuleSetOwner, from: Month): Promise<void> {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
       await this.assertOwner(tx, companyId, owner);
-      const row = await tx.ruleSetUse.findFirst({ where: { companyId, ...owner, fromYear: from.year, fromMonth: from.month } });
+      const row = await tx.ruleSetUse.findFirst({ where: { companyId, ...ownerWhere(owner), fromYear: from.year, fromMonth: from.month } });
       if (!row) throw notFound('ruleSet.useNotFound');
       await assertMonthsOpen(tx, companyId, from, await this.nextUseStart(tx, companyId, owner, from));
       await tx.ruleSetUse.delete({ where: { id: row.id } });
@@ -376,13 +389,12 @@ export class PayRulesService {
     });
   }
 
-  /** The categories a set has split by, newest first (AGENTS.md: Rule sets split by categories). */
-  async listSplits(companyId: string, ruleSetId: string): Promise<RuleSetSplitView[]> {
-    const set = await this.topRuleSet(companyId, ruleSetId);
-    const rows = await this.prisma.ruleSetSplit.findMany({
-      where: { companyId, ruleSetId: set.id },
+  /** The company's pay categories, newest first (AGENTS.md: Pay rule sets). */
+  async listPayCategories(companyId: string): Promise<PayCategoriesView[]> {
+    const rows = await this.prisma.payCategoryChoice.findMany({
+      where: { companyId },
       include: { setBy: { select: { fullName: true } } },
-      orderBy: [{ fromYear: 'desc' }, { fromMonth: 'desc' }],
+      orderBy: NEWEST_FIRST,
     });
     return rows.map((r) => ({
       fromYear: r.fromYear,
@@ -393,43 +405,34 @@ export class PayRulesService {
     }));
   }
 
-  /**
-   * Chooses the categories a set splits by from a month on, until its next choice; none: no
-   * split. A closed category can't be chosen anew.
-   */
-  async setSplit(auth: CompanyAuthContext, ruleSetId: string, from: { year: number; month: number }, categoryIds: readonly string[]): Promise<void> {
+  /** Chooses the company's pay categories from a month on, until its next choice. A closed category can't be chosen anew. */
+  async setPayCategories(auth: CompanyAuthContext, from: Month, categoryIds: readonly string[]): Promise<void> {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
-      const set = await this.topRuleSet(companyId, ruleSetId, tx);
-      await assertMonthsOpen(tx, companyId, from, await this.nextSplitStart(tx, set.id, from));
+      const next = await tx.payCategoryChoice.findFirst({ where: { companyId, ...after(from) }, orderBy: OLDEST_FIRST });
+      await assertMonthsOpen(tx, companyId, from, startOf(next));
       const categories = await tx.workerCategory.findMany({ where: { companyId, id: { in: [...categoryIds] } } });
       for (const id of categoryIds) {
         const category = categories.find((c) => c.id === id);
         if (!category) throw notFound('workerCategory.notFound');
         if (!category.isActive) throw conflict('workerCategory.inactive');
       }
-      const key = { ruleSetId_fromYear_fromMonth: { ruleSetId: set.id, fromYear: from.year, fromMonth: from.month } };
-      const before = await tx.ruleSetSplit.findUnique({ where: key });
-      const data = {
-        firstCategoryId: categoryIds[0] ?? null,
-        secondCategoryId: categoryIds[1] ?? null,
-        setById: auth.user.id,
-        setAt: new Date(),
-      };
-      const row = await tx.ruleSetSplit.upsert({
+      const key = { companyId_fromYear_fromMonth: { companyId, fromYear: from.year, fromMonth: from.month } };
+      const before = await tx.payCategoryChoice.findUnique({ where: key });
+      const data = { firstCategoryId: categoryIds[0], secondCategoryId: categoryIds[1] ?? null, setById: auth.user.id, setAt: new Date() };
+      const row = await tx.payCategoryChoice.upsert({
         where: key,
-        create: { companyId, ruleSetId: set.id, fromYear: from.year, fromMonth: from.month, ...data },
+        create: { companyId, fromYear: from.year, fromMonth: from.month, ...data },
         update: data,
       });
       await this.audit.record(
         {
-          action: 'ruleSet.split',
+          action: 'payCategories.set',
           companyId,
           auth,
-          entityType: 'RuleSetSplit',
+          entityType: 'PayCategoryChoice',
           entityId: row.id,
           data: {
-            ruleSetId: set.id,
             fromYear: from.year,
             fromMonth: from.month,
             from: before ? [before.firstCategoryId, before.secondCategoryId].filter((id) => id !== null) : null,
@@ -441,65 +444,127 @@ export class PayRulesService {
     });
   }
 
-  /** Removes a split choice: its months go back to the choice before it. */
-  async removeSplit(auth: CompanyAuthContext, ruleSetId: string, from: { year: number; month: number }): Promise<void> {
+  /** Removes a choice of pay categories: its months go back to the choice before it. */
+  async removePayCategories(auth: CompanyAuthContext, from: Month): Promise<void> {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
-      const set = await this.topRuleSet(companyId, ruleSetId, tx);
-      const key = { ruleSetId_fromYear_fromMonth: { ruleSetId: set.id, fromYear: from.year, fromMonth: from.month } };
-      const row = await tx.ruleSetSplit.findUnique({ where: key });
-      if (!row) throw notFound('ruleSet.splitNotFound');
-      await assertMonthsOpen(tx, companyId, from, await this.nextSplitStart(tx, set.id, from));
-      await tx.ruleSetSplit.delete({ where: key });
+      const key = { companyId_fromYear_fromMonth: { companyId, fromYear: from.year, fromMonth: from.month } };
+      const row = await tx.payCategoryChoice.findUnique({ where: key });
+      if (!row) throw notFound('payCategories.notFound');
+      const next = await tx.payCategoryChoice.findFirst({ where: { companyId, ...after(from) }, orderBy: OLDEST_FIRST });
+      await assertMonthsOpen(tx, companyId, from, startOf(next));
+      await tx.payCategoryChoice.delete({ where: key });
       await this.audit.record(
         {
-          action: 'ruleSet.splitDelete',
+          action: 'payCategories.delete',
           companyId,
           auth,
-          entityType: 'RuleSetSplit',
+          entityType: 'PayCategoryChoice',
           entityId: row.id,
-          data: {
-            ruleSetId: set.id,
-            fromYear: from.year,
-            fromMonth: from.month,
-            from: [row.firstCategoryId, row.secondCategoryId].filter((id) => id !== null),
-          },
+          data: { fromYear: from.year, fromMonth: from.month, from: [row.firstCategoryId, row.secondCategoryId].filter((id) => id !== null) },
         },
         tx,
       );
     });
   }
 
-  /** A split set's combinations that have been added, each with its options. */
+  /** The company's rounding steps, newest first (AGENTS.md: Pay model). */
+  async listRounding(companyId: string): Promise<PayRoundingView[]> {
+    const rows = await this.prisma.payRounding.findMany({
+      where: { companyId },
+      include: { setBy: { select: { fullName: true } } },
+      orderBy: NEWEST_FIRST,
+    });
+    return rows.map((r) => ({ fromYear: r.fromYear, fromMonth: r.fromMonth, step: r.step.toString(), setBy: r.setBy, setAt: r.setAt }));
+  }
+
+  /** Sets the rounding step from a month on, until its next row, replacing that month's if any. */
+  async setRounding(auth: CompanyAuthContext, from: Month, step: string): Promise<void> {
+    const companyId = auth.company.id;
+    await this.prisma.$transaction(async (tx) => {
+      const next = await tx.payRounding.findFirst({ where: { companyId, ...after(from) }, orderBy: OLDEST_FIRST });
+      await assertMonthsOpen(tx, companyId, from, startOf(next));
+      const key = { companyId_fromYear_fromMonth: { companyId, fromYear: from.year, fromMonth: from.month } };
+      const before = await tx.payRounding.findUnique({ where: key });
+      const data = { step, setById: auth.user.id, setAt: new Date() };
+      const row = await tx.payRounding.upsert({
+        where: key,
+        create: { companyId, fromYear: from.year, fromMonth: from.month, ...data },
+        update: data,
+      });
+      await this.audit.record(
+        {
+          action: 'payRounding.set',
+          companyId,
+          auth,
+          entityType: 'PayRounding',
+          entityId: row.id,
+          data: { fromYear: from.year, fromMonth: from.month, from: before?.step.toString() ?? null, to: step },
+        },
+        tx,
+      );
+    });
+  }
+
+  /** Removes a rounding step: its months go back to the one before it. */
+  async removeRounding(auth: CompanyAuthContext, from: Month): Promise<void> {
+    const companyId = auth.company.id;
+    await this.prisma.$transaction(async (tx) => {
+      const key = { companyId_fromYear_fromMonth: { companyId, fromYear: from.year, fromMonth: from.month } };
+      const row = await tx.payRounding.findUnique({ where: key });
+      if (!row) throw notFound('payRounding.notFound');
+      const next = await tx.payRounding.findFirst({ where: { companyId, ...after(from) }, orderBy: OLDEST_FIRST });
+      await assertMonthsOpen(tx, companyId, from, startOf(next));
+      await tx.payRounding.delete({ where: key });
+      await this.audit.record(
+        {
+          action: 'payRounding.delete',
+          companyId,
+          auth,
+          entityType: 'PayRounding',
+          entityId: row.id,
+          data: { fromYear: from.year, fromMonth: from.month, from: row.step.toString() },
+        },
+        tx,
+      );
+    });
+  }
+
+  /** A set's combinations that have been added, each with its options. */
   async listVariants(companyId: string, ruleSetId: string): Promise<RuleSetVariantView[]> {
-    const set = await this.topRuleSet(companyId, ruleSetId);
+    const set = await this.ruleSet(companyId, ruleSetId);
     const rows = await this.prisma.payrollRuleSet.findMany({
       where: { companyId, parentId: set.id },
       include: {
         variantOptions: { select: { categoryId: true, optionId: true } },
-        versions: { select: { fromYear: true, fromMonth: true }, orderBy: [{ fromYear: 'asc' }, { fromMonth: 'asc' }], take: 1 },
+        versions: { select: { fromYear: true, fromMonth: true }, orderBy: OLDEST_FIRST, take: 1 },
       },
       orderBy: { createdAt: 'asc' },
     });
     return rows.map((r) => ({
       id: r.id,
       options: r.variantOptions,
-      rulesFrom: r.versions[0] ? { year: r.versions[0].fromYear, month: r.versions[0].fromMonth } : null,
+      rulesFrom: startOf(r.versions[0] ?? null),
     }));
   }
 
   /**
-   * Adds a combination of a set: one option of each of one or two categories. Its rules are
-   * then saved like a named set's (setNamed), starting as a copy the person chooses.
+   * Adds a combination of a set: one option of each of the company's pay categories (of any
+   * month). Its rules are then saved with setRules, starting as a copy the person chooses.
    */
   async createVariant(auth: CompanyAuthContext, ruleSetId: string, optionIds: readonly string[]): Promise<{ id: string }> {
     const companyId = auth.company.id;
     return this.prisma.$transaction(async (tx) => {
-      const set = await this.topRuleSet(companyId, ruleSetId, tx);
+      const set = await this.ruleSet(companyId, ruleSetId, tx);
       const options = await tx.workerCategoryOption.findMany({ where: { companyId, id: { in: [...optionIds] } } });
       if (options.length !== optionIds.length) throw notFound('workerCategory.optionNotFound');
       if (new Set(options.map((o) => o.categoryId)).size !== options.length) {
         throw badRequest('validation', { issues: [{ path: 'optionIds', message: 'validation.categoryTwice' }] });
+      }
+      const categories = variantKey(options.map((o) => o.categoryId));
+      const choices = await tx.payCategoryChoice.findMany({ where: { companyId } });
+      if (!choices.some((c) => variantKey([c.firstCategoryId, c.secondCategoryId].filter((id) => id !== null)) === categories)) {
+        throw conflict('ruleSet.notPayCategories');
       }
       const key = variantKey(optionIds);
       if (await tx.payrollRuleSet.findFirst({ where: { companyId, parentId: set.id, variantKey: key } })) {
@@ -524,81 +589,27 @@ export class PayRulesService {
     });
   }
 
-  /** Start of the set's split choice after `from`, i.e. the first month a choice at `from` doesn't reach. */
-  private async nextSplitStart(db: Db, ruleSetId: string, from: { year: number; month: number }) {
-    const next = await db.ruleSetSplit.findFirst({
-      where: { ruleSetId, OR: [{ fromYear: { gt: from.year } }, { fromYear: from.year, fromMonth: { gt: from.month } }] },
-      orderBy: [{ fromYear: 'asc' }, { fromMonth: 'asc' }],
-    });
-    return next && { year: next.fromYear, month: next.fromMonth };
-  }
-
-  private async assertOwner(db: Db, companyId: string, owner: RuleSetOwner) {
-    if ('firmId' in owner) {
-      await findFirm(db, companyId, owner.firmId, owner.firmId);
-    } else if (!(await db.site.findFirst({ where: { id: owner.siteId, companyId } }))) {
-      throw notFound('site.notFound');
-    }
-  }
-
-  /** Start of the owner's choice after `from`, i.e. the first month a choice at `from` doesn't reach. */
-  private async nextUseStart(db: Db, companyId: string, owner: RuleSetOwner, from: { year: number; month: number }) {
-    const next = await db.ruleSetUse.findFirst({
-      where: { companyId, ...owner, OR: [{ fromYear: { gt: from.year } }, { fromYear: from.year, fromMonth: { gt: from.month } }] },
-      orderBy: [{ fromYear: 'asc' }, { fromMonth: 'asc' }],
-    });
-    return next && { year: next.fromYear, month: next.fromMonth };
-  }
-
-  /** Names are unique in the company, ignoring case (also a unique index). */
-  private async assertNameFree(db: Db, companyId: string, name: string, exceptId: string | null) {
-    const other = await db.payrollRuleSet.findFirst({
-      where: { companyId, name: { equals: name, mode: 'insensitive' }, NOT: exceptId ? { id: exceptId } : undefined },
-    });
-    if (other) throw conflict('ruleSet.nameTaken');
-  }
-
-  async list(companyId: string): Promise<PayRulesVersionView[]> {
-    const set = await this.defaultRuleSet(companyId);
-    if (!set) return [];
+  /** A combination's rules, newest first. */
+  async listRules(companyId: string, combinationId: string): Promise<PayRulesVersionView[]> {
+    const set = await this.combination(companyId, combinationId);
     const rows = await this.prisma.payrollRules.findMany({
       where: { companyId, ruleSetId: set.id },
       include: { setBy: { select: { fullName: true } } },
-      orderBy: [{ fromYear: 'desc' }, { fromMonth: 'desc' }],
+      orderBy: NEWEST_FIRST,
     });
-    return rows.map((row) => ({
-      fromYear: row.fromYear,
-      fromMonth: row.fromMonth,
-      rules: defaultRules(row),
-      setBy: row.setBy,
-      setAt: row.setAt,
-    }));
+    return rows.map((row) => ({ fromYear: row.fromYear, fromMonth: row.fromMonth, rules: toPayRules(row), setBy: row.setBy, setAt: row.setAt }));
   }
 
-  /** A named rule set's rules, newest first. */
-  async listNamed(companyId: string, ruleSetId: string): Promise<PayRulesVersionView<RuleSetPayRules>[]> {
-    const set = await this.ruleSetById(companyId, ruleSetId, this.prisma);
-    const rows = await this.prisma.payrollRules.findMany({
-      where: { companyId, ruleSetId: set.id },
-      include: { setBy: { select: { fullName: true } } },
-      orderBy: [{ fromYear: 'desc' }, { fromMonth: 'desc' }],
-    });
-    return rows.map((row) => {
-      const { payRoundingStep: _, ...rules } = toPayRules(row);
-      return { fromYear: row.fromYear, fromMonth: row.fromMonth, rules, setBy: row.setBy, setAt: row.setAt };
-    });
-  }
-
-  /** Saves a named set's rules from a month on, as set() does for the company default. No rounding step: it is company-wide. */
-  async setNamed(auth: CompanyAuthContext, ruleSetId: string, from: { year: number; month: number }, rules: RuleSetPayRules): Promise<void> {
+  /** Saves a combination's rules from a month on, replacing that month's version if any. */
+  async setRules(auth: CompanyAuthContext, combinationId: string, from: Month, rules: PayRules): Promise<void> {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
-      const set = await this.ruleSetById(companyId, ruleSetId, tx);
+      const set = await this.combination(companyId, combinationId, tx);
       await assertMonthsOpen(tx, companyId, from, await this.nextVersionStart(tx, set.id, from));
 
       const key = { ruleSetId_fromYear_fromMonth: { ruleSetId: set.id, fromYear: from.year, fromMonth: from.month } };
       const before = await tx.payrollRules.findUnique({ where: key });
-      const data = { ...toColumns({ ...rules, payRoundingStep: null }), setById: auth.user.id, setAt: new Date() };
+      const data = { ...toColumns(rules), setById: auth.user.id, setAt: new Date() };
       await tx.payrollRules.upsert({
         where: key,
         create: { companyId, ruleSetId: set.id, fromYear: from.year, fromMonth: from.month, ...data },
@@ -624,25 +635,25 @@ export class PayRulesService {
   }
 
   /**
-   * Removes a version of a named set: its months fall back to the version before. Refused when
-   * a site or firm chose the set for a month that would then have no rules.
+   * Removes a version of a combination's rules: its months fall back to the version before.
+   * Refused when the company, a site or a firm chose the set for a month that would then have
+   * no rules.
    */
-  async removeNamed(auth: CompanyAuthContext, ruleSetId: string, from: { year: number; month: number }): Promise<void> {
+  async removeRules(auth: CompanyAuthContext, combinationId: string, from: Month): Promise<void> {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
-      const set = await this.ruleSetById(companyId, ruleSetId, tx);
+      const set = await this.combination(companyId, combinationId, tx);
       const key = { ruleSetId_fromYear_fromMonth: { ruleSetId: set.id, fromYear: from.year, fromMonth: from.month } };
       const row = await tx.payrollRules.findUnique({ where: key });
       if (!row) throw notFound('payRules.notFound');
       await assertMonthsOpen(tx, companyId, from, await this.nextVersionStart(tx, set.id, from));
-      const first = await tx.payrollRules.findFirst({
-        where: { ruleSetId: set.id, NOT: { id: row.id } },
-        orderBy: [{ fromYear: 'asc' }, { fromMonth: 'asc' }],
-      });
-      const firstIndex = first ? monthIndex(first.fromYear, first.fromMonth) : Infinity;
-      const uses = await tx.ruleSetUse.findMany({ where: { companyId, ruleSetId: set.id } });
-      if (uses.some((u) => monthIndex(u.fromYear, u.fromMonth) < firstIndex)) throw conflict('ruleSet.inUse');
       await tx.payrollRules.delete({ where: key });
+      const uses = await tx.ruleSetUse.findMany({ where: { companyId, ruleSetId: set.parentId } });
+      for (const u of uses) {
+        if (!(await this.hasRulesFor(companyId, set.parentId!, { year: u.fromYear, month: u.fromMonth }, tx))) {
+          throw conflict('ruleSet.inUse');
+        }
+      }
       await this.audit.record(
         {
           action: 'payRules.delete',
@@ -650,95 +661,41 @@ export class PayRulesService {
           auth,
           entityType: 'PayrollRuleSet',
           entityId: set.id,
-          data: {
-            fromYear: from.year,
-            fromMonth: from.month,
-            before: toPayRules(row) as unknown as Prisma.InputJsonObject,
-          },
+          data: { fromYear: from.year, fromMonth: from.month, before: toPayRules(row) as unknown as Prisma.InputJsonObject },
         },
         tx,
       );
     });
   }
 
-  /** Saves the rules that apply from a month on, replacing that month's version if any. */
-  async set(auth: CompanyAuthContext, from: { year: number; month: number }, rules: PayRules): Promise<void> {
-    const companyId = auth.company.id;
-    await this.prisma.$transaction(async (tx) => {
-      const set =
-        (await this.defaultRuleSet(companyId, tx)) ?? (await tx.payrollRuleSet.create({ data: { companyId } }));
-      await assertMonthsOpen(tx, companyId, from, await this.nextVersionStart(tx, set.id, from));
-
-      const key = { ruleSetId_fromYear_fromMonth: { ruleSetId: set.id, fromYear: from.year, fromMonth: from.month } };
-      const before = await tx.payrollRules.findUnique({ where: key });
-      const data = { ...toColumns(rules), setById: auth.user.id, setAt: new Date() };
-      await tx.payrollRules.upsert({
-        where: key,
-        create: { companyId, ruleSetId: set.id, fromYear: from.year, fromMonth: from.month, ...data },
-        update: data,
-      });
-      await this.audit.record(
-        {
-          action: 'payRules.set',
-          companyId,
-          auth,
-          entityType: 'PayrollRuleSet',
-          entityId: set.id,
-          data: {
-            fromYear: from.year,
-            fromMonth: from.month,
-            before: before ? (defaultRules(before) as unknown as Prisma.InputJsonObject) : null,
-            after: rules as unknown as Prisma.InputJsonObject,
-          },
-        },
-        tx,
-      );
-    });
+  private async assertOwner(db: Db, companyId: string, owner: RuleSetOwner) {
+    if ('firmId' in owner) {
+      await findFirm(db, companyId, owner.firmId, owner.firmId);
+    } else if ('siteId' in owner && !(await db.site.findFirst({ where: { id: owner.siteId, companyId } }))) {
+      throw notFound('site.notFound');
+    }
   }
 
-  /** Removes the version from a month: the months it covered fall back to the version before it. */
-  async remove(auth: CompanyAuthContext, from: { year: number; month: number }): Promise<void> {
-    const companyId = auth.company.id;
-    await this.prisma.$transaction(async (tx) => {
-      const set = await this.defaultRuleSet(companyId, tx);
-      const key = set && {
-        ruleSetId_fromYear_fromMonth: { ruleSetId: set.id, fromYear: from.year, fromMonth: from.month },
-      };
-      const row = key && (await tx.payrollRules.findUnique({ where: key }));
-      if (!set || !key || !row) throw notFound('payRules.notFound');
-      await assertMonthsOpen(tx, companyId, from, await this.nextVersionStart(tx, set.id, from));
-      await tx.payrollRules.delete({ where: key });
-      await this.audit.record(
-        {
-          action: 'payRules.delete',
-          companyId,
-          auth,
-          entityType: 'PayrollRuleSet',
-          entityId: set.id,
-          data: {
-            fromYear: from.year,
-            fromMonth: from.month,
-            before: defaultRules(row) as unknown as Prisma.InputJsonObject,
-          },
-        },
-        tx,
-      );
+  /** Start of the owner's choice after `from`, i.e. the first month a choice at `from` doesn't reach. */
+  private async nextUseStart(db: Db, companyId: string, owner: RuleSetOwner, from: Month) {
+    const next = await db.ruleSetUse.findFirst({ where: { companyId, ...ownerWhere(owner), ...after(from) }, orderBy: OLDEST_FIRST });
+    return startOf(next);
+  }
+
+  /** Names are unique in the company, ignoring case (also a unique index). */
+  private async assertNameFree(db: Db, companyId: string, name: string, exceptId: string | null) {
+    const other = await db.payrollRuleSet.findFirst({
+      where: { companyId, name: { equals: name, mode: 'insensitive' }, NOT: exceptId ? { id: exceptId } : undefined },
     });
+    if (other) throw conflict('ruleSet.nameTaken');
   }
 
   /**
-   * The rules, calendar and working days of a month of a rule set. The one place that
+   * The rules, calendar and working days of a month of a combination. The one place that
    * works these out, so Settings and payroll always agree.
    */
   async month(companyId: string, ruleSetId: string, year: number, month: number, db: Db = this.prisma): Promise<MonthRules> {
-    const version = await db.payrollRules.findFirst({
-      where: {
-        companyId,
-        ruleSetId,
-        OR: [{ fromYear: { lt: year } }, { fromYear: year, fromMonth: { lte: month } }],
-      },
-      orderBy: [{ fromYear: 'desc' }, { fromMonth: 'desc' }],
-    });
+    const version = await db.payrollRules.findFirst({ where: { companyId, ruleSetId, ...upTo(year, month) }, orderBy: NEWEST_FIRST });
     if (!version) return { rules: null, calendar: null, workingDays: null };
 
     const settings = toPayRules(version);
@@ -774,15 +731,8 @@ export class PayRulesService {
   }
 
   /** Start of the version after `from`, i.e. the first month a version at `from` doesn't reach. */
-  private async nextVersionStart(db: Db, ruleSetId: string, from: { year: number; month: number }) {
-    const next = await db.payrollRules.findFirst({
-      where: {
-        ruleSetId,
-        OR: [{ fromYear: { gt: from.year } }, { fromYear: from.year, fromMonth: { gt: from.month } }],
-      },
-      orderBy: [{ fromYear: 'asc' }, { fromMonth: 'asc' }],
-    });
-    return next && { year: next.fromYear, month: next.fromMonth };
+  private async nextVersionStart(db: Db, ruleSetId: string, from: Month) {
+    return startOf(await db.payrollRules.findFirst({ where: { ruleSetId, ...after(from) }, orderBy: OLDEST_FIRST }));
   }
 }
 
@@ -797,7 +747,7 @@ function liveUses<T extends { siteId: string | null; firmId: string | null; from
   const seen = new Set<string>();
   return newestFirst.filter((u) => {
     if (monthIndex(u.fromYear, u.fromMonth) > now) return true;
-    const owner = u.siteId ?? u.firmId!;
+    const owner = u.siteId ?? u.firmId ?? 'company';
     if (seen.has(owner)) return false;
     seen.add(owner);
     return true;
@@ -808,14 +758,7 @@ function unique<T extends { id: string; name: string }>(rows: readonly T[]): T[]
   return [...new Map(rows.map((r) => [r.id, r])).values()].sort((x, y) => x.name.localeCompare(y.name));
 }
 
-/** A version of the company default rule set, which always has a rounding step. */
-function defaultRules(row: RulesRow): PayRules {
-  const rules = toPayRules(row);
-  if (rules.payRoundingStep === null) throw new Error(`Rules ${row.id} of a company default rule set have no rounding step`);
-  return { ...rules, payRoundingStep: rules.payRoundingStep };
-}
-
-function toPayRules(row: RulesRow): StoredPayRules {
+function toPayRules(row: RulesRow): PayRules {
   return {
     restWeekdays: [...row.restWeekdays].sort((a, b) => a - b),
     normalHoursPerDay: row.normalHoursPerDay.toString(),
@@ -828,11 +771,10 @@ function toPayRules(row: RulesRow): StoredPayRules {
       TRAVEL: { paid: row.travelDayPaid, hoursPerDay: row.travelDayHoursPerDay?.toString() ?? null },
     },
     travelPayMode: row.travelPayMode,
-    payRoundingStep: row.payRoundingStep?.toString() ?? null,
   };
 }
 
-function toColumns(rules: StoredPayRules) {
+function toColumns(rules: PayRules) {
   return {
     restWeekdays: rules.restWeekdays,
     normalHoursPerDay: rules.normalHoursPerDay,
@@ -846,6 +788,5 @@ function toColumns(rules: StoredPayRules) {
     travelDayPaid: rules.absence.TRAVEL.paid,
     travelDayHoursPerDay: rules.absence.TRAVEL.hoursPerDay,
     travelPayMode: rules.travelPayMode,
-    payRoundingStep: rules.payRoundingStep,
   };
 }

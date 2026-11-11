@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import {
+  CompanyRuleSetController,
   FirmRuleSetController,
   HolidaysController,
-  PayRulesController,
+  PayCategoriesController,
+  PayRoundingController,
   RuleSetsController,
   SiteRuleSetController,
-  WorkingDaysController,
 } from './pay-rules.controller';
 import { HolidaysService } from './holidays.service';
 import { PayRulesService } from './pay-rules.service';
@@ -13,7 +14,15 @@ import { WorkingDaysService } from './working-days.service';
 
 /** Pay rules, holidays and working days (Settings). */
 @Module({
-  controllers: [RuleSetsController, SiteRuleSetController, FirmRuleSetController, PayRulesController, HolidaysController, WorkingDaysController],
+  controllers: [
+    PayCategoriesController,
+    PayRoundingController,
+    CompanyRuleSetController,
+    RuleSetsController,
+    SiteRuleSetController,
+    FirmRuleSetController,
+    HolidaysController,
+  ],
   providers: [PayRulesService, HolidaysService, WorkingDaysService],
   exports: [PayRulesService],
 })

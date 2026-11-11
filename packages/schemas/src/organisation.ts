@@ -206,7 +206,7 @@ export const updateCategoryOptionSchema = categoryOptionSchema
   .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
 export type UpdateCategoryOption = z.output<typeof updateCategoryOptionSchema>;
 
-/** A named rule set that sites and firms share (AGENTS.md: Pay rule sets). */
+/** A named rule set that the company, sites and firms choose (AGENTS.md: Pay rule sets). */
 export const ruleSetSchema = z.object({ name: requiredName(120) });
 export type RuleSetInput = z.input<typeof ruleSetSchema>;
 export type RuleSet = z.output<typeof ruleSetSchema>;
@@ -219,19 +219,20 @@ export const updateRuleSetSchema = ruleSetSchema
 export type UpdateRuleSet = z.output<typeof updateRuleSetSchema>;
 
 /**
- * The worker categories a rule set splits its rules by from a month on (AGENTS.md: Rule sets
- * split by categories): none, one or two, in the order given.
+ * The company's pay categories from a month on (AGENTS.md: Pay rule sets): one or two, in the
+ * order given. Every rule set has its rules by the combinations of their options.
  */
-export const ruleSetSplitSchema = z.object({
+export const payCategoriesSchema = z.object({
   categoryIds: z
     .array(uuid)
+    .min(1, { error: 'validation.required' })
     .max(2, { error: 'validation.twoCategoriesAtMost' })
     .refine((ids) => new Set(ids).size === ids.length, { error: 'validation.categoryTwice' }),
 });
-export type RuleSetSplitInput = z.input<typeof ruleSetSplitSchema>;
-export type RuleSetSplit = z.output<typeof ruleSetSplitSchema>;
+export type PayCategoriesInput = z.input<typeof payCategoriesSchema>;
+export type PayCategories = z.output<typeof payCategoriesSchema>;
 
-/** A combination of a split rule set: one option of each of one or two categories. */
+/** A combination of a rule set: one option of each of the company's pay categories. */
 export const ruleSetVariantSchema = z.object({
   optionIds: z
     .array(uuid)
@@ -246,6 +247,11 @@ export type RuleSetVariant = z.output<typeof ruleSetVariantSchema>;
 export const ruleSetUseSchema = z.object({ ruleSetId: z.uuid({ error: 'validation.invalid' }).nullable() });
 export type RuleSetUseInput = z.input<typeof ruleSetUseSchema>;
 export type RuleSetUse = z.output<typeof ruleSetUseSchema>;
+
+/** The rule set the company uses from a month: always one. */
+export const companyRuleSetUseSchema = z.object({ ruleSetId: z.uuid({ error: 'validation.required' }) });
+export type CompanyRuleSetUseInput = z.input<typeof companyRuleSetUseSchema>;
+export type CompanyRuleSetUse = z.output<typeof companyRuleSetUseSchema>;
 
 /** Whether the company uses firms (every new placement then needs one). */
 export const firmSettingsSchema = z.object({ enabled: z.boolean() });

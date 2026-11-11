@@ -146,20 +146,19 @@ function rules(companyId: string, ruleSetId: string, setById: string, fromMonth 
     sickHoursPerDay: '8',
     travelDayPaid: false,
     travelPayMode: 'NONE' as const,
-    payRoundingStep: '1000',
   };
 }
 
 describe('payroll rule sets', () => {
-  it('allows one company default and one rule set per site', async () => {
+  it('names every rule set, and allows one choice per company, site and month', async () => {
     const { prisma } = ctx;
     const company = await createCompany(prisma);
     const other = await createCompany(prisma);
     const siteA = await prisma.site.create({ data: { companyId: company.id, name: 'Site A' } });
     const siteB = await prisma.site.create({ data: { companyId: company.id, name: 'Site B' } });
 
-    await prisma.payrollRuleSet.create({ data: { companyId: company.id } });
-    await expect(prisma.payrollRuleSet.create({ data: { companyId: company.id } })).rejects.toMatchObject(UNIQUE_VIOLATION);
+    // There is no company default: a set without a name is only a combination of a set.
+    await expect(prisma.payrollRuleSet.create({ data: { companyId: company.id } })).rejects.toThrow(/PayrollRuleSet_variant_check/);
 
     // Named sets are unique in the company, ignoring case.
     const named = await prisma.payrollRuleSet.create({ data: { companyId: company.id, name: 'Shared' } });
@@ -171,17 +170,38 @@ describe('payroll rule sets', () => {
     await prisma.ruleSetUse.create({ data: { ...use, siteId: siteA.id } });
     await prisma.ruleSetUse.create({ data: { ...use, siteId: siteB.id } });
     await expect(prisma.ruleSetUse.create({ data: { ...use, siteId: siteA.id } })).rejects.toMatchObject(UNIQUE_VIOLATION);
-    await expect(prisma.ruleSetUse.create({ data: use })).rejects.toThrow();
+    // The company's choice has neither a site nor a firm, one per month, and always a set.
+    await prisma.ruleSetUse.create({ data: use });
+    await expect(prisma.ruleSetUse.create({ data: use })).rejects.toMatchObject(UNIQUE_VIOLATION);
+    await expect(prisma.ruleSetUse.create({ data: { ...use, fromMonth: 10, ruleSetId: null } })).rejects.toThrow(/RuleSetUse_owner_check/);
 
-    // Another company has its own default.
-    await prisma.payrollRuleSet.create({ data: { companyId: other.id } });
+    // Another company may use the same name.
+    await prisma.payrollRuleSet.create({ data: { companyId: other.id, name: 'Shared' } });
+  });
+
+  it('keeps pay categories and the rounding step valid', async () => {
+    const { prisma } = ctx;
+    const company = await createCompany(prisma);
+    const user = await createUser(prisma);
+    const category = await prisma.workerCategory.create({ data: { companyId: company.id, name: 'Type' } });
+    const choice = { companyId: company.id, fromYear: 2026, fromMonth: 9, firstCategoryId: category.id, setById: user.id };
+    await expect(prisma.payCategoryChoice.create({ data: { ...choice, secondCategoryId: category.id } })).rejects.toThrow(
+      /PayCategoryChoice_categories_check/,
+    );
+    await prisma.payCategoryChoice.create({ data: choice });
+    await expect(prisma.payCategoryChoice.create({ data: choice })).rejects.toMatchObject(UNIQUE_VIOLATION);
+
+    const rounding = { companyId: company.id, fromYear: 2026, fromMonth: 9, setById: user.id };
+    await expect(prisma.payRounding.create({ data: { ...rounding, step: '0' } })).rejects.toThrow(/PayRounding_step_check/);
+    await expect(prisma.payRounding.create({ data: { ...rounding, step: '1000', fromMonth: 13 } })).rejects.toThrow(/PayRounding_fromMonth_check/);
+    await prisma.payRounding.create({ data: { ...rounding, step: '1000' } });
   });
 
   it('keeps one version of the rules per rule set and month', async () => {
     const { prisma } = ctx;
     const company = await createCompany(prisma);
     const user = await createUser(prisma);
-    const set = await prisma.payrollRuleSet.create({ data: { companyId: company.id } });
+    const set = await prisma.payrollRuleSet.create({ data: { companyId: company.id, name: 'Set' } });
 
     await prisma.payrollRules.create({ data: rules(company.id, set.id, user.id, 9) });
     await prisma.payrollRules.create({ data: rules(company.id, set.id, user.id, 11) });
@@ -194,7 +214,7 @@ describe('payroll rule sets', () => {
     const { prisma } = ctx;
     const company = await createCompany(prisma);
     const user = await createUser(prisma);
-    const set = await prisma.payrollRuleSet.create({ data: { companyId: company.id } });
+    const set = await prisma.payrollRuleSet.create({ data: { companyId: company.id, name: 'Set' } });
     const bad = [
       { fromMonth: 13 },
       { normalHoursPerDay: '0' },
@@ -203,7 +223,6 @@ describe('payroll rule sets', () => {
       { sickHoursPerDay: '24.5' },
       { restWeekdays: [8] },
       { restWeekdays: [1, 2, 3, 4, 5, 6, 7] },
-      { payRoundingStep: '0' },
     ];
     for (const override of bad) {
       await expect(
@@ -212,7 +231,6 @@ describe('payroll rule sets', () => {
     }
     const created = await prisma.payrollRules.create({ data: rules(company.id, set.id, user.id) });
     expect(created.leaveHoursPerDay).toBeNull();
-    expect(created.payRoundingStep?.toString()).toBe('1000');
   });
 });
 
@@ -317,7 +335,7 @@ describe('rows never mix two companies', () => {
     const company = await createCompany(prisma);
     const other = await createCompany(prisma);
     const user = await createUser(prisma);
-    const otherSet = await prisma.payrollRuleSet.create({ data: { companyId: other.id } });
+    const otherSet = await prisma.payrollRuleSet.create({ data: { companyId: other.id, name: 'Set' } });
 
     await expect(
       prisma.payrollRules.create({ data: rules(company.id, otherSet.id, user.id) }),
@@ -330,7 +348,7 @@ describe('rows never mix two companies', () => {
     const company = await createCompany(prisma);
     const other = await createCompany(prisma);
     const user = await createUser(prisma);
-    const otherRules = await prisma.payrollRuleSet.create({ data: { companyId: other.id } });
+    const otherRules = await prisma.payrollRuleSet.create({ data: { companyId: other.id, name: 'Set' } });
     const override = { ruleSetId: otherRules.id, year: 2026, month: 9, workingDays: 24, setById: user.id };
 
     await expect(

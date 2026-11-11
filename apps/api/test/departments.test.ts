@@ -1,6 +1,6 @@
 import type { Role } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { addMember, createUser, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
+import { addMember, createUser, loginAs, memberOfNewCompany, resetDb, setUpPay, startApp, type TestContext } from './helpers';
 
 let ctx: TestContext;
 beforeAll(async () => (ctx = await startApp()));
@@ -29,10 +29,14 @@ async function member(companyId: string, role: Role) {
   return { user, agent: await loginAs(ctx.app, user.email!) };
 }
 
-const hire = (agent: Agent, placement: { siteId: string; teamId?: string | null; departmentId?: string | null }) =>
+const hire = (
+  agent: Agent,
+  placement: { siteId: string; teamId?: string | null; departmentId?: string | null },
+  categories: Record<string, string> = {},
+) =>
   agent
     .post('/api/workers')
-    .send({ worker: { lastName: 'Testov', firstName: 'Test' }, placement: { ...placement, from: '2026-09-01' } });
+    .send({ worker: { lastName: 'Testov', firstName: 'Test', categories }, placement: { ...placement, from: '2026-09-01' } });
 
 const RULES = {
   restWeekdays: [7],
@@ -46,7 +50,6 @@ const RULES = {
     TRAVEL: { paid: false, hoursPerDay: null },
   },
   travelPayMode: 'NONE',
-  payRoundingStep: '1000',
 };
 
 /** Every working day of September 2026 at normal hours. */
@@ -256,12 +259,12 @@ describe('payroll by department', () => {
     const { agent, site, hse, hseSiteA } = await company();
     await turnOn(agent);
     // September 2026: 25 working days of 9 hours (Sept 1 is a holiday, Sundays are rest days).
-    await agent.put('/api/pay-rules/2026/9').send(RULES).expect(204);
+    const pay = await setUpPay(agent, RULES);
     for (const [departmentId, salary] of [
       [hse, '7500000'],
       [hseSiteA, '5000000'],
     ]) {
-      const worker = (await hire(agent, { siteId: site, departmentId }).expect(201)).body.id;
+      const worker = (await hire(agent, { siteId: site, departmentId }, pay.categories).expect(201)).body.id;
       await agent.post(`/api/workers/${worker}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: salary }).expect(201);
       const placement = (await agent.get(`/api/workers/${worker}`).expect(200)).body.placement.id;
       await agent.post(`/api/monthly-hours/2026/9/${placement}`).send(FULL_MONTH).expect(201);

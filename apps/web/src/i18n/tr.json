@@ -38,7 +38,8 @@
     "workerCategories": "Çalışan kategorileri",
     "ruleSets": "Kural setleri",
     "travelRoutes": "Güzergâhlar",
-    "travelAmounts": "Yol ücreti tutarları"
+    "travelAmounts": "Yol ücreti tutarları",
+    "activity": "Etkinlik"
   },
   "settings": {
     "language": "Dil",
@@ -527,19 +528,20 @@
       "nameTaken": "Bu adda bir kategori zaten var.",
       "optionTaken": "Bu kategoride bu adda bir seçenek zaten var.",
       "optionNotFound": "Böyle bir seçenek yok.",
-      "inUse": "Bir kural seti şu an veya sonraki bir aydan itibaren bu kategoriye göre bölünmüş. Önce o bölmeyi kaldırın."
+      "inUse": "Şirket şu anda veya sonraki bir aydan itibaren bu kategoriye göre ödüyor. Önce başka ücret kategorileri seçin."
     },
     "ruleSet": {
       "notFound": "Böyle bir kural seti yok.",
       "nameTaken": "Bu adla bir kural seti zaten var.",
       "inactive": "Bu kural seti kapalı.",
-      "inUse": "Bu kural setini bir şantiye veya firma kullanıyor. Önce onları başka bir sete geçirin.",
-      "noRulesForMonth": "Bu sette o ay için kural yok. Önce kuralları girin.",
+      "inUse": "Bu kural setini şirket, bir şantiye veya bir firma kullanıyor. Önce onlar için başka bir set seçin.",
+      "noRulesForMonth": "Bu sette bu ayın ücret kategorilerinin hiçbir birleşiminin henüz kuralı yok. Önce onları girin.",
       "useNotFound": "Bu seçim artık yok.",
-      "categoryNotSet": "Bu ücret kuralları, bu çalışan için seçilmemiş bir kategoriye göre değişiyor. Önce çalışanda seçin.",
-      "noCategoryRules": "Bu ücret kurallarında bu ay çalışanın seçenekleri için kural yok. “Kategoriye göre kurallar” bölümünden ekleyin.",
+      "categoryNotSet": "Şirket, bu işçide belirlenmemiş bir kategoriye göre ödüyor. Önce işçide belirleyin.",
+      "noCategoryRules": "Bu sette bu ay işçinin seçenekleri için kural yok. Bunları setin sayfasında ekleyin.",
       "variantExists": "Bu birleşimin kuralları zaten var.",
-      "splitNotFound": "Bu bölme artık yok."
+      "noPayCategories": "Şirket bu ay ücret kurallarının hangi kategorilere göre ayrıldığını seçmedi. Ücret kuralları sayfasında seçin.",
+      "notPayCategories": "Bu seçenekler şirketin ücret kategorilerinin bir birleşimi değil. Önce ücret kategorilerini seçin."
     },
     "travelRoute": {
       "notFound": "Böyle bir güzergâh yok.",
@@ -550,13 +552,17 @@
     "travelAmount": {
       "notInMonth": "İşçi bu ay bu şantiyede değildi.",
       "unchanged": "Bu tutar bu ay için zaten girildi."
+    },
+    "payCategories": {
+      "notFound": "Bu ücret kategorisi seçimi artık yok."
+    },
+    "payRounding": {
+      "notFound": "Bu yuvarlama adımı artık yok."
     }
   },
   "payRules": {
     "title": "Ücret kuralları",
-    "description": "Saatlerin, devamsızlıkların ve yol ücretinin nasıl ödendiği. Değişiklikler seçtiğiniz aydan itibaren geçerlidir; önceki aylar kendi kurallarıyla kalır.",
-    "emptyTitle": "Henüz ücret kuralı yok",
-    "emptyDescription": "Kurallar girilene kadar bordro hesaplanamaz. Fazla mesai katsayısı gibi bazı değerlerin varsayılanı yoktur: bunları siz girersiniz.",
+    "description": "Şirket nasıl öder: ücret kurallarının hangi işçi kategorilerine göre ayrıldığı, şirketin kullandığı kural seti ve yuvarlama adımı. Her biri seçilen aydan itibaren geçerlidir; önceki aylar kendininkini korur.",
     "emptyDescriptionReadOnly": "Sahip veya yönetici kuralları girene kadar bordro hesaplanamaz.",
     "setUp": "Kuralları gir",
     "inForce": "Kurallar: {{month}}",
@@ -624,12 +630,31 @@
     },
     "rounding": "Yuvarlama",
     "roundingStep": "Ödenecek tutarı yuvarlama adımı ({{currency}})",
-    "roundingHint": "Ödenecek tutar (ücret ve primler, avans ve kesintiler düşülerek) bu tutarın en yakın katına bir kez yuvarlanır (yarım yukarı). Kendi kuralları olan şantiyeler dahil tüm şirket için geçerlidir. Fark ayrı bir satırda gösterilir.",
+    "roundingHint": "Ödenecek tutar (ücret ve primler, avanslar ve kesintiler düşülerek) bir kez bu tutarın en yakın katına yuvarlanır, yarım yukarı. Kural seti ne olursa olsun tüm şirkete uygulanır. Fark ayrı bir satırda gösterilir.",
     "confirmDelete": {
       "title": "Bu kurallar silinsin mi?",
       "description": "Başlangıcı {{month}} olan kurallar silinecek. O aydan itibaren önceki kurallar (başlangıç: {{previous}}) geçerli olacak.",
       "descriptionNoPrevious": "Başlangıcı {{month}} olan kurallar silinecek. O aydan itibaren yeni kurallar girilene kadar ücret kuralı olmayacak."
-    }
+    },
+    "since": "{{month}} itibarıyla",
+    "categoriesTitle": "Ücret kategorileri",
+    "categoriesHint": "Her kural setinde bu kategorilerin seçeneklerinin her birleşimi için kendi kuralları vardır, ör. Direkt / Endirekt × Yerli / Yabancı. İşçiye kendi seçeneklerinin kurallarına göre ödenir.",
+    "categoriesMissing": "Seçilmedi: kimseye ödeme yapılamaz",
+    "categoriesDialogDescription": "Bir veya iki kategori seçin. Seçeneği belirlenmemiş işçilere ve kuralı olmayan birleşimlere, düzeltilene kadar ödeme yapılamaz.",
+    "categoriesFromHint": "Bu aydan itibaren her kural setinin yeni birleşimler için kurala ihtiyacı vardır. Önceki aylar kendi kategorilerini korur. Kilitli aylar değiştirilemez.",
+    "firstCategory": "Kategori",
+    "secondCategory": "İkinci kategori (isteğe bağlı)",
+    "chooseCategory": "Kategori seçin",
+    "noSecondCategory": "Yok",
+    "addCategoriesFirst": "Önce işçi kategorileri ekleyin",
+    "confirmRemoveCategories": "{{month}} itibarıyla seçilen ücret kategorileri kaldırılacak. Bu aylar önceki seçime döner.",
+    "ruleSetTitle": "Şirketin kural seti",
+    "ruleSetHint": "Firmasının ve şantiyesinin kendi seti olmayan her yerleştirmeye bu setle ödenir.",
+    "ruleSetMissing": "Seçilmedi: yalnızca kendi seti olan şantiye ve firmalara ödenir",
+    "roundingMissing": "Belirlenmedi: kimseye ödeme yapılamaz",
+    "confirmRemoveRounding": "{{month}} itibarıyla geçerli yuvarlama adımı kaldırılacak. Bu aylar önceki adıma döner.",
+    "changeChoice": "Değiştir",
+    "inForceIn": "Geçerli: {{month}}"
   },
   "holidays": {
     "title": "Tatiller",
@@ -679,7 +704,6 @@
     }
   },
   "workingDays": {
-    "title": "İş günleri",
     "description": "Aylara göre iş günleri: hafta tatillerinden ve resmî tatillerden hesaplanır ya da elle girilir. Saatlik ücret \"Bordroda kullanılan\" sütunundan hesaplanır.",
     "calculated": "Hesaplanan",
     "override": "Elle girilen",
@@ -1098,14 +1122,15 @@
       "twoSources": "Bu ay için hem günlük puantaj hem aylık saatler var. Birini bırakın.",
       "placementWithoutHours": "{{site}} ({{date}} itibarıyla) için saat girilmedi.",
       "noRules": "Bu ay için ödeme kuralı yok: {{sites}}.",
-      "noCompanyRules": "Şirketin bu ay için ödeme kuralları yok. Yuvarlama adımı bu kurallarda.",
       "totalsInvalid": "Aylık saatler aya uymuyor (ödeme kuralları değişmiş olabilir):",
       "invalidHours": "Günlük puantaj kayıtları birbiriyle çelişiyor.",
       "daysWithoutHours": "{{site}} için saat yok ({{from}} – {{until}}).",
       "noSalaryInFirm": "Bu ay için {{firm}} firmasında ücret yok.",
       "adjustmentWithoutFirm": "Bir düzeltme hiçbir firmanın bordrosuna girmiyor. İptal edip firmasıyla yeniden ekleyin.",
       "categoryNotSet": "“{{rules}}” ücret kuralları “{{categories}}” kategorisine göre değişiyor ve bu çalışan için seçilmemiş.",
-      "noCategoryRules": "“{{rules}}” ücret kurallarında bu ay “{{options}}” için kural yok."
+      "noCategoryRules": "“{{rules}}” ücret kurallarında bu ay “{{options}}” için kural yok.",
+      "noRounding": "Şirketin bu ay için yuvarlama adımı yok (Ücret kuralları).",
+      "noPayCategories": "Şirket bu ay ücret kurallarının hangi kategorilere göre ayrıldığını seçmedi, bu yüzden “{{rules}}” kimseye ödeme yapamaz."
     },
     "totalsProblems": {
       "NORMAL_ABOVE_DAYS_WORKED": "normal saatler çalışılan iş günü × günlük normalden fazla",
@@ -1541,7 +1566,7 @@
   },
   "ruleSets": {
     "title": "Kural setleri",
-    "description": "Birden çok şantiye ve firmanın birlikte kullandığı ücret kuralları. Firmanın seti şantiyeninkinden, şantiyenin seti şirket kurallarından önce gelir.",
+    "description": "Ücret kuralları; her birinde ücret kategorilerinin seçeneklerinin her birleşimi için kendi kuralları vardır. Şirket, şantiyeler ve firmalar birer tane seçer: firmanın seti şantiyeninkinden, şantiyeninki şirketinkinden önce gelir.",
     "create": "Set ekle",
     "rename": "Yeniden adlandır",
     "deactivate": "Kapat",
@@ -1554,15 +1579,11 @@
     "usedByColumn": "Kullananlar",
     "noRules": "Kural yok",
     "empty": "Henüz set yok",
-    "emptyDescription": "Bazı şantiye veya firmalar farklı ödüyorsa bir set ekleyin. Diğerleri şirket kurallarıyla devam eder.",
+    "emptyDescription": "Bir kural seti ekleyin, birleşimlerine kurallarını girin, sonra Ücret kuralları sayfasında şirket için seçin.",
     "dialogDescription": "Herkesin anlayacağı bir ad verin, örneğin “6 günlük hafta”.",
-    "payRulesTitle": "Ücret kuralları: {{name}}",
-    "workingDaysTitle": "İş günleri: {{name}}",
-    "workingDaysDescription": "Bu kural setine göre iş günleri. Değişiklik seti kullanan herkesi etkiler.",
-    "usedBy": "Kullananlar: {{names}}. Değişiklik hepsini etkiler. Yuvarlama şirketin ayarı olarak kalır.",
-    "notUsed": "Henüz kimse kullanmıyor. Yuvarlama şirketin ayarı olarak kalır.",
-    "rulesEmptyTitle": "Bu sette henüz kural yok",
-    "rulesEmptyDescription": "Şantiye ve firmaların seçebilmesi için önce kuralları girin.",
+    "workingDaysDescription": "Değişiklik bu setle ödenen herkesi etkiler.",
+    "usedBy": "Kullananlar: {{names}}. Değişiklik hepsini etkiler.",
+    "notUsed": "Henüz kimse kullanmıyor.",
     "useTitle": "Ücret kuralları: {{name}}",
     "useDescription": "Seçilen aydan itibaren hangi kural setinin geçerli olacağı. Önceki aylar kendi kurallarında kalır.",
     "noneFirm": "Kendi seti yok: şantiye veya şirket kuralları",
@@ -1582,45 +1603,36 @@
     "confirmReactivate": {
       "title": "Set yeniden açılsın mı?",
       "description": "“{{name}}” yeniden seçim için sunulacak."
-    }
+    },
+    "company": "Şirket",
+    "noneCompany": "Kural seti seçilmedi",
+    "chooseRuleSet": "Kural seti seçin",
+    "useCompanyDescription": "Firmasının ve şantiyesinin kendi seti olmayan işçilere seçilen aydan itibaren bu setle ödenir. Önceki aylar kendininkini korur."
   },
   "ruleSetCategories": {
-    "title": "Kategoriye göre kurallar: {{name}}",
-    "description": "Bu kuralların çalışanlarına kategorilerine göre farklı ödeyin, örneğin Direkt / Endirekt × Yerel / Yabancı. Her birleşimin kendi tam kuralları vardır.",
-    "defaultName": "Şirket kuralları",
-    "link": "Kategoriye göre kurallar",
-    "splitBy": "Bölme",
-    "noSplit": "Bölme yok",
-    "splitSince": "{{month}} ayından beri “{{categories}}” kategorisine göre bölünmüş.",
-    "notSplit": "Kategorilere göre bölünmemiş: herkes bu kurallarla ödenir.",
-    "changeSplit": "Bölmeyi değiştir",
-    "historyHint": "Her bölme kendi ayından bir sonrakine kadar geçerlidir. Kilitli aylar kendininkini korur.",
-    "confirmRemove": "{{month}} ayından itibaren olan bölme kaldırılacak. O aylar önceki bölmeye döner.",
+    "title": "Kural seti: {{name}}",
+    "link": "Birleşimler ve kurallar",
     "combinationsTitle": "Birleşimler: {{categories}}",
     "combinationsHint": "Her birleşimin kuralları var.",
     "missing": "Kuralı olmayan birleşimler: {{count}}. Kurallar eklenene kadar çalışanlarına ödeme yapılamaz.",
     "addRules": "Kural ekle",
-    "none": "Yok",
-    "splitDialogDescription": "Bir veya iki kategori seçin ya da bölmeyi kaldırmak için “Yok” seçin. Seçeneği seçilmemiş çalışanlara, seçilene kadar ödeme yapılamaz.",
-    "fromHint": "Önceki aylar kendi bölmelerini korur.",
-    "firstCategory": "Kategori",
-    "secondCategory": "İkinci kategori (isteğe bağlı)",
     "addRulesFor": "“{{combination}}” için kurallar",
-    "copyDescription": "Boş bir formla başlayın ya da kuralları kopyalayıp bu birleşim için farklı olanı değiştirin.",
+    "copyDescription": "Boş bir formla başlayın ya da başka bir birleşimin kurallarını kopyalayıp bu birleşim için farklı olanları değiştirin.",
     "copyAndOpen": "Kopyala ve aç",
     "copied": "Kopyalandı. Şimdi farklı olanı değiştirin.",
     "combinationRulesTitle": "Ücret kuralları: {{name}}, {{combination}}",
     "combinationWorkingDaysTitle": "Çalışma günleri: {{name}}, {{combination}}",
     "startWith": "Başlangıç",
     "emptyForm": "Boş form",
-    "copyCombination": "Başka bir birleşimin kopyası",
-    "copyRuleSet": "Bir kural setinin kurallarının kopyası",
     "copyMonthHint": "Bu ayda geçerli kurallar kopyalanır ve bu aydan itibaren geçerli olur.",
     "openForm": "Formu aç",
     "sourceStartsLater": "Bu kurallar ancak {{month}} ayından itibaren geçerli. O ayı veya sonraki bir ayı seçin.",
     "sourceEmpty": "Bu kuralların henüz bir sürümü yok. Başka kurallar veya boş form seçin.",
     "combinationEmptyTitle": "Bu birleşimin henüz kuralı yok",
-    "combinationEmptyDescription": "Kuralları girin: çalışanları bunlarla ödenir."
+    "combinationEmptyDescription": "Bunları girin: bu seçeneklerdeki işçilere bunlarla ödenir.",
+    "noPayCategoriesTitle": "Ücret kategorileri henüz seçilmedi",
+    "noPayCategoriesDescription": "Şirketin hangi işçi kategorilerine göre ödediğini Ücret kuralları sayfasında seçin. Sonra her birleşimin kuralları burada girilir.",
+    "copyFrom": "“{{name}}” setinden"
   },
   "travelRoutes": {
     "title": "Güzergâhlar",
@@ -1671,5 +1683,230 @@
     "lockedHint": "Ay kilitli, yol ücreti tutarları değiştirilemez.",
     "emptyTitle": "Bu ay işçi yok",
     "emptyDescription": "Ay içinde görev yeri olan işçiler burada listelenir."
+  },
+  "audit": {
+    "title": "Etkinlik",
+    "description": "Platformdaki kayıtlı tüm değişiklikler: kim, hangi şirkette, neyi, ne zaman yaptı.",
+    "history": "Geçmiş",
+    "when": "Ne zaman",
+    "action": "Ne",
+    "who": "Kim",
+    "area": "Alan",
+    "person": "Kişi",
+    "allCompanies": "Tüm şirketler",
+    "everyone": "Herkes",
+    "allAreas": "Tüm alanlar",
+    "from": "Başlangıç",
+    "to": "Bitiş",
+    "showLogins": "Girişleri göster",
+    "clearFilters": "Filtreleri temizle",
+    "loadOlder": "Daha eskileri yükle",
+    "system": "Sistem",
+    "asUser": "{{admin}}, {{user}} olarak",
+    "impersonated": "Kullanıcı olarak giriş yapıldı",
+    "noCompany": "Platform",
+    "details": "Ayrıntılar",
+    "detailsFor": "Ayrıntılar: {{action}}",
+    "record": "Kayıt",
+    "ip": "IP adresi",
+    "code": "İşlem kodu",
+    "noDetails": "Başka ayrıntı kaydedilmedi.",
+    "field": "Alan",
+    "before": "Önce",
+    "after": "Sonra",
+    "value": "Değer",
+    "blank": "boş",
+    "empty": "Henüz hiçbir şey kaydedilmedi.",
+    "unknownAction": "Eski işlem ({{code}})",
+    "areas": {
+      "adjustment": "Ek ödeme ve kesintiler",
+      "auth": "Giriş ve şifreler",
+      "company": "Şirketler",
+      "department": "Bölümler",
+      "firm": "Firmalar",
+      "holiday": "Tatiller",
+      "impersonation": "Kullanıcı olarak giriş",
+      "importMapping": "Aktarma sütunları",
+      "member": "Şirket kullanıcıları",
+      "monthlyHours": "Aylık saatler",
+      "payCategories": "Ücret kategorileri",
+      "payRounding": "Yuvarlama",
+      "payRules": "Ücret kuralları",
+      "period": "Ay kilitleri",
+      "plan": "Paketler",
+      "platform": "Platform yöneticileri",
+      "ruleSet": "Kural setleri",
+      "salary": "Maaşlar",
+      "shift": "Vardiyalar",
+      "site": "Şantiyeler",
+      "team": "Ekipler",
+      "timesheetCodes": "Kodlar",
+      "timesheetEntry": "Puantaj saatleri",
+      "timesheetImport": "Saat aktarmaları",
+      "timesheetSettings": "Puantaj girişi ayarları",
+      "travelAmount": "Yol ücreti tutarları",
+      "travelRoute": "Güzergâhlar",
+      "user": "Hesaplar",
+      "worker": "İşçiler",
+      "workerCategory": "Çalışan kategorileri",
+      "workerImport": "İşçi aktarmaları",
+      "workerShift": "İşçi vardiyaları",
+      "workingDays": "İş günleri"
+    },
+    "actions": {
+      "adjustment": {
+        "add": "Ek ödeme veya kesinti eklendi",
+        "cancel": "Ek ödeme veya kesinti iptal edildi"
+      },
+      "auth": {
+        "login": "Giriş yaptı",
+        "passwordChanged": "Şifre değiştirildi",
+        "sessionRevoked": "Oturum kapatıldı"
+      },
+      "company": {
+        "activate": "Şirket etkinleştirildi",
+        "create": "Şirket oluşturuldu",
+        "deactivate": "Şirket devre dışı bırakıldı",
+        "departments": "Bölümler açıldı veya kapatıldı",
+        "firms": "Firmalar açıldı veya kapatıldı",
+        "payment": "Ödeme kaydedildi",
+        "planChange": "Paket değiştirildi",
+        "update": "Şirket düzenlendi"
+      },
+      "department": {
+        "create": "Bölüm oluşturuldu",
+        "update": "Bölüm düzenlendi"
+      },
+      "firm": {
+        "create": "Firma oluşturuldu",
+        "update": "Firma düzenlendi"
+      },
+      "holiday": {
+        "create": "Tatil eklendi",
+        "delete": "Tatil kaldırıldı",
+        "update": "Tatil düzenlendi"
+      },
+      "impersonation": {
+        "end": "Kullanıcı olarak giriş sonlandırıldı",
+        "start": "Kullanıcı olarak giriş yapıldı"
+      },
+      "importMapping": {
+        "set": "Aktarma sütunları kaydedildi"
+      },
+      "member": {
+        "add": "Kullanıcı şirkete eklendi",
+        "invitationAccepted": "Davet kabul edildi",
+        "invitationDeclined": "Davet reddedildi",
+        "invite": "Kullanıcı davet edildi",
+        "passwordReset": "Şifre sıfırlandı",
+        "update": "Kullanıcının rolü veya erişimi değiştirildi"
+      },
+      "monthlyHours": {
+        "add": "Aylık saatler eklendi"
+      },
+      "payCategories": {
+        "delete": "Ücret kategorileri seçimi kaldırıldı",
+        "set": "Ücret kategorileri seçildi"
+      },
+      "payRounding": {
+        "delete": "Yuvarlama seçimi kaldırıldı",
+        "set": "Yuvarlama ayarlandı"
+      },
+      "payRules": {
+        "delete": "Ücret kuralları kaldırıldı",
+        "set": "Ücret kuralları ayarlandı"
+      },
+      "period": {
+        "lock": "Ay kilitlendi",
+        "unlock": "Ayın kilidi açıldı"
+      },
+      "plan": {
+        "create": "Paket oluşturuldu",
+        "update": "Paket düzenlendi"
+      },
+      "platform": {
+        "adminCreated": "Platform yöneticisi oluşturuldu",
+        "adminGranted": "Platform yöneticisi yetkisi değiştirildi"
+      },
+      "ruleSet": {
+        "addVariant": "Kombinasyon kuralları eklendi",
+        "create": "Kural seti oluşturuldu",
+        "update": "Kural seti düzenlendi",
+        "use": "Kural seti seçildi",
+        "useDelete": "Kural seti seçimi kaldırıldı"
+      },
+      "salary": {
+        "add": "Maaş eklendi"
+      },
+      "shift": {
+        "create": "Vardiya oluşturuldu",
+        "update": "Vardiya düzenlendi"
+      },
+      "site": {
+        "create": "Şantiye oluşturuldu",
+        "staffAdd": "Personel şantiyeye atandı",
+        "staffRemove": "Personel şantiyeden çıkarıldı",
+        "update": "Şantiye düzenlendi"
+      },
+      "team": {
+        "create": "Ekip oluşturuldu",
+        "foremanAdd": "Ustabaşı ekibe atandı",
+        "foremanRemove": "Ustabaşı ekipten çıkarıldı",
+        "update": "Ekip düzenlendi"
+      },
+      "timesheetCodes": {
+        "set": "Kodlar kaydedildi"
+      },
+      "timesheetEntry": {
+        "create": "Saatler girildi",
+        "delete": "Saatler temizlendi",
+        "update": "Saatler değiştirildi"
+      },
+      "timesheetImport": {
+        "create": "Saatler aktarıldı",
+        "worker": "Aktarılan saatler değiştirildi"
+      },
+      "timesheetSettings": {
+        "set": "Puantaj girişi ayarları kaydedildi"
+      },
+      "travelAmount": {
+        "add": "Yol ücreti tutarı eklendi"
+      },
+      "travelRoute": {
+        "create": "Güzergâh oluşturuldu",
+        "update": "Güzergâh düzenlendi"
+      },
+      "user": {
+        "create": "Hesap oluşturuldu",
+        "passwordReset": "Şifre sıfırlandı",
+        "update": "Hesap düzenlendi"
+      },
+      "worker": {
+        "create": "İşçi eklendi",
+        "leave": "İşçi ayrıldı",
+        "place": "İşçi yerleştirildi",
+        "placementDepartment": "Yerleşim bölümü ayarlandı",
+        "placementFirm": "Yerleşim firması ayarlandı",
+        "placementTravelRoute": "Yerleşim güzergâhı ayarlandı",
+        "update": "İşçi düzenlendi"
+      },
+      "workerCategory": {
+        "addOption": "Kategori seçeneği eklendi",
+        "create": "Çalışan kategorisi oluşturuldu",
+        "update": "Çalışan kategorisi düzenlendi",
+        "updateOption": "Kategori seçeneği düzenlendi"
+      },
+      "workerImport": {
+        "create": "İşçiler aktarıldı"
+      },
+      "workerShift": {
+        "add": "Vardiya atandı",
+        "correct": "Vardiya düzeltildi",
+        "remove": "Vardiya kaldırıldı"
+      },
+      "workingDays": {
+        "override": "İş günleri elle değiştirildi"
+      }
+    }
   }
 }

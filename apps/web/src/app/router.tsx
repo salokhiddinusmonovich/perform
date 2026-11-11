@@ -81,23 +81,15 @@ export const router = createBrowserRouter([
       },
       {
         path: 'settings/pay-rules',
-        lazy: async () => ({ Component: (await import('@/pages/pay-rules-page')).PayRulesPage }),
+        lazy: async () => ({ Component: (await import('@/pages/company-pay-page')).CompanyPayPage }),
       },
       {
         path: 'settings/rule-sets',
         lazy: async () => ({ Component: (await import('@/pages/rule-sets-page')).RuleSetsPage }),
       },
       {
-        path: 'settings/rule-sets/:ruleSetId/pay-rules',
-        lazy: async () => ({ Component: (await import('@/pages/pay-rules-page')).RuleSetPayRulesPage }),
-      },
-      {
-        path: 'settings/rule-sets/:ruleSetId/working-days',
-        lazy: async () => ({ Component: (await import('@/pages/working-days-page')).RuleSetWorkingDaysPage }),
-      },
-      {
-        path: 'settings/rule-sets/:ruleSetId/categories',
-        lazy: async () => ({ Component: (await import('@/pages/rule-set-categories-page')).RuleSetCategoriesPage }),
+        path: 'settings/rule-sets/:ruleSetId',
+        lazy: async () => ({ Component: (await import('@/pages/rule-set-page')).RuleSetPage }),
       },
       {
         path: 'settings/rule-sets/:ruleSetId/combinations/:variantId/pay-rules',
@@ -110,10 +102,6 @@ export const router = createBrowserRouter([
       {
         path: 'settings/holidays',
         lazy: async () => ({ Component: (await import('@/pages/holidays-page')).HolidaysPage }),
-      },
-      {
-        path: 'settings/working-days',
-        lazy: async () => ({ Component: (await import('@/pages/working-days-page')).WorkingDaysPage }),
       },
       {
         path: 'settings/timesheet',
@@ -144,6 +132,10 @@ export const router = createBrowserRouter([
       {
         path: 'platform/plans',
         lazy: async () => ({ Component: (await import('@/pages/platform-plans-page')).PlatformPlansPage }),
+      },
+      {
+        path: 'platform/activity',
+        lazy: async () => ({ Component: (await import('@/pages/platform-activity-page')).PlatformActivityPage }),
       },
       {
         path: '*',

@@ -1,7 +1,7 @@
 import type { Role } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { addMember, createUser, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
+import { addMember, createUser, loginAs, memberOfNewCompany, resetDb, setUpPay, startApp, type PaySetup, type TestContext } from './helpers';
 
 let ctx: TestContext;
 beforeAll(async () => (ctx = await startApp()));
@@ -44,12 +44,13 @@ const SECOND_HALF = totals('2026-09-01', '2026-09-30', '117', 13);
 /** A company with rules for September, a site, and two firms; firms on unless asked otherwise. */
 async function company({ on = true }: { on?: boolean } = {}) {
   const owner = await memberOfNewCompany(ctx, 'OWNER');
-  await owner.agent.put('/api/pay-rules/2026/9').send({ ...RULES, payRoundingStep: '1000' }).expect(204);
+  // Paid by the category of the import files' Statu column: Direkt has rules.
+  const pay = await setUpPay(owner.agent, RULES, { category: 'Statu', options: ['Direkt', 'Endirekt'] });
   const site = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
   const own = await firm(owner.agent, 'Perform MEP', 'OWN');
   const sub = await firm(owner.agent, 'Subcontractor X', 'SUBCONTRACTOR');
   if (on) await owner.agent.put('/api/firms/settings').send({ enabled: true }).expect(204);
-  return { ...owner, site, own, sub };
+  return { ...owner, pay, site, own, sub };
 }
 
 async function firm(agent: Agent, name: string, type: string) {
@@ -62,17 +63,18 @@ async function member(companyId: string, role: Role) {
   return { user, agent: await loginAs(ctx.app, user.email!) };
 }
 
-const hire = (agent: Agent, placement: { siteId: string; firmId?: string | null; from?: string }) =>
-  agent
+/** Hires a worker into the company, with the option its pay rules pay. */
+const hire = (c: { agent: Agent; pay: PaySetup }, placement: { siteId: string; firmId?: string | null; from?: string }) =>
+  c.agent
     .post('/api/workers')
-    .send({ worker: { lastName: 'Testov', firstName: 'Test' }, placement: { from: '2026-09-01', ...placement } });
+    .send({ worker: { lastName: 'Testov', firstName: 'Test', categories: c.pay.categories }, placement: { from: '2026-09-01', ...placement } });
 
 const salary = (agent: Agent, workerId: string, firmId: string | null, monthlySalary: string) =>
   agent.post(`/api/workers/${workerId}/salaries`).send({ firmId, fromYear: 2026, fromMonth: 9, monthlySalary });
 
 /** A worker in one firm up to the 15th and in another from the 16th, each with its own salary and hours. */
 async function movedWorker(c: Awaited<ReturnType<typeof company>>) {
-  const workerId = (await hire(c.agent, { siteId: c.site, firmId: c.own }).expect(201)).body.id as string;
+  const workerId = (await hire(c, { siteId: c.site, firmId: c.own }).expect(201)).body.id as string;
   await c.agent.post(`/api/workers/${workerId}/placements`).send({ siteId: c.site, firmId: c.sub, from: '2026-09-16' }).expect(204);
   await salary(c.agent, workerId, c.own, '7500000').expect(201);
   await salary(c.agent, workerId, c.sub, '10000000').expect(201);
@@ -104,11 +106,11 @@ describe('firms', () => {
   it("keeps another company's firms apart", async () => {
     const a = await company();
     const b = await company();
-    const worker = (await hire(b.agent, { siteId: b.site, firmId: b.own }).expect(201)).body.id as string;
+    const worker = (await hire(b, { siteId: b.site, firmId: b.own }).expect(201)).body.id as string;
 
     expect((await a.agent.get('/api/firms').expect(200)).body.map((f: { id: string }) => f.id)).not.toContain(b.own);
     await a.agent.patch(`/api/firms/${b.own}`).send({ name: 'Stolen' }).expect(404);
-    await hire(a.agent, { siteId: a.site, firmId: b.own }).expect(404);
+    await hire(a, { siteId: a.site, firmId: b.own }).expect(404);
     await salary(b.agent, worker, a.own, '5000000').expect(404);
     await a.agent.get(`/api/firms/${b.own}/rule-set`).expect(404);
     await a.agent.put(`/api/firms/${b.own}/rule-set/2026/9`).send({ ruleSetId: null }).expect(404);
@@ -123,24 +125,24 @@ describe('firms', () => {
     expect(refused.body.code).toBe('firm.noneActive');
 
     const c = await company();
-    const worker = (await hire(c.agent, { siteId: c.site, firmId: c.own }).expect(201)).body.id as string;
+    const worker = (await hire(c, { siteId: c.site, firmId: c.own }).expect(201)).body.id as string;
     expect((await c.agent.patch(`/api/firms/${c.own}`).send({ isActive: false }).expect(409)).body.code).toBe('firm.hasWorkers');
     await c.agent.patch(`/api/firms/${c.sub}`).send({ isActive: false }).expect(204);
-    expect((await hire(c.agent, { siteId: c.site, firmId: c.sub }).expect(409)).body.code).toBe('firm.inactive');
+    expect((await hire(c, { siteId: c.site, firmId: c.sub }).expect(409)).body.code).toBe('firm.inactive');
     await c.agent.post(`/api/workers/${worker}/leave`).send({ date: '2026-09-02' }).expect(204);
     await c.agent.patch(`/api/firms/${c.own}`).send({ isActive: false }).expect(204);
   });
 
   it('needs a firm on new placements only while switched on, and shows it on the worker', async () => {
     const off = await company({ on: false });
-    const plain = (await hire(off.agent, { siteId: off.site, firmId: off.own }).expect(201)).body.id as string;
+    const plain = (await hire(off, { siteId: off.site, firmId: off.own }).expect(201)).body.id as string;
     // Off: firms are hidden, so nothing is stored.
     expect((await off.agent.get(`/api/workers/${plain}`).expect(200)).body.placement.firmId).toBeNull();
 
     const on = await company();
-    const refused = await hire(on.agent, { siteId: on.site }).expect(400);
+    const refused = await hire(on, { siteId: on.site }).expect(400);
     expect(refused.body.issues).toEqual([{ path: 'placement.firmId', message: 'validation.required' }]);
-    const worker = (await hire(on.agent, { siteId: on.site, firmId: on.sub }).expect(201)).body.id as string;
+    const worker = (await hire(on, { siteId: on.site, firmId: on.sub }).expect(201)).body.id as string;
     expect((await on.agent.get(`/api/workers/${worker}`).expect(200)).body.placement).toMatchObject({
       firmId: on.sub,
       firmName: 'Subcontractor X',
@@ -150,7 +152,7 @@ describe('firms', () => {
 
   it('fills in the firm of an older placement, unless one of its months is locked', async () => {
     const c = await company({ on: false });
-    const worker = (await hire(c.agent, { siteId: c.site }).expect(201)).body.id as string;
+    const worker = (await hire(c, { siteId: c.site }).expect(201)).body.id as string;
     const placement = (await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId: worker } })).id;
     await c.agent.put('/api/firms/settings').send({ enabled: true }).expect(204);
 
@@ -170,7 +172,7 @@ describe('firms', () => {
 describe('salaries per firm', () => {
   it('keeps one salary per firm and month, and needs a firm while switched on', async () => {
     const c = await company();
-    const worker = (await hire(c.agent, { siteId: c.site, firmId: c.own }).expect(201)).body.id as string;
+    const worker = (await hire(c, { siteId: c.site, firmId: c.own }).expect(201)).body.id as string;
     expect((await salary(c.agent, worker, null, '5000000').expect(400)).body.issues).toEqual([
       { path: 'firmId', message: 'validation.required' },
     ]);
@@ -190,7 +192,7 @@ describe('salaries per firm', () => {
 
   it('never carries a salary to a new firm, but one from before firms counts until the firm has its own', async () => {
     const c = await company({ on: false });
-    const worker = (await hire(c.agent, { siteId: c.site }).expect(201)).body.id as string;
+    const worker = (await hire(c, { siteId: c.site }).expect(201)).body.id as string;
     await salary(c.agent, worker, null, '7500000').expect(201);
     const placement = (await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId: worker } })).id;
     await c.agent.post(`/api/monthly-hours/2026/9/${placement}`).send(totals('2026-09-01', '2026-09-30', '225', 25)).expect(201);
@@ -273,7 +275,7 @@ describe('payroll per firm', () => {
 
   it('says which firm has no salary', async () => {
     const c = await company();
-    const workerId = (await hire(c.agent, { siteId: c.site, firmId: c.own }).expect(201)).body.id as string;
+    const workerId = (await hire(c, { siteId: c.site, firmId: c.own }).expect(201)).body.id as string;
     await c.agent.post(`/api/workers/${workerId}/placements`).send({ siteId: c.site, firmId: c.sub, from: '2026-09-16' }).expect(204);
     await salary(c.agent, workerId, c.own, '7500000').expect(201);
     const placements = await ctx.prisma.assignment.findMany({ where: { workerId }, orderBy: { hiredOn: 'asc' } });
@@ -312,23 +314,24 @@ describe('payroll per firm', () => {
 });
 
 describe('pay rules per firm', () => {
-  it("uses the firm's set over the default, only from the month it chose it", async () => {
+  it("uses the firm's set over the company's, only from the month it chose it", async () => {
     const c = await company();
     const set = (await c.agent.post('/api/rule-sets').send({ name: 'Subcontractors' }).expect(201)).body.id as string;
-    await c.agent.put(`/api/rule-sets/${set}/pay-rules/2026/10`).send({ ...RULES, normalHoursPerDay: '8' }).expect(204);
+    const combination = (await c.agent.post(`/api/rule-sets/${set}/variants`).send({ optionIds: [c.pay.optionId] }).expect(201)).body.id;
+    await c.agent.put(`/api/rule-sets/${combination}/pay-rules/2026/10`).send({ ...RULES, normalHoursPerDay: '8' }).expect(204);
     await c.agent.put(`/api/firms/${c.sub}/rule-set/2026/10`).send({ ruleSetId: set }).expect(204);
-    const worker = (await hire(c.agent, { siteId: c.site, firmId: c.sub }).expect(201)).body.id as string;
+    const worker = (await hire(c, { siteId: c.site, firmId: c.sub }).expect(201)).body.id as string;
     await salary(c.agent, worker, c.sub, '10000000').expect(201);
     const placement = (await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId: worker } })).id;
 
-    // September comes before the choice: the company default, 9 hours.
+    // September comes before the choice: the company's set, 9 hours.
     await c.agent.post(`/api/monthly-hours/2026/9/${placement}`).send(totals('2026-09-01', '2026-09-30', '225', 25)).expect(201);
     let view = (await c.agent.get('/api/payroll/2026/9').expect(200)).body.workers[0];
-    expect(view.parts[0].ruleSetName).toBeNull();
+    expect(view.parts[0].ruleSetName).toBe('Main');
     expect(view.total).toBe('10000000.00');
 
     // October: the set's rules, 8 hours a day.
-    const october = (await c.agent.get(`/api/rule-sets/${set}/working-days?year=2026`).expect(200)).body.months[9];
+    const october = (await c.agent.get(`/api/rule-sets/${combination}/working-days?year=2026`).expect(200)).body.months[9];
     expect(october.rulesFrom).toEqual({ year: 2026, month: 10 });
     const days = october.effective as number;
     await c.agent
@@ -430,7 +433,7 @@ describe('Excel import with firms', () => {
 
   it('shows where the file names another firm than the app', async () => {
     const c = await withCodes();
-    await hire(c.agent, { siteId: c.site, firmId: c.own }).expect(201);
+    await hire(c, { siteId: c.site, firmId: c.own }).expect(201);
     await ctx.prisma.worker.updateMany({ data: { employeeNumber: '1' } });
     const file = await workbook([['1', 'Testov', 'Test', 'Direkt', 'Subcontractor X', 'Site A', hired, null, null, ...daysIn(1, 30)]]);
     const preview = (await send(c.agent, 'preview', file).expect(200)).body;

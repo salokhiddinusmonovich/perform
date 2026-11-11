@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { Department, UpdateDepartment } from '@puantaj/schemas';
+import type { AuditAction, Department, UpdateDepartment } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
@@ -131,7 +131,7 @@ export class DepartmentsService {
     if (other) throw conflict('department.nameTaken');
   }
 
-  private record(tx: Tx, auth: CompanyAuthContext, action: string, id: string, data: Prisma.InputJsonObject) {
+  private record(tx: Tx, auth: CompanyAuthContext, action: AuditAction, id: string, data: Prisma.InputJsonObject) {
     return this.audit.record(
       { action, companyId: auth.company.id, auth, entityType: 'Department', entityId: id, data },
       tx,

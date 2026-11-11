@@ -1,6 +1,6 @@
 import type { Role } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { addMember, createUser, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
+import { addMember, createUser, loginAs, memberOfNewCompany, paidCategories, resetDb, setUpPay, startApp, type TestContext } from './helpers';
 
 let ctx: TestContext;
 beforeAll(async () => (ctx = await startApp()));
@@ -21,7 +21,6 @@ const RULES = {
     TRAVEL: { paid: false, hoursPerDay: null },
   },
   travelPayMode: 'PER_DAY_WORKED',
-  payRoundingStep: '1000',
 };
 
 type Agent = Awaited<ReturnType<typeof memberOfNewCompany>>['agent'];
@@ -29,7 +28,7 @@ type Agent = Awaited<ReturnType<typeof memberOfNewCompany>>['agent'];
 /** A company with pay rules from September 2026, a site, two routes and a worker on the site with a salary. */
 async function company(rules = RULES) {
   const owner = await memberOfNewCompany(ctx, 'OWNER');
-  await owner.agent.put('/api/pay-rules/2026/9').send(rules).expect(204);
+  await setUpPay(owner.agent, rules);
   const siteA = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
   const near = (await owner.agent.post('/api/travel-routes').send({ name: 'Near', amountPerDay: '20000' }).expect(201)).body.id as string;
   const far = (await owner.agent.post('/api/travel-routes').send({ name: 'Far', amountPerDay: '30000' }).expect(201)).body.id as string;
@@ -40,9 +39,10 @@ async function company(rules = RULES) {
 }
 
 async function hire(agent: Agent, siteId: string, travelRouteId: string | null) {
+  const categories = await paidCategories(agent);
   const res = await agent
     .post('/api/workers')
-    .send({ worker: { lastName: 'Testov', firstName: 'Test' }, placement: { siteId, travelRouteId, from: '2026-09-01' } })
+    .send({ worker: { lastName: 'Testov', firstName: 'Test', categories }, placement: { siteId, travelRouteId, from: '2026-09-01' } })
     .expect(201);
   return res.body.id as string;
 }

@@ -105,11 +105,14 @@ export type PayrollProblem =
   /** until is absent in months locked before shifts */
   | { code: 'placementWithoutHours'; assignmentId: string; siteName: string; from: string; until?: string }
   | { code: 'noRules'; siteNames: string[] }
-  /** The rule set splits by these categories and the worker's option isn't set (AGENTS.md: Rule sets split by categories); ruleSetName null: the company default */
-  | { code: 'categoryNotSet'; ruleSetName: string | null; categoryIds: string[] }
-  /** The worker's combination of the split's options has no rules for the month */
-  | { code: 'noCategoryRules'; ruleSetName: string | null; optionIds: string[] }
-  | { code: 'noCompanyRules' }
+  /** The company hasn't chosen its pay categories for the month (AGENTS.md: Pay rule sets) */
+  | { code: 'noPayCategories'; ruleSetName: string }
+  /** The worker's option isn't set in these pay categories */
+  | { code: 'categoryNotSet'; ruleSetName: string; categoryIds: string[] }
+  /** The worker's combination of the pay categories' options has no rules for the month in the rule set */
+  | { code: 'noCategoryRules'; ruleSetName: string; optionIds: string[] }
+  /** The company's rounding step isn't set for the month */
+  | { code: 'noRounding' }
   | { code: 'totalsInvalid'; issues: { siteName: string | null; problem: TotalsProblem }[] }
   | { code: 'invalidHours'; detail: string };
 
@@ -127,9 +130,9 @@ export interface FirmRef {
 }
 
 export interface PayrollPart {
-  /** Name of the rule set that applies; null: the company default */
+  /** Name of the rule set that applies; null in months locked with the company default rules (before 2026-11-03) */
   ruleSetName: string | null;
-  /** The combination of the worker's options whose rules apply, when the rule set splits by categories */
+  /** The combination of the worker's options whose rules apply; absent in months locked with a set's own rules (before 2026-11-03) */
   combination?: { categoryName: string; optionName: string }[];
   /** The firm whose payslip it is on; absent while the company doesn't use firms */
   firm?: FirmRef | null;

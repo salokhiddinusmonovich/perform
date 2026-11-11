@@ -1,21 +1,23 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import {
+  companyRuleSetUseSchema,
   holidaySchema,
+  payCategoriesSchema,
+  payRoundingSchema,
   payRulesSchema,
-  ruleSetPayRulesSchema,
   ruleSetSchema,
-  ruleSetSplitSchema,
   ruleSetUseSchema,
   ruleSetVariantSchema,
   updateRuleSetSchema,
   workingDaysOverrideSchema,
   yearMonthSchema,
   yearQuerySchema,
+  type CompanyRuleSetUse,
   type Holiday,
+  type PayCategories,
+  type PayRounding,
   type PayRules,
   type RuleSet,
-  type RuleSetPayRules,
-  type RuleSetSplit,
   type RuleSetUse,
   type RuleSetVariant,
   type UpdateRuleSet,
@@ -28,8 +30,9 @@ import { ZodPipe } from '../common/zod.pipe';
 import { HolidaysService, type HolidayYearView } from './holidays.service';
 import {
   PayRulesService,
+  type PayCategoriesView,
+  type PayRoundingView,
   type PayRulesVersionView,
-  type RuleSetSplitView,
   type RuleSetUseView,
   type RuleSetVariantView,
   type RuleSetView,
@@ -39,16 +42,16 @@ import { WorkingDaysService, type WorkingDaysYearView } from './working-days.ser
 // Owners and admins change pay rules and holidays; accountants see them (AGENTS.md: Roles).
 // Timekeepers and foremen never see pay settings.
 
-/** Pay rules of the company, versioned by the month they apply from. */
+/** The company's pay categories (AGENTS.md: Pay rule sets), versioned by the month they apply from. */
 @ForModule('PAYROLL')
 @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
-@Controller('pay-rules')
-export class PayRulesController {
+@Controller('pay-categories')
+export class PayCategoriesController {
   constructor(private readonly rules: PayRulesService) {}
 
   @Get()
-  list(@CompanyAuth() auth: CompanyAuthContext): Promise<PayRulesVersionView[]> {
-    return this.rules.list(auth.company.id);
+  list(@CompanyAuth() auth: CompanyAuthContext): Promise<PayCategoriesView[]> {
+    return this.rules.listPayCategories(auth.company.id);
   }
 
   @Put(':year/:month')
@@ -57,22 +60,84 @@ export class PayRulesController {
   set(
     @CompanyAuth() auth: CompanyAuthContext,
     @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
-    @Body(new ZodPipe(payRulesSchema)) body: PayRules,
+    @Body(new ZodPipe(payCategoriesSchema)) body: PayCategories,
   ): Promise<void> {
-    return this.rules.set(auth, from, body);
+    return this.rules.setPayCategories(auth, from, body.categoryIds);
   }
 
   @Delete(':year/:month')
   @Roles('OWNER', 'ADMIN')
   @HttpCode(204)
   remove(@CompanyAuth() auth: CompanyAuthContext, @Param(new ZodPipe(yearMonthSchema)) from: YearMonth): Promise<void> {
-    return this.rules.remove(auth, from);
+    return this.rules.removePayCategories(auth, from);
+  }
+}
+
+/** The company's rounding step of the amount to pay out (AGENTS.md: Pay model), versioned by month. */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+@Controller('pay-rounding')
+export class PayRoundingController {
+  constructor(private readonly rules: PayRulesService) {}
+
+  @Get()
+  list(@CompanyAuth() auth: CompanyAuthContext): Promise<PayRoundingView[]> {
+    return this.rules.listRounding(auth.company.id);
+  }
+
+  @Put(':year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  set(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
+    @Body(new ZodPipe(payRoundingSchema)) body: PayRounding,
+  ): Promise<void> {
+    return this.rules.setRounding(auth, from, body.step);
+  }
+
+  @Delete(':year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  remove(@CompanyAuth() auth: CompanyAuthContext, @Param(new ZodPipe(yearMonthSchema)) from: YearMonth): Promise<void> {
+    return this.rules.removeRounding(auth, from);
+  }
+}
+
+/** The rule set the company uses, from a month on. */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+@Controller('company/rule-set')
+export class CompanyRuleSetController {
+  constructor(private readonly rules: PayRulesService) {}
+
+  @Get()
+  list(@CompanyAuth() auth: CompanyAuthContext): Promise<RuleSetUseView[]> {
+    return this.rules.listUses(auth.company.id, { company: true });
+  }
+
+  @Put(':year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  set(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
+    @Body(new ZodPipe(companyRuleSetUseSchema)) body: CompanyRuleSetUse,
+  ): Promise<void> {
+    return this.rules.setUse(auth, { company: true }, from, body.ruleSetId);
+  }
+
+  @Delete(':year/:month')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  remove(@CompanyAuth() auth: CompanyAuthContext, @Param(new ZodPipe(yearMonthSchema)) from: YearMonth): Promise<void> {
+    return this.rules.removeUse(auth, { company: true }, from);
   }
 }
 
 /**
- * Named rule sets sites and firms share (AGENTS.md: Pay rule sets), with their rules and working
- * days, the same way as the company default's but without a rounding step.
+ * Rule sets that the company, sites and firms choose (AGENTS.md: Pay rule sets), and their
+ * combinations, each with its own rules and working days (the routes taking a combination's id).
  */
 @ForModule('PAYROLL')
 @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
@@ -105,12 +170,25 @@ export class RuleSetsController {
     return this.rules.updateRuleSet(auth, id, body);
   }
 
-  @Get(':id/pay-rules')
-  list(
+  /** The set's combinations; each one's rules and working days go through the routes below with its own id. */
+  @Get(':id/variants')
+  variants(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<RuleSetVariantView[]> {
+    return this.rules.listVariants(auth.company.id, id);
+  }
+
+  @Post(':id/variants')
+  @Roles('OWNER', 'ADMIN')
+  createVariant(
     @CompanyAuth() auth: CompanyAuthContext,
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<PayRulesVersionView<RuleSetPayRules>[]> {
-    return this.rules.listNamed(auth.company.id, id);
+    @Body(new ZodPipe(ruleSetVariantSchema)) body: RuleSetVariant,
+  ): Promise<{ id: string }> {
+    return this.rules.createVariant(auth, id, body.optionIds);
+  }
+
+  @Get(':id/pay-rules')
+  list(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<PayRulesVersionView[]> {
+    return this.rules.listRules(auth.company.id, id);
   }
 
   @Put(':id/pay-rules/:year/:month')
@@ -120,9 +198,9 @@ export class RuleSetsController {
     @CompanyAuth() auth: CompanyAuthContext,
     @Param('id', ParseUUIDPipe) id: string,
     @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
-    @Body(new ZodPipe(ruleSetPayRulesSchema)) body: RuleSetPayRules,
+    @Body(new ZodPipe(payRulesSchema)) body: PayRules,
   ): Promise<void> {
-    return this.rules.setNamed(auth, id, from, body);
+    return this.rules.setRules(auth, id, from, body);
   }
 
   @Delete(':id/pay-rules/:year/:month')
@@ -133,7 +211,7 @@ export class RuleSetsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
   ): Promise<void> {
-    return this.rules.removeNamed(auth, id, from);
+    return this.rules.removeRules(auth, id, from);
   }
 
   @Get(':id/working-days')
@@ -154,51 +232,6 @@ export class RuleSetsController {
     @Body(new ZodPipe(workingDaysOverrideSchema)) body: WorkingDaysOverride,
   ): Promise<void> {
     return this.workingDays.override(auth, month, body, id);
-  }
-
-  /** The categories the set (the company default too) splits by (AGENTS.md: Rule sets split by categories). */
-  @Get(':id/splits')
-  splits(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<RuleSetSplitView[]> {
-    return this.rules.listSplits(auth.company.id, id);
-  }
-
-  @Put(':id/splits/:year/:month')
-  @Roles('OWNER', 'ADMIN')
-  @HttpCode(204)
-  setSplit(
-    @CompanyAuth() auth: CompanyAuthContext,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
-    @Body(new ZodPipe(ruleSetSplitSchema)) body: RuleSetSplit,
-  ): Promise<void> {
-    return this.rules.setSplit(auth, id, from, body.categoryIds);
-  }
-
-  @Delete(':id/splits/:year/:month')
-  @Roles('OWNER', 'ADMIN')
-  @HttpCode(204)
-  removeSplit(
-    @CompanyAuth() auth: CompanyAuthContext,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param(new ZodPipe(yearMonthSchema)) from: YearMonth,
-  ): Promise<void> {
-    return this.rules.removeSplit(auth, id, from);
-  }
-
-  /** The set's combinations; each one's rules and working days go through the routes above with its own id. */
-  @Get(':id/variants')
-  variants(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<RuleSetVariantView[]> {
-    return this.rules.listVariants(auth.company.id, id);
-  }
-
-  @Post(':id/variants')
-  @Roles('OWNER', 'ADMIN')
-  createVariant(
-    @CompanyAuth() auth: CompanyAuthContext,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodPipe(ruleSetVariantSchema)) body: RuleSetVariant,
-  ): Promise<{ id: string }> {
-    return this.rules.createVariant(auth, id, body.optionIds);
   }
 }
 
@@ -311,31 +344,5 @@ export class HolidaysController {
   @HttpCode(204)
   remove(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.holidays.remove(auth, id);
-  }
-}
-
-/** Working days per month: calculated, overridden, and the value pay uses. */
-@ForModule('PAYROLL')
-@Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
-@Controller('working-days')
-export class WorkingDaysController {
-  constructor(private readonly workingDays: WorkingDaysService) {}
-
-  @Get()
-  year(
-    @CompanyAuth() auth: CompanyAuthContext,
-    @Query(new ZodPipe(yearQuerySchema)) { year }: YearQuery,
-  ): Promise<WorkingDaysYearView> {
-    return this.workingDays.year(auth.company.id, year);
-  }
-
-  @Post(':year/:month')
-  @HttpCode(204)
-  override(
-    @CompanyAuth() auth: CompanyAuthContext,
-    @Param(new ZodPipe(yearMonthSchema)) month: YearMonth,
-    @Body(new ZodPipe(workingDaysOverrideSchema)) body: WorkingDaysOverride,
-  ): Promise<void> {
-    return this.workingDays.override(auth, month, body);
   }
 }

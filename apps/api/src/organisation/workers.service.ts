@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { FirmType, Prisma } from '@prisma/client';
-import type { CreateWorker, Placement, Salary, Worker } from '@puantaj/schemas';
+import type { AuditAction, CreateWorker, Placement, Salary, Worker } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
@@ -626,7 +626,7 @@ export class WorkersService {
     };
   }
 
-  private record(tx: Tx, auth: CompanyAuthContext, action: string, workerId: string, data: Prisma.InputJsonObject) {
+  private record(tx: Tx, auth: CompanyAuthContext, action: AuditAction, workerId: string, data: Prisma.InputJsonObject) {
     return this.audit.record(
       { action, companyId: auth.company.id, auth, entityType: 'Worker', entityId: workerId, data },
       tx,

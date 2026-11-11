@@ -13,7 +13,7 @@ import {
   type TotalsProblem,
   type TravelInput,
 } from '@puantaj/payroll';
-import type { YearMonth } from '@puantaj/schemas';
+import type { PayRules, YearMonth } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict } from '../common/api-error';
@@ -24,7 +24,7 @@ import { categoriesInMonth, listCategories, type WorkerCategoryView } from '../o
 import { placementDaysIn, shiftPartsOf, type ShiftPart } from '../organisation/worker-shifts';
 import { SALARY_ORDER, salaryForFirm } from '../organisation/workers.service';
 import { lockCompanyMonths } from '../pay-rules/months';
-import { PayRulesService, type MonthRules, type StoredPayRules, type WorkerRules } from '../pay-rules/pay-rules.service';
+import { PayRulesService, type MonthRules, type WorkerRules } from '../pay-rules/pay-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { COUNTING_ADJUSTMENTS } from './adjustments.service';
 import { toTotals } from './monthly-hours.service';
@@ -46,15 +46,14 @@ export type PayrollProblem =
   | { code: 'placementWithoutHours'; assignmentId: string; siteName: string; from: string; until?: string }
   /** No pay rules for the month at these sites */
   | { code: 'noRules'; siteNames: string[] }
-  /**
-   * The rule set splits by these categories, and the worker's option isn't set in them
-   * (AGENTS.md: Rule sets split by categories). ruleSetName null: the company default.
-   */
-  | { code: 'categoryNotSet'; ruleSetName: string | null; categoryIds: string[] }
-  /** The worker's combination of the split rule set's categories (option ids in the split's order) has no rules for the month */
-  | { code: 'noCategoryRules'; ruleSetName: string | null; optionIds: string[] }
-  /** The company default rules, which hold the rounding step, are not set for the month */
-  | { code: 'noCompanyRules' }
+  /** The company hasn't chosen its pay categories for the month (AGENTS.md: Pay rule sets) */
+  | { code: 'noPayCategories'; ruleSetName: string }
+  /** The worker's option isn't set in these pay categories (AGENTS.md: Pay rule sets) */
+  | { code: 'categoryNotSet'; ruleSetName: string; categoryIds: string[] }
+  /** The worker's combination (option ids in the pay categories' order) has no rules for the month in the rule set */
+  | { code: 'noCategoryRules'; ruleSetName: string; optionIds: string[] }
+  /** The company's rounding step is not set for the month */
+  | { code: 'noRounding' }
   /** siteName null: the placements' totals together don't fit */
   | { code: 'totalsInvalid'; issues: { siteName: string | null; problem: TotalsProblem }[] }
   /** Daily entries that contradict each other (the engine says how) */
@@ -86,12 +85,12 @@ const placeKey = (assignmentId: string, siteId: string, teamId: string | null) =
  * rule set's rules with the shift's normal hours.
  */
 export interface PayrollPartView {
-  /** Site whose own rules apply, or null: the company default or a firm's */
-  /** Name of the rule set that applies; null: the company default */
+  /** Site whose own rules apply, or null: the company's or a firm's */
+  /** Name of the rule set that applies; null in months locked with the company default rules (before 2026-11-03) */
   ruleSetName: string | null;
   /**
-   * The combination of the worker's options whose rules apply, when the rule set splits by
-   * categories, saved by name so a locked month keeps it. Absent: the set's own rules.
+   * The combination of the worker's options whose rules apply, saved by name so a locked month
+   * keeps it. Absent in months locked with a rule set's own rules (before 2026-11-03).
    */
   combination?: { categoryName: string; optionName: string }[];
   /** The firm whose payslip the part is on; absent while the company doesn't use firms */
@@ -490,7 +489,7 @@ export class PayrollService {
     const assignmentIds = placements.map((p) => p.id);
     const workerIds = [...visible];
 
-    const [salaries, entries, editedDays, travelAmounts, adjustments, companyRules, shiftParts, categoryValues, categories] = await Promise.all([
+    const [salaries, entries, editedDays, travelAmounts, adjustments, roundingStep, shiftParts, categoryValues, categories] = await Promise.all([
       db.salary.findMany({
         where: {
           companyId,
@@ -517,14 +516,11 @@ export class PayrollService {
         where: { companyId, year, month, workerId: { in: workerIds }, ...COUNTING_ADJUSTMENTS },
         orderBy: { seq: 'asc' },
       }),
-      this.rules
-        .defaultRuleSet(companyId, db)
-        .then((set) => (set ? this.rules.month(companyId, set.id, year, month, db) : null)),
+      this.rules.roundingIn(companyId, year, month, db),
       shiftPartsOf(db, companyId, workerIds, year, month),
       categoriesInMonth(db, companyId, workerIds, year, month),
       listCategories(db, companyId),
     ]);
-    const roundingStep = companyRules?.rules?.settings.payRoundingStep ?? null;
 
     /** While the company doesn't use firms, placements count as having none. */
     const firmOf = (p: Placement): FirmRef | null => (firmsOn ? p.firm : null);
@@ -621,7 +617,7 @@ export class PayrollService {
         else groups.set(key, { firm, rules: r, placements: [p] });
       }
       if (withoutRules.length > 0) view.problems.push({ code: 'noRules', siteNames: [...new Set(withoutRules)] });
-      else if (roundingStep === null) view.problems.push({ code: 'noCompanyRules' });
+      else if (roundingStep === null) view.problems.push({ code: 'noRounding' });
       view.problems.push(...combinationProblems.values());
       if (view.problems.length > 0) continue;
 
@@ -793,7 +789,7 @@ function totalsFor(p: Placement, part: Pick<ShiftPart, 'from' | 'until'>): Month
 }
 
 /** Pay rules (Settings) as the engine takes them. Normal hours are always paid at × 1. */
-function paySettings(rules: StoredPayRules): PaySettings {
+function paySettings(rules: PayRules): PaySettings {
   return {
     normalHoursPerDay: rules.normalHoursPerDay,
     multipliers: {
@@ -816,7 +812,7 @@ function route(p: Placement) {
  * (none entered: none paid).
  */
 function travel(
-  rules: StoredPayRules,
+  rules: PayRules,
   routes: Record<string, ReturnType<typeof route>>,
   starting: readonly Placement[],
   amounts: readonly { assignmentId: string; amount: Prisma.Decimal }[],

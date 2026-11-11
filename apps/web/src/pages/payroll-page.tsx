@@ -820,14 +820,16 @@ function ProblemText({ problem }: { problem: PayrollProblem }) {
         : t('payroll.problems.placementWithoutHours', { site: problem.siteName, date: format.date(problem.from) });
     case 'noRules':
       return t('payroll.problems.noRules', { sites: problem.siteNames.join(', ') });
+    case 'noPayCategories':
+      return t('payroll.problems.noPayCategories', { rules: problem.ruleSetName });
     case 'categoryNotSet':
       return t('payroll.problems.categoryNotSet', {
-        rules: problem.ruleSetName ?? t('ruleSetCategories.defaultName'),
+        rules: problem.ruleSetName,
         categories: problem.categoryIds.map((id) => categories.data?.find((c) => c.id === id)?.name ?? '').join(', '),
       });
     case 'noCategoryRules':
       return t('payroll.problems.noCategoryRules', {
-        rules: problem.ruleSetName ?? t('ruleSetCategories.defaultName'),
+        rules: problem.ruleSetName,
         // In the order of their categories by name, as every page shows a combination.
         options: (categories.data ?? [])
           .flatMap((c) => c.options)

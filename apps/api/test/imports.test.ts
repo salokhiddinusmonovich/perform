@@ -2,7 +2,18 @@ import type { Role } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { addMember, createPlan, createUser, givePlan, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
+import {
+  addMember,
+  createPlan,
+  createUser,
+  givePlan,
+  loginAs,
+  memberOfNewCompany,
+  resetDb,
+  setUpPay,
+  startApp,
+  type TestContext,
+} from './helpers';
 
 let ctx: TestContext;
 beforeAll(async () => (ctx = await startApp()));
@@ -23,7 +34,6 @@ const RULES = {
     TRAVEL: { paid: false, hoursPerDay: null },
   },
   travelPayMode: 'NONE',
-  payRoundingStep: '1000',
 };
 
 const HEADERS = ['№', 'SICIL', 'SOYADI', 'ADI', 'Statu', 'Объект / Santiye', 'GIRIS TARIHI', 'CIKIS TARIHI', 'ÜCRET MAAŞ'];
@@ -79,9 +89,15 @@ function send(agent: Agent, path: string, file: Buffer, fields: Record<string, s
   return req.attach('file', file, 'Sentyabr – табель.xlsx');
 }
 
-async function company() {
+/**
+ * A company with a site and the file's codes, paying from September by the category of the file's
+ * Statu column (the same rules for Direkt and Endirekt), or else by a category the file doesn't have.
+ */
+async function company({ payByStatus = true }: { payByStatus?: boolean } = {}) {
   const owner = await memberOfNewCompany(ctx, 'OWNER');
-  await owner.agent.put('/api/pay-rules/2026/9').send(RULES).expect(204);
+  const pay = payByStatus
+    ? await setUpPay(owner.agent, RULES, { category: 'Statu', options: ['Direkt', 'Endirekt'], paid: ['Direkt', 'Endirekt'] })
+    : await setUpPay(owner.agent, RULES);
   await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201);
   await owner.agent
     .put('/api/timesheet-codes')
@@ -94,7 +110,7 @@ async function company() {
       ],
     })
     .expect(204);
-  return owner;
+  return { ...owner, status: { id: pay.categoryId, options: pay.options } };
 }
 
 /** Adds a worker category with these options; returns its id and each option's id by name. */
@@ -113,7 +129,7 @@ async function member(companyId: string, role: Role) {
 describe('Excel import', () => {
   it('guesses the columns, adds the new workers, then imports their hours, paid as an import', async () => {
     const owner = await company();
-    const status = await category(owner.agent, 'Statu', ['Direkt', 'Endirekt']);
+    const { status } = owner;
     const file = await workbook([
       { number: '10001', lastName: 'Aliyev' },
       { number: '10002', lastName: 'Karimov', status: 'Endirekt', salary: 0, left: '20.09.2026' },
@@ -201,7 +217,7 @@ describe('Excel import', () => {
   });
 
   it("maps a category's column and values, and shows where workers already in the app differ", async () => {
-    const owner = await company();
+    const owner = await company({ payByStatus: false });
     const type = await category(owner.agent, 'Direkt / Endirekt', ['Direkt', 'Endirekt']);
     const file = await workbook([
       { number: '1', lastName: 'Aliyev' },
@@ -319,7 +335,6 @@ describe('Excel import', () => {
 
   it('writes nothing while any row has a problem', async () => {
     const owner = await company();
-    await category(owner.agent, 'Statu', ['Direkt', 'Endirekt']);
     const file = await workbook([
       { number: '1', lastName: 'Aliyev' },
       { number: '2', lastName: 'Karimov', site: 'Nowhere' },

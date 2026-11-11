@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { AUDIT_ACTIONS, AUDIT_AREAS } from '@puantaj/schemas';
 import { describe, expect, it } from 'vitest';
 import en from './en.json';
 import ru from './ru.json';
@@ -61,6 +62,14 @@ describe('keys used in code exist in the translations', () => {
       'notFound',
     ].filter((c) => c !== 'validation');
     expect(codes.filter((c) => !enKeys.has(`errors.${c}`))).toEqual([]);
+  });
+
+  it('audit: every action and area the API records (shown as audit.actions.<action>, audit.areas.<area>)', () => {
+    expect(AUDIT_ACTIONS.filter((a) => !enKeys.has(`audit.actions.${a}`))).toEqual([]);
+    expect(AUDIT_AREAS.filter((a) => !enKeys.has(`audit.areas.${a}`))).toEqual([]);
+    // No names left over for actions the API no longer records.
+    const named = [...enKeys].filter((k) => k.startsWith('audit.actions.')).map((k) => k.slice('audit.actions.'.length));
+    expect(named.filter((a) => !(AUDIT_ACTIONS as readonly string[]).includes(a))).toEqual([]);
   });
 
   it('API: every Excel import problem code (shown as errors.<code>)', () => {

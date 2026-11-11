@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Plan, Prisma } from '@prisma/client';
-import type { CreateCompany, SubscriptionPayment, UpdatePlatformCompany } from '@puantaj/schemas';
+import type { AuditAction, CreateCompany, SubscriptionPayment, UpdatePlatformCompany } from '@puantaj/schemas';
 import { randomBytes } from 'node:crypto';
 import { AuditService, diff } from '../audit/audit.service';
 import type { AuthContext } from '../auth/auth.context';
@@ -154,7 +154,7 @@ export class PlatformService {
       const { isActive, planId, ...settings } = changes;
       const updated = await tx.company.update({ where: { id: companyId }, data: { isActive, ...settings } });
 
-      const record = (action: string, data?: Prisma.InputJsonObject) =>
+      const record = (action: AuditAction, data?: Prisma.InputJsonObject) =>
         this.audit.record({ action, companyId, auth, entityType: 'Company', entityId: companyId, data }, tx);
       const settingsChanged = diff({ name: company.name, currency: company.currency, timezone: company.timezone }, settings);
       if (Object.keys(settingsChanged).length > 0) await record('company.update', settingsChanged);

@@ -1,5 +1,5 @@
-import type { Role } from '@puantaj/schemas';
-import { useQuery } from '@tanstack/react-query';
+import type { AuditQueryInput, Role } from '@puantaj/schemas';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from './api';
 import type { Subscription } from './auth';
 
@@ -88,4 +88,49 @@ export function useCompanies(enabled = true) {
 
 export function usePlans(enabled = true) {
   return useQuery({ queryKey: PLANS_KEY, queryFn: () => api.get<PlanRow[]>('/platform/plans'), enabled });
+}
+
+export function usePlatformUsers(enabled = true) {
+  return useQuery({ queryKey: USERS_KEY, queryFn: () => api.get<UserRow[]>('/platform/users'), enabled });
+}
+
+export const AUDIT_KEY = [...PLATFORM_KEY, 'audit'] as const;
+
+/** One audit entry, as `GET /platform/audit` returns it. */
+export interface AuditEntryRow {
+  id: string;
+  createdAt: string;
+  /** An `AuditAction`, or an older code the app no longer records */
+  action: string;
+  company: { id: string; name: string } | null;
+  /** null for actions without a session (e.g. the command line) */
+  actor: { id: string; fullName: string } | null;
+  /** The platform admin who acted as `actor` (impersonation) */
+  impersonator: { id: string; fullName: string } | null;
+  entityType: string | null;
+  entityId: string | null;
+  /** Changed fields ({ field: { from, to } }) or other details */
+  data: unknown;
+  ip: string | null;
+}
+
+interface AuditPage {
+  entries: AuditEntryRow[];
+  nextCursor: string | null;
+}
+
+/** The audit trail, newest first, a page at a time ("Load older" fetches the next). */
+export function useAuditLog(query: Omit<AuditQueryInput, 'before'>) {
+  return useInfiniteQuery({
+    queryKey: [...AUDIT_KEY, query],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries({ ...query, before: pageParam ?? undefined })) {
+        if (value !== undefined && value !== '') params.set(key, String(value));
+      }
+      return api.get<AuditPage>(`/platform/audit?${params}`);
+    },
+    getNextPageParam: (last) => last.nextCursor,
+  });
 }

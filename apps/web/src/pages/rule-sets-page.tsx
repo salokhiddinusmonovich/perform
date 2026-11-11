@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ruleSetSchema, type RuleSet, type RuleSetInput } from '@puantaj/schemas';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { CalendarCheck, MoreHorizontal, Pencil, Plus, Power, Scale, Shapes } from 'lucide-react';
+import { MoreHorizontal, Pencil, Plus, Power, Shapes } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -29,7 +29,7 @@ import { canManageCompany, canViewPayRules, useMe, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
 import { RULE_SETS_KEY, useRuleSets, type RuleSetItem } from '@/lib/rule-sets';
 
-/** Named rule sets sites and firms share (AGENTS.md: Pay rule sets). Owners and admins manage them; accountants look. */
+/** Rule sets that the company, sites and firms choose (AGENTS.md: Pay rule sets). Owners and admins manage them; accountants look. */
 export function RuleSetsPage() {
   const { t } = useTranslation();
   const me = useMe().data;
@@ -63,7 +63,6 @@ function RuleSetsView({ me, creating, onCreatingChange }: { me: Me; creating: bo
   const manages = canManageCompany(me);
   const [editing, setEditing] = useState<RuleSetItem | null>(null);
   const [toggling, setToggling] = useState<RuleSetItem | null>(null);
-  const rows = useMemo(() => sets.data?.filter((s) => s.name !== null), [sets.data]);
   const refresh = () => queryClient.invalidateQueries({ queryKey: RULE_SETS_KEY });
 
   const columns = useMemo<ColumnDef<RuleSetItem, unknown>[]>(
@@ -73,7 +72,7 @@ function RuleSetsView({ me, creating, onCreatingChange }: { me: Me; creating: bo
         accessorKey: 'name',
         header: t('ruleSets.name'),
         cell: ({ row }) => (
-          <Link to={`/settings/rule-sets/${row.original.id}/pay-rules`} className="font-medium underline-offset-4 hover:underline">
+          <Link to={`/settings/rule-sets/${row.original.id}`} className="font-medium underline-offset-4 hover:underline">
             {row.original.name}
           </Link>
         ),
@@ -92,8 +91,8 @@ function RuleSetsView({ me, creating, onCreatingChange }: { me: Me; creating: bo
         header: t('ruleSets.usedByColumn'),
         enableSorting: false,
         cell: ({ row }) => {
-          const { sites, firms } = row.original.usedBy;
-          return [...sites, ...firms].map((x) => x.name).join(', ') || '—';
+          const { company, sites, firms } = row.original.usedBy;
+          return [...(company ? [t('ruleSets.company')] : []), ...[...sites, ...firms].map((x) => x.name)].join(', ') || '—';
         },
       },
       {
@@ -120,19 +119,7 @@ function RuleSetsView({ me, creating, onCreatingChange }: { me: Me; creating: bo
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem asChild>
-                <Link to={`/settings/rule-sets/${row.original.id}/pay-rules`}>
-                  <Scale aria-hidden />
-                  {t('nav.payRules')}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to={`/settings/rule-sets/${row.original.id}/working-days`}>
-                  <CalendarCheck aria-hidden />
-                  {t('nav.workingDays')}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to={`/settings/rule-sets/${row.original.id}/categories`}>
+                <Link to={`/settings/rule-sets/${row.original.id}`}>
                   <Shapes aria-hidden />
                   {t('ruleSetCategories.link')}
                 </Link>
@@ -166,13 +153,13 @@ function RuleSetsView({ me, creating, onCreatingChange }: { me: Me; creating: bo
     <>
       <DataTable
         columns={columns}
-        data={rows}
+        data={sets.data}
         isLoading={sets.isPending}
         isError={sets.isError}
         onRetry={() => sets.refetch()}
-        totalCount={rows?.length}
+        totalCount={sets.data?.length}
         searchable
-        searchText={(s) => s.name ?? ''}
+        searchText={(s) => s.name}
         emptyTitle={t('ruleSets.empty')}
         emptyDescription={t('ruleSets.emptyDescription')}
       />

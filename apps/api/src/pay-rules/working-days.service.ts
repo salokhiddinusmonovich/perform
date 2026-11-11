@@ -35,9 +35,9 @@ export interface WorkingDaysYearView {
 }
 
 /**
- * Working days per month of the company default rule set or a named one: calculated from its
- * rest weekdays and the holidays, with overrides by an owner, admin or accountant. Overrides
- * are only ever added (the accountant can't edit); the newest counts.
+ * Working days per month of a rule set's combination: calculated from its rest weekdays and
+ * the holidays, with overrides by an owner, admin or accountant. Overrides are only ever
+ * added (the accountant can't edit); the newest counts.
  */
 @Injectable()
 export class WorkingDaysService {
@@ -47,32 +47,30 @@ export class WorkingDaysService {
     private readonly audit: AuditService,
   ) {}
 
-  async year(companyId: string, year: number, ruleSetId: string | null = null): Promise<WorkingDaysYearView> {
-    const set = ruleSetId ? await this.rules.editableRuleSet(companyId, ruleSetId) : await this.rules.defaultRuleSet(companyId);
+  async year(companyId: string, year: number, combinationId: string): Promise<WorkingDaysYearView> {
+    const set = await this.rules.combination(companyId, combinationId);
     const [holidays, locked, overrides] = await Promise.all([
       this.prisma.holiday.findMany({
         where: { companyId, date: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year + 1, 0, 1)) } },
         select: { kind: true },
       }),
       this.prisma.payrollPeriod.findMany({ where: { companyId, year, status: 'LOCKED' }, select: { month: true } }),
-      set
-        ? this.prisma.workingDaysOverride.findMany({
-            where: { companyId, ruleSetId: set.id, year },
-            include: { setBy: { select: { fullName: true } } },
-            orderBy: { seq: 'desc' },
-          })
-        : [],
+      this.prisma.workingDaysOverride.findMany({
+        where: { companyId, ruleSetId: set.id, year },
+        include: { setBy: { select: { fullName: true } } },
+        orderBy: { seq: 'desc' },
+      }),
     ]);
 
     const months: WorkingDaysMonthView[] = [];
     for (let month = 1; month <= 12; month++) {
-      const m = set ? await this.rules.month(companyId, set.id, year, month) : null;
+      const m = await this.rules.month(companyId, set.id, year, month);
       months.push({
         month,
-        rulesFrom: m?.rules ? { year: m.rules.fromYear, month: m.rules.fromMonth } : null,
-        calculated: m?.workingDays?.calculated ?? null,
-        override: m?.workingDays?.override ?? null,
-        effective: m?.workingDays?.effective ?? null,
+        rulesFrom: m.rules ? { year: m.rules.fromYear, month: m.rules.fromMonth } : null,
+        calculated: m.workingDays?.calculated ?? null,
+        override: m.workingDays?.override ?? null,
+        effective: m.workingDays?.effective ?? null,
         locked: locked.some((p) => p.month === month),
         history: overrides
           .filter((o) => o.month === month)
@@ -86,14 +84,14 @@ export class WorkingDaysService {
     auth: CompanyAuthContext,
     { year, month }: { year: number; month: number },
     input: WorkingDaysOverride,
-    ruleSetId: string | null = null,
+    combinationId: string,
   ): Promise<void> {
     const companyId = auth.company.id;
     await this.prisma.$transaction(async (tx) => {
       await assertMonthsOpen(tx, companyId, { year, month });
-      const set = ruleSetId ? await this.rules.editableRuleSet(companyId, ruleSetId, tx) : await this.rules.defaultRuleSet(companyId, tx);
-      const current = set && (await this.rules.month(companyId, set.id, year, month, tx));
-      if (!set || !current?.calendar || !current.workingDays) throw conflict('payRules.notSet');
+      const set = await this.rules.combination(companyId, combinationId, tx);
+      const current = await this.rules.month(companyId, set.id, year, month, tx);
+      if (!current.calendar || !current.workingDays) throw conflict('payRules.notSet');
       if (input.workingDays !== null && input.workingDays > current.calendar.length) {
         throw badRequest('validation', { issues: [{ path: 'workingDays', message: 'validation.workingDaysRange' }] });
       }

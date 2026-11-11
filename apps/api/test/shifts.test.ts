@@ -1,6 +1,6 @@
 import type { Role } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { addMember, createUser, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
+import { addMember, createUser, loginAs, memberOfNewCompany, paidCategories, resetDb, setUpPay, startApp, type TestContext } from './helpers';
 
 let ctx: TestContext;
 beforeAll(async () => (ctx = await startApp()));
@@ -21,7 +21,6 @@ const RULES = {
     TRAVEL: { paid: false, hoursPerDay: null },
   },
   travelPayMode: 'NONE',
-  payRoundingStep: '1000',
 };
 
 type Agent = Awaited<ReturnType<typeof memberOfNewCompany>>['agent'];
@@ -29,7 +28,7 @@ type Agent = Awaited<ReturnType<typeof memberOfNewCompany>>['agent'];
 /** A company with pay rules from September 2026, two sites, a night shift and a worker on each site. */
 async function company() {
   const owner = await memberOfNewCompany(ctx, 'OWNER');
-  await owner.agent.put('/api/pay-rules/2026/9').send(RULES).expect(204);
+  await setUpPay(owner.agent, RULES);
   const siteA = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
   const siteB = (await owner.agent.post('/api/sites').send({ name: 'Site B' }).expect(201)).body.id as string;
   const night = (await owner.agent.post('/api/shifts').send({ name: 'Night', normalHoursPerDay: '10' }).expect(201)).body.id as string;
@@ -41,9 +40,10 @@ async function company() {
 }
 
 async function hire(agent: Agent, siteId: string, lastName: string) {
+  const categories = await paidCategories(agent);
   const res = await agent
     .post('/api/workers')
-    .send({ worker: { lastName, firstName: 'Test' }, placement: { siteId, from: '2026-09-01' } })
+    .send({ worker: { lastName, firstName: 'Test', categories }, placement: { siteId, from: '2026-09-01' } })
     .expect(201);
   return res.body.id as string;
 }

@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import type { AuditAction } from '@puantaj/schemas';
 import type { AuthContext } from '../auth/auth.context';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface AuditDetails {
-  action: string;
+  action: AuditAction;
   companyId?: string | null;
   entityType?: string;
   entityId?: string;

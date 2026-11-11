@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { FirmType, Prisma } from '@prisma/client';
-import type { Firm, UpdateFirm } from '@puantaj/schemas';
+import type { AuditAction, Firm, UpdateFirm } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict, notFound } from '../common/api-error';
@@ -105,7 +105,7 @@ export class FirmsService {
     if (other) throw conflict('firm.nameTaken');
   }
 
-  private record(tx: Tx, auth: CompanyAuthContext, action: string, id: string, data: Prisma.InputJsonObject) {
+  private record(tx: Tx, auth: CompanyAuthContext, action: AuditAction, id: string, data: Prisma.InputJsonObject) {
     return this.audit.record({ action, companyId: auth.company.id, auth, entityType: 'Firm', entityId: id, data }, tx);
   }
 }

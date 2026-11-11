@@ -106,27 +106,48 @@ async function main() {
       data: [ids.pm, ids.timekeeper].map((userId) => ({ userId, companyId: demo.id, siteId: north.id })),
     });
     await prisma.memberTeam.create({ data: { userId: ids.foreman, companyId: demo.id, teamId: electrical.id } });
-    // Pay rules from September 2026, so the payroll pages have something to calculate.
-    const ruleSet = await prisma.payrollRuleSet.create({ data: { companyId: demo.id } });
-    await prisma.payrollRules.create({
-      data: {
-        companyId: demo.id,
-        ruleSetId: ruleSet.id,
-        fromYear: 2026,
-        fromMonth: 9,
-        restWeekdays: [7],
-        normalHoursPerDay: '9',
-        overtimeMultiplier: '1.5',
-        restDayMultiplier: '2',
-        holidayMultiplier: '2',
-        leavePaid: true,
-        sickPaid: true,
-        sickHoursPerDay: '8',
-        travelDayPaid: true,
-        travelPayMode: 'NONE',
-        payRoundingStep: '1000',
-        setById: ids.owner,
-      },
+    // Pay rules from September 2026, so the payroll pages have something to calculate: pay goes
+    // by Direkt / Endirekt, and the company's rule set has the same rules for both.
+    const directness = await prisma.workerCategory.create({ data: { companyId: demo.id, name: 'Direkt / Endirekt' } });
+    const [direct, indirect] = await Promise.all(
+      ['Direkt', 'Endirekt'].map((name, position) =>
+        prisma.workerCategoryOption.create({ data: { companyId: demo.id, categoryId: directness.id, position, name } }),
+      ),
+    );
+    await prisma.payCategoryChoice.create({
+      data: { companyId: demo.id, fromYear: 2026, fromMonth: 9, firstCategoryId: directness.id, setById: ids.owner },
+    });
+    await prisma.payRounding.create({ data: { companyId: demo.id, fromYear: 2026, fromMonth: 9, step: '1000', setById: ids.owner } });
+    const ruleSet = await prisma.payrollRuleSet.create({ data: { companyId: demo.id, name: 'Asosiy' } });
+    for (const option of [direct, indirect]) {
+      const combination = await prisma.payrollRuleSet.create({
+        data: { companyId: demo.id, parentId: ruleSet.id, variantKey: option.id },
+      });
+      await prisma.ruleSetVariantOption.create({
+        data: { companyId: demo.id, ruleSetId: combination.id, categoryId: directness.id, optionId: option.id },
+      });
+      await prisma.payrollRules.create({
+        data: {
+          companyId: demo.id,
+          ruleSetId: combination.id,
+          fromYear: 2026,
+          fromMonth: 9,
+          restWeekdays: [7],
+          normalHoursPerDay: '9',
+          overtimeMultiplier: '1.5',
+          restDayMultiplier: '2',
+          holidayMultiplier: '2',
+          leavePaid: true,
+          sickPaid: true,
+          sickHoursPerDay: '8',
+          travelDayPaid: true,
+          travelPayMode: 'NONE',
+          setById: ids.owner,
+        },
+      });
+    }
+    await prisma.ruleSetUse.create({
+      data: { companyId: demo.id, ruleSetId: ruleSet.id, fromYear: 2026, fromMonth: 9, setById: ids.owner },
     });
     // Shifts are optional; one to give workers from the workers page.
     await prisma.shift.create({ data: { companyId: demo.id, name: 'Night', normalHoursPerDay: '10' } });
@@ -138,6 +159,17 @@ async function main() {
       ['Namunov', 'Sardor', 'HSE inspector', '5000000', false],
     ] as const) {
       const worker = await prisma.worker.create({ data: { companyId: demo.id, lastName, firstName, position } });
+      await prisma.workerCategoryValue.create({
+        data: {
+          companyId: demo.id,
+          workerId: worker.id,
+          categoryId: directness.id,
+          optionId: team ? direct.id : indirect.id,
+          fromYear: 2026,
+          fromMonth: 9,
+          setById: ids.owner,
+        },
+      });
       const placement = await prisma.assignment.create({
         data: {
           companyId: demo.id,
@@ -219,7 +251,11 @@ async function removeDemoData(prisma: PrismaClient) {
     prisma.workingDaysOverride.deleteMany({ where: inCompany }),
     prisma.payrollRules.deleteMany({ where: inCompany }),
     prisma.ruleSetUse.deleteMany({ where: inCompany }),
+    prisma.ruleSetVariantOption.deleteMany({ where: inCompany }),
     prisma.payrollRuleSet.deleteMany({ where: inCompany }),
+    prisma.payCategoryChoice.deleteMany({ where: inCompany }),
+    prisma.payRounding.deleteMany({ where: inCompany }),
+    prisma.workerCategoryValue.deleteMany({ where: inCompany }),
     prisma.holiday.deleteMany({ where: inCompany }),
     prisma.timesheetCode.deleteMany({ where: inCompany }),
     prisma.assignment.deleteMany({ where: inCompany }),
@@ -230,6 +266,8 @@ async function removeDemoData(prisma: PrismaClient) {
     prisma.memberTeam.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),
     prisma.membership.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),
     prisma.worker.deleteMany({ where: inCompany }),
+    prisma.workerCategoryOption.deleteMany({ where: inCompany }),
+    prisma.workerCategory.deleteMany({ where: inCompany }),
     prisma.team.deleteMany({ where: inCompany }),
     prisma.department.deleteMany({ where: inCompany }),
     prisma.firm.deleteMany({ where: inCompany }),

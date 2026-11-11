@@ -2,7 +2,19 @@ import { randomUUID } from 'node:crypto';
 import type { Role } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { dayToDate, isoDay, todayIn } from '../src/common/dates';
-import { addMember, createPlan, createUser, givePlan, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
+import {
+  addMember,
+  createPlan,
+  createUser,
+  givePlan,
+  loginAs,
+  memberOfNewCompany,
+  paidCategories,
+  resetDb,
+  setUpPay,
+  startApp,
+  type TestContext,
+} from './helpers';
 
 let ctx: TestContext;
 beforeAll(async () => (ctx = await startApp()));
@@ -24,7 +36,6 @@ const RULES = {
     TRAVEL: { paid: false, hoursPerDay: null },
   },
   travelPayMode: 'NONE',
-  payRoundingStep: '1000',
 };
 
 /**
@@ -36,7 +47,7 @@ async function company({ timesheetModule = true, planFrom = '2000-01-01' } = {})
   const owner = await memberOfNewCompany(ctx, 'OWNER');
   const plan = await createPlan(ctx.prisma, { timesheetModule });
   await givePlan(ctx.prisma, owner.company.id, plan.id, planFrom);
-  await owner.agent.put('/api/pay-rules/2026/9').send(RULES).expect(204);
+  await setUpPay(owner.agent, RULES);
   const siteA = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
   const siteB = (await owner.agent.post('/api/sites').send({ name: 'Site B' }).expect(201)).body.id as string;
   const teamA = (await owner.agent.post('/api/teams').send({ siteId: siteA, name: 'Team A' }).expect(201)).body.id as string;
@@ -47,9 +58,10 @@ async function company({ timesheetModule = true, planFrom = '2000-01-01' } = {})
 }
 
 async function hire(agent: Agent, siteId: string, teamId: string | null, lastName: string, from = '2026-09-01') {
+  const categories = await paidCategories(agent);
   const res = await agent
     .post('/api/workers')
-    .send({ worker: { lastName, firstName: 'Test' }, placement: { siteId, teamId, from } })
+    .send({ worker: { lastName, firstName: 'Test', categories }, placement: { siteId, teamId, from } })
     .expect(201);
   return res.body.id as string;
 }
@@ -197,7 +209,9 @@ describe('daily hour entry', () => {
     expect(grid).toMatchObject({ year: 2026, month: 9, site: { id: siteA, name: 'Site A', isActive: true }, locked: false });
     expect(grid.calendar).toHaveLength(30);
     expect(grid.calendar[0]).toEqual({ date: '2026-09-01', kind: 'HOLIDAY' });
-    expect(grid.calendar[5]).toEqual({ date: '2026-09-06', kind: 'REST_DAY' });
+    // The headers mark holidays; each row marks its own rest days (AGENTS.md: The daily grid marks each worker's own days).
+    expect(grid.calendar[5]).toEqual({ date: '2026-09-06', kind: 'WORKDAY' });
+    expect(grid.rows.find((r: { worker: { id: string } }) => r.worker.id === workerId).calendar[5]).toEqual({ date: '2026-09-06', kind: 'REST_DAY' });
     expect(
       grid.rows.map((r: { worker: { lastName: string }; teamId: string | null; entries: unknown[] }) => [r.worker.lastName, r.teamId, r.entries.length]),
     ).toEqual([

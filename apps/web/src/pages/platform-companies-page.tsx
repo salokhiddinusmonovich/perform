@@ -10,10 +10,11 @@ import {
 } from '@puantaj/schemas';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Building2, MoreHorizontal, Pencil, Power, Wallet } from 'lucide-react';
+import { Building2, History, MoreHorizontal, Pencil, Power, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DataTable } from '@/components/data-table';
@@ -79,6 +80,7 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
   const { t } = useTranslation();
   const format = useFormat();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const companies = useCompanies();
   const [editing, setEditing] = useState<CompanyRow | null>(null);
   const [paying, setPaying] = useState<CompanyRow | null>(null);
@@ -192,6 +194,10 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
                 <Wallet aria-hidden />
                 {t('platform.payments')}
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate(`/platform/activity?company=${row.original.id}`)}>
+                <History aria-hidden />
+                {t('audit.history')}
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => setConfirm({ company: row.original, action: row.original.isActive ? 'deactivate' : 'activate' })}
               >
@@ -203,7 +209,7 @@ function CompaniesView({ creating, onCreatingChange }: { creating: boolean; onCr
         ),
       },
     ],
-    [t, format],
+    [t, format, navigate],
   );
 
   return (

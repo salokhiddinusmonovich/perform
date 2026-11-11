@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type DayStatus } from '@prisma/client';
 import { MAX_HOURS_PER_DAY, type DayKind } from '@puantaj/payroll';
-import type { TimesheetEntry, YearMonth } from '@puantaj/schemas';
+import type { AuditAction, TimesheetEntry, YearMonth } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict, forbidden, notFound } from '../common/api-error';
@@ -47,8 +47,8 @@ export interface TimesheetRowView {
   /** The caller may enter hours on this row (Settings and their sites or teams). */
   canEnter: boolean;
   /**
-   * The worker's own days while the site's rule set is split by categories: by the rules of
-   * their combination. null: the month's calendar (or none, while their option or rules are missing).
+   * The worker's own days, by the rules of their combination in the site's rule set. null while
+   * their option or their combination's rules are missing: the month's holidays only.
    */
   calendar: { date: string; kind: DayKind }[] | null;
   entries: TimesheetEntryView[];
@@ -62,8 +62,8 @@ export interface TimesheetMonthView {
   /** This month's plan has the Timesheet module; without it no hours are entered. */
   timesheetModule: boolean;
   /**
-   * Kind of each day under the site's rules; null while no rules are set for the month. While
-   * the site's rule set is split by worker categories, only holidays: each row has its own.
+   * The month's holidays (each row has its own rest days); null while the site has no rule set
+   * for the month.
    */
   calendar: { date: string; kind: DayKind }[] | null;
   rows: TimesheetRowView[];
@@ -130,7 +130,7 @@ export class TimesheetService {
     if (!site) throw notFound('site.notFound');
     const { first, last } = monthSpan(year, month);
 
-    const [placements, entries, locked, entryRoles, { calendar, split }, timesheetModule] = await Promise.all([
+    const [placements, entries, locked, entryRoles, { calendar, ruleSet }, timesheetModule] = await Promise.all([
       this.prisma.assignment.findMany({
         where: { AND: [{ companyId, siteId }, inMonth(year, month)] },
         include: { worker: { select: WORKER_SELECT }, team: { select: { name: true } } },
@@ -202,7 +202,7 @@ export class TimesheetService {
         orderBy: { date: 'asc' },
       }),
     ]);
-    if (split) {
+    if (ruleSet) {
       const options = await categoriesInMonth(this.prisma, companyId, workerIds, year, month);
       const own = new Map<string, Promise<DayView[] | null>>();
       const daysOf = (workerId: string) => {
@@ -210,7 +210,7 @@ export class TimesheetService {
         const key = JSON.stringify(Object.entries(opts).sort());
         let found = own.get(key);
         if (!found) {
-          found = this.rules.rulesInSet(companyId, split, opts, year, month).then((r) => r.month?.calendar?.map(dayView) ?? null);
+          found = this.rules.rulesInSet(companyId, ruleSet, opts, year, month).then((r) => r.month?.calendar?.map(dayView) ?? null);
           own.set(key, found);
         }
         return found;
@@ -410,23 +410,19 @@ export class TimesheetService {
   }
 
   /**
-   * The site's days for the month (its rule set's, AGENTS.md: The daily grid). While the set is
-   * split by categories, only holidays, and the set is returned so each row gets its own days.
+   * The site's days for the month (AGENTS.md: The daily grid marks each worker's own days): only
+   * holidays, and the site's rule set, so each row gets the days of its combination's rules.
    */
   private async calendar(companyId: string, siteId: string, year: number, month: number) {
     const set = await this.rules.ruleSetForSite(companyId, siteId, year, month);
-    if (!set) return { calendar: null, split: null };
-    if ((await this.rules.splitIn(companyId, set.id, year, month)).length > 0) {
-      return { calendar: (await this.rules.calendar(companyId, year, month, [])).map(dayView), split: set };
-    }
-    const m = await this.rules.month(companyId, set.id, year, month);
-    return { calendar: m.calendar?.map(dayView) ?? null, split: null };
+    if (!set) return { calendar: null, ruleSet: null };
+    return { calendar: (await this.rules.calendar(companyId, year, month, [])).map(dayView), ruleSet: set };
   }
 
   private record(
     tx: Tx,
     auth: CompanyAuthContext,
-    action: string,
+    action: AuditAction,
     e: EntryRow,
     change: { from?: ReturnType<typeof content>; to?: ReturnType<typeof content> },
   ) {

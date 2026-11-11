@@ -6,9 +6,9 @@ import {
   type Role,
   type UpdatePlatformUserInput,
 } from '@puantaj/schemas';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Building2, KeyRound, LogIn, MoreHorizontal, Pencil, Power, ShieldCheck, UserPlus } from 'lucide-react';
+import { Building2, History, KeyRound, LogIn, MoreHorizontal, Pencil, Power, ShieldCheck, UserPlus } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import { Controller, useForm, type FieldError, type UseFormRegisterReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -39,7 +39,7 @@ import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { isPlatformAdmin, useMe, useResetSession, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { COMPANIES_KEY, useCompanies, USERS_KEY, type UserRow } from '@/lib/platform';
+import { COMPANIES_KEY, useCompanies, usePlatformUsers, USERS_KEY, type UserRow } from '@/lib/platform';
 
 type ConfirmAction = 'deactivate' | 'activate' | 'reset' | 'impersonate' | 'grantAdmin' | 'revokeAdmin';
 
@@ -77,7 +77,7 @@ function UsersView({ me, creating, onCreatingChange }: { me: Me; creating: boole
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const resetSession = useResetSession();
-  const users = useQuery({ queryKey: USERS_KEY, queryFn: () => api.get<UserRow[]>('/platform/users') });
+  const users = usePlatformUsers();
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [placing, setPlacing] = useState<UserRow | null>(null);
   const [confirm, setConfirm] = useState<{ user: UserRow; action: ConfirmAction } | null>(null);
@@ -202,6 +202,10 @@ function UsersView({ me, creating, onCreatingChange }: { me: Me; creating: boole
                   <Building2 aria-hidden />
                   {t('platformUsers.membership')}
                 </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate(`/platform/activity?user=${user.id}`)}>
+                  <History aria-hidden />
+                  {t('audit.history')}
+                </DropdownMenuItem>
                 {!self && (
                   <>
                     {/* Only active customers can be impersonated; the API refuses the rest. */}
@@ -232,7 +236,7 @@ function UsersView({ me, creating, onCreatingChange }: { me: Me; creating: boole
         },
       },
     ],
-    [t, format, me.user.id],
+    [t, format, me.user.id, navigate],
   );
 
   return (

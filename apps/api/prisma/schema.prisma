@@ -45,6 +45,8 @@ model Company {
   workers           Worker[]
   holidays          Holiday[]
   ruleSets          PayrollRuleSet[]
+  payCategories     PayCategoryChoice[]
+  payRoundings      PayRounding[]
   periods           PayrollPeriod[]
   auditLogs         AuditLog[]
   travelRoutes      TravelRoute[]
@@ -149,7 +151,8 @@ model User {
   workingDaysOverrides WorkingDaysOverride[]
   payrollRules         PayrollRules[]
   ruleSetUses          RuleSetUse[]
-  ruleSetSplits        RuleSetSplit[]
+  payCategoryChoices   PayCategoryChoice[]
+  payRoundings         PayRounding[]
   categoryValues       WorkerCategoryValue[]
   salaries             Salary[]
   monthlyHours         MonthlyHours[]
@@ -227,6 +230,10 @@ model AuditLog {
 
   @@index([companyId, createdAt])
   @@index([entityType, entityId])
+  /// The platform admin's activity list: newest first, or one person's entries
+  @@index([createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([impersonatorUserId])
 }
 
 enum Role {
@@ -436,7 +443,7 @@ model Worker {
 }
 
 /// A company's own way of grouping workers (AGENTS.md: Worker categories), e.g. Direct/Indirect.
-/// Changes pay only where a rule set splits by it (RuleSetSplit). Deactivated, never deleted;
+/// Changes pay only while it is a pay category (PayCategoryChoice). Deactivated, never deleted;
 /// names are unique in the company ignoring case.
 model WorkerCategory {
   id        String   @id @default(uuid()) @db.Uuid
@@ -448,8 +455,8 @@ model WorkerCategory {
   company      Company                @relation(fields: [companyId], references: [id], onDelete: NoAction)
   options      WorkerCategoryOption[]
   values       WorkerCategoryValue[]
-  firstSplits  RuleSetSplit[]         @relation("SplitFirst")
-  secondSplits RuleSetSplit[]         @relation("SplitSecond")
+  firstSplits  PayCategoryChoice[]    @relation("SplitFirst")
+  secondSplits PayCategoryChoice[]    @relation("SplitSecond")
   variants     RuleSetVariantOption[]
 
   @@unique([id, companyId])
@@ -666,18 +673,18 @@ enum TravelPayMode {
   MONTHLY_AMOUNT
 }
 
-/// A set of pay rules: the company default (name and parent null, one per company; a partial
-/// unique index added by hand), a named set that sites and firms share (RuleSetUse), or a
-/// combination of a set that splits by worker categories (parentId set, AGENTS.md: Rule sets
-/// split by categories). Names are unique in the company, ignoring case (also by hand). The
-/// rules themselves are versioned by month (PayrollRules); working-days overrides belong to
-/// the rule set. A named set is deactivated, never deleted.
+/// A set of pay rules (AGENTS.md: Pay rule sets): a named set that the company, sites and firms
+/// choose (RuleSetUse), or a combination of a set (parentId set): one option of each of the
+/// company's pay categories (PayCategoryChoice). Only combinations have rules (PayrollRules,
+/// versioned by month) and working-days overrides; the API keeps it that way. Names are unique
+/// in the company, ignoring case (a unique index added by hand). A named set is deactivated,
+/// never deleted.
 model PayrollRuleSet {
   id         String   @id @default(uuid()) @db.Uuid
   companyId  String   @db.Uuid
-  /// null: the company default, or a combination
+  /// Set exactly for a named set, null for a combination (CHECK constraint)
   name       String?
-  /// The set a combination belongs to; null for the company default and named sets
+  /// The set a combination belongs to; null for a named set
   parentId   String?  @db.Uuid
   /// A combination's option ids, sorted and joined with ","; set exactly when parentId is
   /// (CHECK constraint). Unique in the parent, so each combination has one set of rules.
@@ -692,37 +699,54 @@ model PayrollRuleSet {
   versions             PayrollRules[]
   workingDaysOverrides WorkingDaysOverride[]
   uses                 RuleSetUse[]
-  splits               RuleSetSplit[]
 
   @@unique([id, companyId])
   @@unique([parentId, variantKey])
   @@index([companyId])
 }
 
-/// The worker categories a rule set splits its rules by from a month on, until its next row
-/// (AGENTS.md: Rule sets split by categories). Both null: no split from that month. A second
-/// category only with a first, never the same one (CHECK constraint).
-model RuleSetSplit {
+/// The worker categories the company's pay rules go by from a month on, until its next row
+/// (AGENTS.md: Pay rule sets): every rule set has rules per combination of their options.
+/// Before the first row nobody can be paid. A second category is never the first (CHECK
+/// constraint).
+model PayCategoryChoice {
   id               String   @id @default(uuid()) @db.Uuid
   companyId        String   @db.Uuid
-  ruleSetId        String   @db.Uuid
   fromYear         Int
   /// 1-based
   fromMonth        Int
-  firstCategoryId  String?  @db.Uuid
+  firstCategoryId  String   @db.Uuid
   secondCategoryId String?  @db.Uuid
   setById          String   @db.Uuid
   setAt            DateTime @default(now())
 
-  ruleSet        PayrollRuleSet  @relation(fields: [ruleSetId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
-  firstCategory  WorkerCategory? @relation("SplitFirst", fields: [firstCategoryId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  firstCategory  WorkerCategory  @relation("SplitFirst", fields: [firstCategoryId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
   secondCategory WorkerCategory? @relation("SplitSecond", fields: [secondCategoryId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
   setBy          User            @relation(fields: [setById], references: [id], onDelete: NoAction)
 
-  @@unique([ruleSetId, fromYear, fromMonth])
-  @@index([companyId])
+  @@unique([companyId, fromYear, fromMonth])
   @@index([firstCategoryId])
   @@index([secondCategoryId])
+}
+
+/// The company's rounding step of the amount to pay out from a month on, until its next row
+/// (AGENTS.md: Pay model): rounded to the nearest multiple of it, halves up. Before the first
+/// row nobody can be paid.
+model PayRounding {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  fromYear  Int
+  /// 1-based
+  fromMonth Int
+  step      Decimal  @db.Decimal(14, 2)
+  setById   String   @db.Uuid
+  setAt     DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  setBy   User    @relation(fields: [setById], references: [id], onDelete: NoAction)
+
+  @@unique([companyId, fromYear, fromMonth])
 }
 
 /// One option of a combination (a PayrollRuleSet with a parent), one per category.
@@ -742,10 +766,12 @@ model RuleSetVariantOption {
   @@index([optionId])
 }
 
-/// Which rule set a site or a firm uses from a month on, until its next row. ruleSetId null:
-/// none of its own from that month, so a firm's placements follow the site's and a site's
-/// the company default (AGENTS.md: Pay rule sets). Exactly one of siteId and firmId is set
-/// (CHECK constraint).
+/// Which rule set the company, a site or a firm uses from a month on, until its next row
+/// (AGENTS.md: Pay rule sets). The company's rows have neither siteId nor firmId (one per
+/// month, a partial unique index added by hand) and always a set. A site's or firm's row
+/// without a set: none of its own from that month, so a firm's placements follow the site's
+/// and a site's the company's. CHECK constraints keep at most one of siteId and firmId, and
+/// a set in the company's rows.
 model RuleSetUse {
   id        String   @id @default(uuid()) @db.Uuid
   companyId String   @db.Uuid
@@ -800,10 +826,6 @@ model PayrollRules {
   travelDayPaid        Boolean
   travelDayHoursPerDay Decimal?      @db.Decimal(4, 2)
   travelPayMode        TravelPayMode
-  /// The amount to pay out is rounded to the nearest multiple of this (halves up).
-  /// Company-wide: set only in the company default rule set, null in named rule sets
-  /// (AGENTS.md: Pay model). The API is the only writer and keeps it that way.
-  payRoundingStep      Decimal?      @db.Decimal(14, 2)
   /// Who saved this version last (owners and admins may replace it). Every change is
   /// also in AuditLog.
   setById              String        @db.Uuid

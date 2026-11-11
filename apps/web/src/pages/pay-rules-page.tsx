@@ -3,7 +3,6 @@ import {
   ABSENCE_RULE_TYPES,
   NEW_PAY_RULES,
   payRulesSchema,
-  ruleSetPayRulesSchema,
   TRAVEL_PAY_MODES,
   WEEKDAYS,
   type PayRules,
@@ -11,9 +10,9 @@ import {
 } from '@puantaj/schemas';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Pencil, Scale, Shapes, Trash2 } from 'lucide-react';
+import { CalendarCheck, MoreHorizontal, Pencil, Scale, Trash2 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
-import { Controller, useForm, type FieldError, type Resolver } from 'react-hook-form';
+import { Controller, useForm, type FieldError } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -43,13 +42,12 @@ import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { canManageCompany, canViewPayRules, type Me } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
-import { useCombinationLabel, useRuleSetLabel, useRuleSets } from '@/lib/rule-sets';
+import { RULE_SETS_KEY, useCombinationLabel, useRuleSetLabel, useRuleSets, useUsedByLabel } from '@/lib/rule-sets';
 
 interface Version {
   fromYear: number;
   fromMonth: number;
-  /** A named set's rules have no rounding step: it is company-wide. */
-  rules: Omit<PayRules, 'payRoundingStep'> & { payRoundingStep?: string };
+  rules: PayRules;
   setBy: { fullName: string };
   setAt: string;
 }
@@ -74,73 +72,47 @@ function versionFor(versions: Version[], { year, month }: YearMonth): Version | 
   return versions.find((v) => monthIndex(v.fromYear, v.fromMonth) <= monthIndex(year, month));
 }
 
-export function PayRulesPage() {
-  const { t } = useTranslation();
-  const defaultSet = useRuleSets().data?.find((s) => s.name === null);
-  return (
-    <>
-      <PageHeader
-        title={t('payRules.title')}
-        description={t('payRules.description')}
-        actions={defaultSet && <ByCategoryLink ruleSetId={defaultSet.id} />}
-      />
-      <RequireAccess allowed={canViewPayRules}>{(me) => <PayRulesView me={me} />}</RequireAccess>
-    </>
-  );
-}
-
 /**
- * A named rule set's rules (AGENTS.md: Pay rule sets), or with variantId one combination's of a
- * set split by categories. A change reaches every site and firm using the set, so the page names them.
+ * A rule set's combination's rules (AGENTS.md: Pay rule sets). A change reaches the company, every
+ * site and firm using the set, so the page names them.
  */
 export function RuleSetPayRulesPage() {
   const { t } = useTranslation();
-  const { ruleSetId, variantId } = useParams<{ ruleSetId: string; variantId?: string }>();
+  const { ruleSetId, variantId } = useParams<{ ruleSetId: string; variantId: string }>();
   const set = useRuleSets().data?.find((s) => s.id === ruleSetId);
   const name = useRuleSetLabel(ruleSetId);
   const combination = useCombinationLabel(ruleSetId!, variantId);
-  const users = set ? [...set.usedBy.sites, ...set.usedBy.firms].map((x) => x.name).join(', ') : '';
+  const users = useUsedByLabel(set);
   return (
     <>
       <PageHeader
-        title={
-          variantId
-            ? t('ruleSetCategories.combinationRulesTitle', { name, combination })
-            : t('ruleSets.payRulesTitle', { name: set?.name ?? '' })
+        title={t('ruleSetCategories.combinationRulesTitle', { name, combination })}
+        description={users ? t('ruleSets.usedBy', { names: users }) : t('ruleSets.notUsed')}
+        actions={
+          <Button variant="outline" asChild>
+            <Link to={`/settings/rule-sets/${ruleSetId}/combinations/${variantId}/working-days`}>
+              <CalendarCheck aria-hidden />
+              {t('nav.workingDays')}
+            </Link>
+          </Button>
         }
-        description={set?.name === null ? t('payRules.description') : users ? t('ruleSets.usedBy', { names: users }) : t('ruleSets.notUsed')}
-        actions={!variantId && <ByCategoryLink ruleSetId={ruleSetId!} />}
       />
-      <RequireAccess allowed={canViewPayRules}>{(me) => <PayRulesView me={me} ruleSetId={variantId ?? ruleSetId!} combination={Boolean(variantId)} />}</RequireAccess>
+      <RequireAccess allowed={canViewPayRules}>{(me) => <PayRulesView me={me} combinationId={variantId!} />}</RequireAccess>
     </>
-  );
-}
-
-/** To a set's rules by worker category (AGENTS.md: Rule sets split by categories). */
-function ByCategoryLink({ ruleSetId }: { ruleSetId: string }) {
-  const { t } = useTranslation();
-  return (
-    <Button variant="outline" asChild>
-      <Link to={`/settings/rule-sets/${ruleSetId}/categories`}>
-        <Shapes aria-hidden />
-        {t('ruleSetCategories.link')}
-      </Link>
-    </Button>
   );
 }
 
 /** What the form edits: a new version from a month the admin picks, or an existing version. */
-type Editing = { from: YearMonth; fixedFrom: boolean; initial: Omit<PayRulesInput, 'payRoundingStep'> & { payRoundingStep?: string } | typeof NEW_PAY_RULES };
+type Editing = { from: YearMonth; fixedFrom: boolean; initial: PayRulesInput | typeof NEW_PAY_RULES };
 
-/** The company default rules, or with ruleSetId that named set's. */
-function PayRulesView({ me, ruleSetId = null, combination = false }: { me: Me; ruleSetId?: string | null; combination?: boolean }) {
+/** A combination's rules, versioned by month. */
+function PayRulesView({ me, combinationId }: { me: Me; combinationId: string }) {
   const { t } = useTranslation();
   const format = useFormat();
   const queryClient = useQueryClient();
   const canChange = canManageCompany(me);
-  const currency = me.activeCompany!.currency; // guaranteed by canViewPayRules
-  const base = ruleSetId ? `/rule-sets/${ruleSetId}/pay-rules` : '/pay-rules';
-  const versions = useQuery({ queryKey: [...PAY_RULES_KEY, ruleSetId], queryFn: () => api.get<Version[]>(base) });
+  const base = `/rule-sets/${combinationId}/pay-rules`;
+  const versions = useQuery({ queryKey: [...PAY_RULES_KEY, combinationId], queryFn: () => api.get<Version[]>(base) });
   const [editing, setEditing] = useState<Editing | null>(null);
   const [deleting, setDeleting] = useState<Version | null>(null);
 
@@ -148,6 +120,8 @@ function PayRulesView({ me, ruleSetId = null, combination = false }: { me: Me; r
     Promise.all([
       queryClient.invalidateQueries({ queryKey: PAY_RULES_KEY }),
       queryClient.invalidateQueries({ queryKey: WORKING_DAYS_KEY }),
+      // A combination's first rules change where its set and combinations show rules from.
+      queryClient.invalidateQueries({ queryKey: RULE_SETS_KEY }),
     ]);
 
   const columns = useMemo<ColumnDef<Version, unknown>[]>(
@@ -237,8 +211,7 @@ function PayRulesView({ me, ruleSetId = null, combination = false }: { me: Me; r
       <PayRulesForm
         editing={editing}
         versions={list}
-        ruleSetId={ruleSetId}
-        currency={currency}
+        base={base}
         readOnly={!canChange}
         onDone={async (saved) => {
           setEditing(null);
@@ -256,14 +229,8 @@ function PayRulesView({ me, ruleSetId = null, combination = false }: { me: Me; r
       <Card>
         <EmptyState
           icon={Scale}
-          title={combination ? t('ruleSetCategories.combinationEmptyTitle') : ruleSetId ? t('ruleSets.rulesEmptyTitle') : t('payRules.emptyTitle')}
-          description={
-            ruleSetId
-              ? t(combination ? 'ruleSetCategories.combinationEmptyDescription' : 'ruleSets.rulesEmptyDescription')
-              : canChange
-                ? t('payRules.emptyDescription')
-                : t('payRules.emptyDescriptionReadOnly')
-          }
+          title={t('ruleSetCategories.combinationEmptyTitle')}
+          description={canChange ? t('ruleSetCategories.combinationEmptyDescription') : t('payRules.emptyDescriptionReadOnly')}
           action={
             canChange && (
               <Button onClick={() => setEditing({ from: thisMonth(), fixedFrom: false, initial: NEW_PAY_RULES })}>
@@ -305,7 +272,7 @@ function PayRulesView({ me, ruleSetId = null, combination = false }: { me: Me; r
         </CardHeader>
         {current && (
           <CardContent>
-            <RulesSummary rules={current.rules} currency={currency} />
+            <RulesSummary rules={current.rules} />
           </CardContent>
         )}
       </Card>
@@ -347,7 +314,7 @@ function PayRulesView({ me, ruleSetId = null, combination = false }: { me: Me; r
   );
 }
 
-function RulesSummary({ rules, currency }: { rules: Version['rules']; currency: string }) {
+function RulesSummary({ rules }: { rules: Version['rules'] }) {
   const { t } = useTranslation();
   const format = useFormat();
   const hours = (value: string) => t('payRules.hours', { value: format.number(value) });
@@ -374,7 +341,6 @@ function RulesSummary({ rules, currency }: { rules: Version['rules']; currency: 
       ];
     }),
     [t('payRules.travelPay'), t(`payRules.travelMode.${rules.travelPayMode}`)],
-    ...(rules.payRoundingStep ? [[t('payRules.rounding'), format.money(rules.payRoundingStep, currency)] as [string, string]] : []),
   ];
 
   return (
@@ -392,15 +358,14 @@ function RulesSummary({ rules, currency }: { rules: Version['rules']; currency: 
 function PayRulesForm({
   editing,
   versions,
-  ruleSetId,
-  currency,
+  base,
   readOnly,
   onDone,
 }: {
   editing: Editing;
   versions: Version[];
-  ruleSetId: string | null;
-  currency: string;
+  /** The rules' route */
+  base: string;
   readOnly: boolean;
   onDone: (saved: boolean) => void;
 }) {
@@ -409,8 +374,7 @@ function PayRulesForm({
   const [from, setFrom] = useState<YearMonth>(editing.from);
   const [formError, setFormError] = useState<string>();
   const form = useForm<PayRulesInput, unknown, PayRules>({
-    // A named set's rules have no rounding step; the form leaves its field out for them.
-    resolver: zodResolver(ruleSetId ? ruleSetPayRulesSchema : payRulesSchema) as unknown as Resolver<PayRulesInput, unknown, PayRules>,
+    resolver: zodResolver(payRulesSchema),
     defaultValues: editing.initial as PayRulesInput,
     disabled: readOnly,
   });
@@ -420,15 +384,14 @@ function PayRulesForm({
     !editing.fixedFrom && versions.some((v) => v.fromYear === from.year && v.fromMonth === from.month);
 
   const save = useMutation({
-    mutationFn: (values: PayRules) =>
-      api.put(`${ruleSetId ? `/rule-sets/${ruleSetId}/pay-rules` : '/pay-rules'}/${from.year}/${from.month}`, values),
+    mutationFn: (values: PayRules) => api.put(`${base}/${from.year}/${from.month}`, values),
     onSuccess: () => onDone(true),
     onError: (error) => {
       if (!applyFieldErrors(error, form.setError)) setFormError(errorMessage(t, error));
     },
   });
 
-  const decimal = (name: 'normalHoursPerDay' | 'overtimeMultiplier' | 'restDayMultiplier' | 'holidayMultiplier' | 'payRoundingStep', error?: FieldError) => (
+  const decimal = (name: 'normalHoursPerDay' | 'overtimeMultiplier' | 'restDayMultiplier' | 'holidayMultiplier', error?: FieldError) => (
     <Input {...fieldControlProps(name, error)} {...form.register(name)} inputMode="decimal" autoComplete="off" />
   );
 
@@ -588,21 +551,6 @@ function PayRulesForm({
               )}
             />
           </Section>
-
-          {!ruleSetId && (
-            <Section title={t('payRules.rounding')}>
-              <div className="max-w-xs">
-                <Field
-                  id="payRoundingStep"
-                  label={t('payRules.roundingStep', { currency })}
-                  error={errors.payRoundingStep}
-                  hint={t('payRules.roundingHint')}
-                >
-                  {decimal('payRoundingStep', errors.payRoundingStep)}
-                </Field>
-              </div>
-            </Section>
-          )}
 
           {readOnly ? (
             <div className="flex justify-end">

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { Shift, UpdateShift, WorkerShift, WorkerShifts } from '@puantaj/schemas';
+import type { AuditAction, Shift, UpdateShift, WorkerShift, WorkerShifts } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict, forbidden, notFound } from '../common/api-error';
@@ -225,7 +225,7 @@ export class ShiftsService {
   private record(
     tx: Tx,
     auth: CompanyAuthContext,
-    action: string,
+    action: AuditAction,
     entityType: string,
     entityId: string,
     data: Prisma.InputJsonObject,

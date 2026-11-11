@@ -22,7 +22,6 @@ const RULES = {
     TRAVEL: { paid: false, hoursPerDay: null },
   },
   travelPayMode: 'NONE',
-  payRoundingStep: '1000',
 };
 
 const FULL_MONTH = {
@@ -38,14 +37,26 @@ const FULL_MONTH = {
   travelDays: 0,
 };
 
-/** A company with rules for September, a site, and two categories: Direct/Indirect and Origin. */
+/**
+ * A company with a site and two categories, Direct/Indirect and Origin, paying by Direct/Indirect
+ * from September: its rule set "Main" has the same rules for Direkt and for Endirekt.
+ */
 async function company() {
   const owner = await memberOfNewCompany(ctx, 'OWNER');
-  await owner.agent.put('/api/pay-rules/2026/9').send(RULES).expect(204);
   const site = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
   const type = await category(owner.agent, 'Direkt / Endirekt', ['Direkt', 'Endirekt']);
   const origin = await category(owner.agent, 'Origin', ['Local', 'Foreign']);
-  return { ...owner, site, type, origin };
+  await owner.agent.put('/api/pay-categories/2026/9').send({ categoryIds: [type.id] }).expect(204);
+  await owner.agent.put('/api/pay-rounding/2026/9').send({ step: '1000' }).expect(204);
+  const main = (await owner.agent.post('/api/rule-sets').send({ name: 'Main' }).expect(201)).body.id as string;
+  const combinations: Record<string, string> = {};
+  for (const option of ['Direkt', 'Endirekt']) {
+    const id = (await owner.agent.post(`/api/rule-sets/${main}/variants`).send({ optionIds: [type.options[option]] }).expect(201)).body.id;
+    await owner.agent.put(`/api/rule-sets/${id}/pay-rules/2026/9`).send(RULES).expect(204);
+    combinations[option] = id;
+  }
+  await owner.agent.put('/api/company/rule-set/2026/9').send({ ruleSetId: main }).expect(204);
+  return { ...owner, site, type, origin, main, combinations };
 }
 
 async function category(agent: Agent, name: string, options: string[]) {
@@ -169,8 +180,8 @@ describe('worker categories', () => {
     // The worker who has it keeps it through other changes.
     await c.agent.patch(`/api/workers/${id}`).send(worker('Aliyev Jr', { [c.origin.id]: c.origin.options.Foreign })).expect(204);
 
-    await c.agent.patch(`/api/worker-categories/${c.type.id}`).send({ isActive: false }).expect(204);
-    const inactive = await c.agent.patch(`/api/workers/${id}`).send(worker('Aliyev', { [c.type.id]: c.type.options.Direkt })).expect(409);
+    await c.agent.patch(`/api/worker-categories/${c.origin.id}`).send({ isActive: false }).expect(204);
+    const inactive = await c.agent.patch(`/api/workers/${id}`).send(worker('Aliyev', { [c.origin.id]: c.origin.options.Local })).expect(409);
     expect(inactive.body.code).toBe('workerCategory.inactive');
   });
 
@@ -274,15 +285,8 @@ describe('worker categories', () => {
   });
 });
 
-describe('rule sets split by categories', () => {
-  const OWN_RULES = Object.fromEntries(Object.entries(RULES).filter(([k]) => k !== 'payRoundingStep'));
+describe('pay by categories', () => {
   const WITH_OVERTIME = { ...FULL_MONTH, overtimeHours: '10' };
-
-  /** The company default rule set's id. */
-  async function defaultSet(agent: Agent) {
-    const sets = (await agent.get('/api/rule-sets').expect(200)).body as { id: string; name: string | null }[];
-    return sets.find((s) => s.name === null)!.id;
-  }
 
   /** Hires a worker with a salary for September; totals() enters September's hours. */
   async function hired(c: Awaited<ReturnType<typeof company>>, lastName: string, categories: Record<string, string | null>) {
@@ -298,24 +302,13 @@ describe('rule sets split by categories', () => {
   it('pays each worker by the rules of their options’ combination, and never guesses a missing one', async () => {
     const c = await company();
     const { Direkt, Endirekt } = c.type.options;
-    const set = await defaultSet(c.agent);
-    const accountant = await member(c.company.id, 'ACCOUNTANT');
-    await accountant.agent.put(`/api/rule-sets/${set}/splits/2026/9`).send({ categoryIds: [c.type.id] }).expect(403);
-    await c.agent.put(`/api/rule-sets/${set}/splits/2026/9`).send({ categoryIds: [c.type.id] }).expect(204);
-    expect((await accountant.agent.get(`/api/rule-sets/${set}/splits`).expect(200)).body).toMatchObject([
-      { fromYear: 2026, fromMonth: 9, categoryIds: [c.type.id] },
-    ]);
-
-    // Direkt: overtime ×2; Endirekt: the set's own ×1.5.
-    const direkt = (await c.agent.post(`/api/rule-sets/${set}/variants`).send({ optionIds: [Direkt] }).expect(201)).body.id;
-    await c.agent.put(`/api/rule-sets/${direkt}/pay-rules/2026/9`).send({ ...OWN_RULES, overtimeMultiplier: '2' }).expect(204);
-    const endirekt = (await c.agent.post(`/api/rule-sets/${set}/variants`).send({ optionIds: [Endirekt] }).expect(201)).body.id;
-    await c.agent.put(`/api/rule-sets/${endirekt}/pay-rules/2026/9`).send(OWN_RULES).expect(204);
-    const again = await c.agent.post(`/api/rule-sets/${set}/variants`).send({ optionIds: [Direkt] }).expect(409);
+    // Direkt: overtime ×2; Endirekt: ×1.5.
+    await c.agent.put(`/api/rule-sets/${c.combinations.Direkt}/pay-rules/2026/9`).send({ ...RULES, overtimeMultiplier: '2' }).expect(204);
+    const again = await c.agent.post(`/api/rule-sets/${c.main}/variants`).send({ optionIds: [Direkt] }).expect(409);
     expect(again.body.code).toBe('ruleSet.variantExists');
-    expect((await c.agent.get(`/api/rule-sets/${set}/variants`).expect(200)).body).toEqual([
-      { id: direkt, options: [{ categoryId: c.type.id, optionId: Direkt }], rulesFrom: { year: 2026, month: 9 } },
-      { id: endirekt, options: [{ categoryId: c.type.id, optionId: Endirekt }], rulesFrom: { year: 2026, month: 9 } },
+    expect((await c.agent.get(`/api/rule-sets/${c.main}/variants`).expect(200)).body).toEqual([
+      { id: c.combinations.Direkt, options: [{ categoryId: c.type.id, optionId: Direkt }], rulesFrom: { year: 2026, month: 9 } },
+      { id: c.combinations.Endirekt, options: [{ categoryId: c.type.id, optionId: Endirekt }], rulesFrom: { year: 2026, month: 9 } },
     ]);
 
     const aliyev = await hired(c, 'Aliyev', { [c.type.id]: Direkt });
@@ -333,44 +326,40 @@ describe('rule sets split by categories', () => {
     // Hourly rate 7 500 000 / (25 × 9); 10 overtime hours at ×2 = 666 666.67, at ×1.5 = 500 000.
     expect(workerIn(month, aliyev.id).total).toBe('8167000.00');
     expect(workerIn(month, aliyev.id).parts[0]).toMatchObject({
-      ruleSetName: null,
+      ruleSetName: 'Main',
       combination: [{ categoryName: 'Direkt / Endirekt', optionName: 'Direkt' }],
     });
     expect(workerIn(month, karimov.id).total).toBe('8000000.00');
-    expect(workerIn(month, notSet.id).problems).toContainEqual({ code: 'categoryNotSet', ruleSetName: null, categoryIds: [c.type.id] });
-    expect(workerIn(month, noRules.id).problems).toContainEqual({ code: 'noCategoryRules', ruleSetName: null, optionIds: [kontrakt] });
+    expect(workerIn(month, notSet.id).problems).toContainEqual({ code: 'categoryNotSet', ruleSetName: 'Main', categoryIds: [c.type.id] });
+    expect(workerIn(month, noRules.id).problems).toContainEqual({ code: 'noCategoryRules', ruleSetName: 'Main', optionIds: [kontrakt] });
 
-    // A category a set splits by now or later can't be closed.
+    // A pay category of now or later can't be closed.
     const inUse = await c.agent.patch(`/api/worker-categories/${c.type.id}`).send({ isActive: false }).expect(409);
     expect(inUse.body.code).toBe('workerCategory.inUse');
-    await c.agent.put(`/api/rule-sets/${set}/splits/2026/12`).send({ categoryIds: [] }).expect(204);
+    await c.agent.put('/api/pay-categories/2026/12').send({ categoryIds: [c.origin.id] }).expect(204);
     await c.agent.patch(`/api/worker-categories/${c.type.id}`).send({ isActive: false }).expect(409);
-    // Without the split, the set's own rules pay again.
-    await c.agent.delete(`/api/rule-sets/${set}/splits/2026/9`).expect(204);
+    // Without pay categories nobody is paid: "none" is never a choice, so the choices are removed.
+    await c.agent.delete('/api/pay-categories/2026/9').expect(204);
     await c.agent.patch(`/api/worker-categories/${c.type.id}`).send({ isActive: false }).expect(204);
-    expect(workerIn((await c.agent.get('/api/payroll/2026/9').expect(200)).body, aliyev.id).total).toBe('8000000.00');
-
-    const log = await ctx.prisma.auditLog.findMany({
-      where: { companyId: c.company.id, action: { startsWith: 'ruleSet.' } },
-      orderBy: { createdAt: 'asc' },
+    expect(workerIn((await c.agent.get('/api/payroll/2026/9').expect(200)).body, aliyev.id)).toMatchObject({
+      total: null,
+      problems: [{ code: 'noPayCategories', ruleSetName: 'Main' }],
     });
-    expect(log.map((l) => l.action)).toEqual(['ruleSet.split', 'ruleSet.addVariant', 'ruleSet.addVariant', 'ruleSet.split', 'ruleSet.splitDelete']);
+    expect((await aliyev.totals().expect(409)).body.code).toBe('ruleSet.noPayCategories');
   });
 
-  it('needs no rules of its own once split, and the grid marks each worker’s own rest days', async () => {
+  it('pays only by the rules of a set’s combinations, and the grid marks each worker’s own rest days', async () => {
     const c = await company();
     const plan = await createPlan(ctx.prisma, { timesheetModule: true });
     await givePlan(ctx.prisma, c.company.id, plan.id);
     const { Direkt, Endirekt } = c.type.options;
     const { id: set } = (await c.agent.post('/api/rule-sets').send({ name: 'By category' }).expect(201)).body;
     const choose = () => c.agent.put(`/api/sites/${c.site}/rule-set/2026/9`).send({ ruleSetId: set });
-    // Neither rules of its own nor a combination's: it can't be chosen yet.
-    expect((await choose().expect(409)).body.code).toBe('ruleSet.noRulesForMonth');
-    await c.agent.put(`/api/rule-sets/${set}/splits/2026/9`).send({ categoryIds: [c.type.id] }).expect(204);
+    // No combination has rules yet: it can't be chosen.
     expect((await choose().expect(409)).body.code).toBe('ruleSet.noRulesForMonth');
     // Direkt: Saturdays and Sundays off, so September 2026 has 21 working days.
     const direkt = (await c.agent.post(`/api/rule-sets/${set}/variants`).send({ optionIds: [Direkt] }).expect(201)).body.id;
-    await c.agent.put(`/api/rule-sets/${direkt}/pay-rules/2026/9`).send({ ...OWN_RULES, restWeekdays: [6, 7] }).expect(204);
+    await c.agent.put(`/api/rule-sets/${direkt}/pay-rules/2026/9`).send({ ...RULES, restWeekdays: [6, 7] }).expect(204);
     await choose().expect(204);
 
     const aliyev = await hired(c, 'Aliyev', { [c.type.id]: Direkt });
@@ -386,7 +375,7 @@ describe('rule sets split by categories', () => {
     // Endirekt has no rules here: holidays only.
     expect(rowOf(karimov.id).calendar).toBeNull();
 
-    // Paid by the combination's rules alone: a full month of 21 days is exactly the salary.
+    // Paid by the combination's rules: a full month of 21 days is exactly the salary.
     const placement = await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId: aliyev.id } });
     await c.agent
       .post(`/api/monthly-hours/2026/9/${placement.id}`)
@@ -397,35 +386,61 @@ describe('rule sets split by categories', () => {
     expect(workerIn(month, karimov.id).problems).toContainEqual({ code: 'noCategoryRules', ruleSetName: 'By category', optionIds: [Endirekt] });
   });
 
-  it('checks the categories of a split and keeps another company’s apart', async () => {
+  it('pays by two categories crossed from a month, each month by its own', async () => {
+    const c = await company();
+    const { Direkt } = c.type.options;
+    const { Local } = c.origin.options;
+    await c.agent.put('/api/pay-categories/2026/10').send({ categoryIds: [c.type.id, c.origin.id] }).expect(204);
+    const aliyev = await hired(c, 'Aliyev', { [c.type.id]: Direkt, [c.origin.id]: Local });
+    await aliyev.totals().expect(201);
+    // October needs a combination of both categories: Direkt + Local has none yet.
+    const placement = await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId: aliyev.id } });
+    const october = () => c.agent.post(`/api/monthly-hours/2026/10/${placement.id}`).send({ ...FULL_MONTH, from: '2026-10-01', until: '2026-10-31', normalHours: '234', workdaysWorked: 26 });
+    expect((await october().expect(409)).body.code).toBe('ruleSet.noCategoryRules');
+    const both = (await c.agent.post(`/api/rule-sets/${c.main}/variants`).send({ optionIds: [Local, Direkt] }).expect(201)).body.id;
+    await c.agent.put(`/api/rule-sets/${both}/pay-rules/2026/10`).send({ ...RULES, overtimeMultiplier: '3' }).expect(204);
+    await october().expect(201);
+
+    // September keeps paying by Direkt alone.
+    expect(workerIn((await c.agent.get('/api/payroll/2026/9').expect(200)).body, aliyev.id).total).toBe('8000000.00');
+    expect(workerIn((await c.agent.get('/api/payroll/2026/10').expect(200)).body, aliyev.id).parts[0]).toMatchObject({
+      ruleSetName: 'Main',
+      combination: [
+        { categoryName: 'Direkt / Endirekt', optionName: 'Direkt' },
+        { categoryName: 'Origin', optionName: 'Local' },
+      ],
+    });
+  });
+
+  it('checks the pay categories and keeps another company’s apart', async () => {
     const a = await company();
     const b = await company();
-    const setA = await defaultSet(a.agent);
-    const setB = await defaultSet(b.agent);
     const three = await a.agent
-      .put(`/api/rule-sets/${setA}/splits/2026/9`)
+      .put('/api/pay-categories/2026/9')
       .send({ categoryIds: [a.type.id, a.origin.id, b.type.id] })
       .expect(400);
     expect(three.body.issues).toEqual([{ path: 'categoryIds', message: 'validation.twoCategoriesAtMost' }]);
     const twoOfOne = await a.agent
-      .post(`/api/rule-sets/${setA}/variants`)
+      .post(`/api/rule-sets/${a.main}/variants`)
       .send({ optionIds: [a.type.options.Direkt, a.type.options.Endirekt] })
       .expect(400);
     expect(twoOfOne.body.issues).toEqual([{ path: 'optionIds', message: 'validation.categoryTwice' }]);
-    await a.agent.put(`/api/rule-sets/${setA}/splits/2026/9`).send({ categoryIds: [a.type.id, a.origin.id] }).expect(204);
+    await a.agent.put('/api/pay-categories/2026/9').send({ categoryIds: [a.type.id, a.origin.id] }).expect(204);
     const variant = (
-      await a.agent.post(`/api/rule-sets/${setA}/variants`).send({ optionIds: [a.type.options.Direkt, a.origin.options.Local] }).expect(201)
+      await a.agent.post(`/api/rule-sets/${a.main}/variants`).send({ optionIds: [a.type.options.Direkt, a.origin.options.Local] }).expect(201)
     ).body.id;
 
-    await b.agent.get(`/api/rule-sets/${setA}/splits`).expect(404);
-    await b.agent.get(`/api/rule-sets/${setA}/variants`).expect(404);
-    await b.agent.put(`/api/rule-sets/${setA}/splits/2026/10`).send({ categoryIds: [] }).expect(404);
-    await b.agent.put(`/api/rule-sets/${setB}/splits/2026/9`).send({ categoryIds: [a.type.id] }).expect(404);
-    await b.agent.post(`/api/rule-sets/${setB}/variants`).send({ optionIds: [a.type.options.Direkt] }).expect(404);
-    await b.agent.put(`/api/rule-sets/${variant}/pay-rules/2026/9`).send(OWN_RULES).expect(404);
+    await b.agent.get(`/api/rule-sets/${a.main}/variants`).expect(404);
+    expect((await b.agent.put('/api/pay-categories/2026/10').send({ categoryIds: [a.type.id] }).expect(404)).body.code).toBe(
+      'workerCategory.notFound',
+    );
+    await b.agent.post(`/api/rule-sets/${b.main}/variants`).send({ optionIds: [a.type.options.Direkt] }).expect(404);
+    await b.agent.put(`/api/rule-sets/${variant}/pay-rules/2026/9`).send(RULES).expect(404);
     await b.agent.get(`/api/rule-sets/${variant}/working-days?year=2026`).expect(404);
-    // A combination is not a set that sites and firms choose.
+    expect((await b.agent.get('/api/pay-categories').expect(200)).body.map((p: { categoryIds: string[] }) => p.categoryIds)).toEqual([[b.type.id]]);
+    // A combination is not a set that the company, sites and firms choose.
     const use = await a.agent.put(`/api/sites/${a.site}/rule-set/2026/9`).send({ ruleSetId: variant }).expect(404);
     expect(use.body.code).toBe('ruleSet.notFound');
+    await a.agent.put('/api/company/rule-set/2026/9').send({ ruleSetId: variant }).expect(404);
   });
 });

@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
@@ -7,35 +6,40 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { ErrorState } from '@/components/error-state';
 import { FormActions, FormError } from '@/components/form';
+import { FromMonthList } from '@/components/from-month-list';
 import { LoadingState } from '@/components/loading-state';
 import { MonthPicker } from '@/components/month-picker';
-import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFormat } from '@/hooks/use-format';
 import { api } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
-import { RULE_SETS_KEY, useRuleSets } from '@/lib/rule-sets';
+import { RULE_SETS_KEY, useRuleSets, type FromMonth } from '@/lib/rule-sets';
 
-interface Use {
-  fromYear: number;
-  fromMonth: number;
-  ruleSet: { id: string; name: string | null } | null;
-  setBy: { fullName: string };
-  setAt: string;
+interface Use extends FromMonth {
+  /** null: none of its own (sites and firms only) */
+  ruleSet: { id: string; name: string } | null;
 }
+
+/** Who chooses a rule set: the company, a site or a firm. */
+export type RuleSetOwner = { kind: 'company' } | { kind: 'sites' | 'firms'; id: string };
 
 const NONE = 'none';
 
-/** Which rule set a site or firm uses, from a month on (AGENTS.md: Pay rule sets). */
+export const ruleSetUsesKey = (owner: RuleSetOwner) => ['rule-set-uses', owner.kind === 'company' ? 'company' : owner.id] as const;
+
+/**
+ * Which rule set the company, a site or a firm uses, from a month on (AGENTS.md: Pay rule sets).
+ * Sites and firms may choose none of their own; the company always has one.
+ */
 export function RuleSetUseDialog({
   owner,
   name,
   canChange,
   onClose,
 }: {
-  owner: { kind: 'sites' | 'firms'; id: string };
+  owner: RuleSetOwner;
   name: string;
   canChange: boolean;
   onClose: () => void;
@@ -43,19 +47,21 @@ export function RuleSetUseDialog({
   const { t } = useTranslation();
   const format = useFormat();
   const queryClient = useQueryClient();
-  const base = `/${owner.kind}/${owner.id}/rule-set`;
-  const key = ['rule-set-uses', owner.id];
+  const base = owner.kind === 'company' ? '/company/rule-set' : `/${owner.kind}/${owner.id}/rule-set`;
+  const key = ruleSetUsesKey(owner);
   const uses = useQuery({ queryKey: key, queryFn: () => api.get<Use[]>(base) });
   const sets = useRuleSets();
   const [from, setFrom] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() + 1 };
   });
-  const [choice, setChoice] = useState(NONE);
+  const canBeNone = owner.kind !== 'company';
+  const [choice, setChoice] = useState(canBeNone ? NONE : '');
   const [formError, setFormError] = useState<string>();
   const [removing, setRemoving] = useState<Use | null>(null);
 
-  const noneLabel = owner.kind === 'firms' ? t('ruleSets.noneFirm') : t('ruleSets.noneSite');
+  const noneLabel =
+    owner.kind === 'company' ? t('ruleSets.noneCompany') : owner.kind === 'firms' ? t('ruleSets.noneFirm') : t('ruleSets.noneSite');
   const refresh = () =>
     Promise.all([queryClient.invalidateQueries({ queryKey: key }), queryClient.invalidateQueries({ queryKey: RULE_SETS_KEY })]);
 
@@ -69,14 +75,14 @@ export function RuleSetUseDialog({
     onError: (error) => setFormError(errorMessage(t, error)),
   });
 
-  const selectable = sets.data?.filter((s) => s.name !== null && s.isActive) ?? [];
+  const selectable = sets.data?.filter((s) => s.isActive) ?? [];
 
   return (
     <Dialog open onOpenChange={(next) => !next && !save.isPending && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('ruleSets.useTitle', { name })}</DialogTitle>
-          <DialogDescription>{t('ruleSets.useDescription')}</DialogDescription>
+          <DialogDescription>{owner.kind === 'company' ? t('ruleSets.useCompanyDescription') : t('ruleSets.useDescription')}</DialogDescription>
         </DialogHeader>
         {uses.isPending || sets.isPending ? (
           <LoadingState />
@@ -84,32 +90,12 @@ export function RuleSetUseDialog({
           <ErrorState onRetry={() => void refresh()} />
         ) : (
           <div className="space-y-6">
-            {uses.data.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{noneLabel}</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {uses.data.map((u) => (
-                  <li key={`${u.fromYear}-${u.fromMonth}`} className="flex items-center justify-between gap-3 py-2">
-                    <div className="min-w-0">
-                      <div className="font-medium">{u.ruleSet?.name ?? noneLabel}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {t('ruleSets.fromMonth', { month: format.month(u.fromYear, u.fromMonth) })} · {u.setBy.fullName}
-                      </div>
-                    </div>
-                    {canChange && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t('ruleSets.removeUse', { month: format.month(u.fromYear, u.fromMonth) })}
-                        onClick={() => setRemoving(u)}
-                      >
-                        <Trash2 aria-hidden />
-                      </Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <FromMonthList
+              items={uses.data}
+              label={(u) => u.ruleSet?.name ?? noneLabel}
+              empty={noneLabel}
+              onRemove={canChange ? setRemoving : undefined}
+            />
             {canChange && (
               <form
                 className="space-y-4"
@@ -128,10 +114,10 @@ export function RuleSetUseDialog({
                   <Label htmlFor="rule-set-choice">{t('ruleSets.ruleSet')}</Label>
                   <Select value={choice} onValueChange={setChoice}>
                     <SelectTrigger id="rule-set-choice" className="w-full">
-                      <SelectValue />
+                      <SelectValue placeholder={t('ruleSets.chooseRuleSet')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={NONE}>{noneLabel}</SelectItem>
+                      {canBeNone && <SelectItem value={NONE}>{noneLabel}</SelectItem>}
                       {selectable.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.name}

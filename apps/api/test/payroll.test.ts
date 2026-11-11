@@ -1,6 +1,6 @@
 import type { Role } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { addMember, createUser, loginAs, memberOfNewCompany, resetDb, startApp, type TestContext } from './helpers';
+import { addMember, createUser, loginAs, memberOfNewCompany, paidCategories, resetDb, setUpPay, startApp, type TestContext } from './helpers';
 
 let ctx: TestContext;
 beforeAll(async () => (ctx = await startApp()));
@@ -21,7 +21,6 @@ const RULES = {
     TRAVEL: { paid: false, hoursPerDay: null },
   },
   travelPayMode: 'NONE',
-  payRoundingStep: '1000',
 };
 
 const FULL_MONTH = {
@@ -40,20 +39,21 @@ const FULL_MONTH = {
 /** A company with pay rules from September 2026, two sites and one worker on site A with a salary. */
 async function company(rules = RULES) {
   const owner = await memberOfNewCompany(ctx, 'OWNER');
-  await owner.agent.put('/api/pay-rules/2026/9').send(rules).expect(204);
+  const pay = await setUpPay(owner.agent, rules);
   const siteA = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
   const siteB = (await owner.agent.post('/api/sites').send({ name: 'Site B' }).expect(201)).body.id as string;
   const workerId = await hire(owner.agent, siteA, 'Testov');
   await owner.agent.post(`/api/workers/${workerId}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '7500000' }).expect(201);
   const placementA = (await owner.agent.get(`/api/workers/${workerId}`).expect(200)).body.placement.id as string;
-  return { ...owner, siteA, siteB, workerId, placementA };
+  return { ...owner, pay, siteA, siteB, workerId, placementA };
 }
 
 async function hire(agent: Awaited<ReturnType<typeof memberOfNewCompany>>['agent'], siteId: string, lastName: string, from = '2026-09-01') {
+  const categories = await paidCategories(agent);
   const res = await agent
     .post('/api/workers')
     .send({
-      worker: { lastName, firstName: 'Test' },
+      worker: { lastName, firstName: 'Test', categories },
       placement: { siteId, from },
     })
     .expect(201);
@@ -67,16 +67,21 @@ async function member(companyId: string, role: Role) {
 }
 
 /**
- * A named rule set (8-hour days) chosen by a site, written directly: these tests are about
- * pay, not the rule set API. Like every named set, it has no rounding step.
+ * A rule set (8-hour days for the company's paid option) chosen by a site, written directly:
+ * these tests are about pay, not the rule set API.
  */
-async function siteRules(companyId: string, siteId: string, name: string) {
+async function siteRules(c: Awaited<ReturnType<typeof company>>, siteId: string, name: string) {
+  const companyId = c.company.id;
   const user = await createUser(ctx.prisma);
   const set = await ctx.prisma.payrollRuleSet.create({ data: { companyId, name } });
+  const combination = await ctx.prisma.payrollRuleSet.create({ data: { companyId, parentId: set.id, variantKey: c.pay.optionId } });
+  await ctx.prisma.ruleSetVariantOption.create({
+    data: { companyId, ruleSetId: combination.id, categoryId: c.pay.categoryId, optionId: c.pay.optionId },
+  });
   await ctx.prisma.payrollRules.create({
     data: {
       companyId,
-      ruleSetId: set.id,
+      ruleSetId: combination.id,
       fromYear: 2026,
       fromMonth: 1,
       restWeekdays: [7],
@@ -151,7 +156,7 @@ describe('monthly hours', () => {
       'monthlyHours.notInMonth',
     );
     // Without pay rules for the month, hours can't be checked.
-    await agent.delete('/api/pay-rules/2026/9').expect(204);
+    await agent.delete('/api/company/rule-set/2026/9').expect(204);
     expect((await agent.post(url).send(FULL_MONTH).expect(409)).body.code).toBe('payRules.notSet');
     const user = await createUser(ctx.prisma);
     await ctx.prisma.payrollPeriod.create({ data: { companyId: c.id, year: 2026, month: 9, status: 'LOCKED', lockedAt: new Date(), lockedById: user.id } });
@@ -191,7 +196,8 @@ describe('payroll', () => {
     });
     expect(w.parts).toHaveLength(1);
     expect(w.parts[0]).toMatchObject({
-      ruleSetName: null,
+      ruleSetName: 'Main',
+      combination: [{ categoryName: 'Pay group', optionName: 'A' }],
       rulesFrom: { year: 2026, month: 9 },
       placementIds: [placementA],
       places: { [placementA]: { siteName: 'Site A', from: '2026-09-01', until: null } },
@@ -213,11 +219,12 @@ describe('payroll', () => {
   });
 
   it('pays a worker who moved to a site with its own rules in two parts, rounded once', async () => {
-    const { company: c, agent, siteB, workerId, placementA } = await company();
+    const c = await company();
+    const { agent, siteB, workerId, placementA } = c;
     await agent.post(`/api/workers/${workerId}/placements`).send({ siteId: siteB, from: '2026-09-16' }).expect(204);
     const placementB = (await agent.get(`/api/workers/${workerId}`).expect(200)).body.placement.id as string;
     // Site B's own rules: 8-hour days.
-    await siteRules(c.id, siteB, 'Site B');
+    await siteRules(c, siteB, 'Site B');
 
     await agent.post(`/api/monthly-hours/2026/9/${placementA}`).send({ ...FULL_MONTH, normalHours: '100', workdaysWorked: 12 }).expect(201);
     // Placement B has no hours yet: missing data is never guessed.
@@ -234,7 +241,7 @@ describe('payroll', () => {
       p.result.hourlyRate.rounded,
       p.result.total,
     ])).toEqual([
-      [null, '33333.33', '3333333.33'],
+      ['Main', '33333.33', '3333333.33'],
       ['Site B', '37500.00', '3600000.00'],
     ]);
     // The parts aren't rounded on their own: 6 933 333.33 is rounded once, with the company step.
@@ -267,10 +274,10 @@ describe('payroll', () => {
   });
 
   it('shows totals that no longer fit after the rules changed', async () => {
-    const { agent, placementA } = await company();
+    const { agent, pay, placementA } = await company();
     await agent.post(`/api/monthly-hours/2026/9/${placementA}`).send(FULL_MONTH).expect(201);
     // Normal hours go down to 8 a day: 225 h no longer fits 25 days.
-    await agent.put('/api/pay-rules/2026/9').send({ ...RULES, normalHoursPerDay: '8' }).expect(204);
+    await agent.put(`/api/rule-sets/${pay.combinationId}/pay-rules/2026/9`).send({ ...RULES, normalHoursPerDay: '8' }).expect(204);
     const [w] = (await agent.get('/api/payroll/2026/9').expect(200)).body.workers;
     expect(w).toMatchObject({
       total: null,
@@ -428,9 +435,10 @@ describe('adjustments', () => {
     await agent.post('/api/payroll/2026/9/lock').expect(201);
   });
 
-  it('needs the company rules for the rounding step even when a site has its own rules', async () => {
-    const { company: c, agent, siteB } = await company();
-    await siteRules(c.id, siteB, 'Site B');
+  it("needs the company's rounding step even when a site has its own rules", async () => {
+    const c = await company();
+    const { agent, siteB } = c;
+    await siteRules(c, siteB, 'Site B');
     const onB = await hire(agent, siteB, 'Bsite');
     await agent.post(`/api/workers/${onB}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '6000000' }).expect(201);
     const placement = (await agent.get(`/api/workers/${onB}`).expect(200)).body.placement.id;
@@ -439,9 +447,9 @@ describe('adjustments', () => {
       problems: [],
       total: '6000000.00',
     });
-    await agent.delete('/api/pay-rules/2026/9').expect(204);
+    await agent.delete('/api/pay-rounding/2026/9').expect(204);
     const w = (await agent.get('/api/payroll/2026/9').expect(200)).body.workers.find((x: { worker: { id: string } }) => x.worker.id === onB);
-    expect(w).toMatchObject({ total: null, payOut: null, problems: [{ code: 'noCompanyRules' }] });
+    expect(w).toMatchObject({ total: null, payOut: null, problems: [{ code: 'noRounding' }] });
   });
 
   it('never shows adjustments to timekeepers or foremen, and lets project managers only view their sites', async () => {

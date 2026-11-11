@@ -95,23 +95,19 @@ export const payRulesSchema = z.object({
   holidayMultiplier: multiplierSchema,
   absence: z.object({ LEAVE: absenceRuleSchema, SICK: absenceRuleSchema, TRAVEL: absenceRuleSchema }),
   travelPayMode: z.enum(TRAVEL_PAY_MODES, { error: 'validation.required' }),
-  payRoundingStep: decimalSchema({
-    min: 0,
-    minExclusive: true,
-    max: 1_000_000_000,
-    rangeError: 'validation.roundingStepRange',
-  }),
 });
 export type PayRulesInput = z.input<typeof payRulesSchema>;
 export type PayRules = z.output<typeof payRulesSchema>;
 
-/** A named rule set's rules (AGENTS.md: Pay rule sets): the rounding step stays company-wide. */
-export const ruleSetPayRulesSchema = payRulesSchema.omit({ payRoundingStep: true });
-export type RuleSetPayRulesInput = z.input<typeof ruleSetPayRulesSchema>;
-export type RuleSetPayRules = z.output<typeof ruleSetPayRulesSchema>;
+/** The company's rounding step of the amount to pay out, from a month (AGENTS.md: Pay model). */
+export const payRoundingSchema = z.object({
+  step: decimalSchema({ min: 0, minExclusive: true, max: 1_000_000_000, rangeError: 'validation.roundingStepRange' }),
+});
+export type PayRoundingInput = z.input<typeof payRoundingSchema>;
+export type PayRounding = z.output<typeof payRoundingSchema>;
 
 /**
- * What a new company's rules form starts with: only the decided defaults
+ * What a new combination's rules form starts with: only the decided defaults
  * (AGENTS.md). Rest weekdays, normal hours, the multipliers and the travel pay
  * mode have none: the admin enters them.
  */
@@ -126,7 +122,6 @@ export const NEW_PAY_RULES: Omit<PayRulesInput, 'travelPayMode'> & { travelPayMo
     SICK: { paid: true, hoursPerDay: '8' },
     TRAVEL: { paid: true, hoursPerDay: null },
   },
-  payRoundingStep: '1000',
 };
 
 /** Mirrors HolidayKind in apps/api/prisma/schema.prisma (EnteredHolidayKind in @puantaj/payroll). */
