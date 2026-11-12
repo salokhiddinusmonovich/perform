@@ -53,7 +53,7 @@ async function company({ timesheetModule = true, planFrom = '2000-01-01' } = {})
   const teamA = (await owner.agent.post('/api/teams').send({ siteId: siteA, name: 'Team A' }).expect(201)).body.id as string;
   const teamB = (await owner.agent.post('/api/teams').send({ siteId: siteA, name: 'Team B' }).expect(201)).body.id as string;
   const workerId = await hire(owner.agent, siteA, teamA, 'Testov');
-  await owner.agent.post(`/api/workers/${workerId}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '7500000' }).expect(201);
+  await owner.agent.post(`/api/workers/${workerId}/salaries`).send({ from: '2026-09-01', monthlySalary: '7500000' }).expect(201);
   return { ...owner, siteA, siteB, teamA, teamB, workerId };
 }
 

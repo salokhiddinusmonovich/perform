@@ -41,7 +41,6 @@ export interface WorkerItem {
   lastName: string;
   firstName: string;
   patronymic: string | null;
-  position: string | null;
   /** The worker's option in each category this month (AGENTS.md: Worker categories), by category id; a category not set is left out */
   categories: Record<string, string>;
   placement: {
@@ -63,6 +62,8 @@ export interface WorkerItem {
     from: string;
     until: string | null;
   } | null;
+  /** The worker's position today (AGENTS.md: Positions); null: not set */
+  position: PositionRef | null;
   /** The worker's shift today; null: none, the normal hours of the pay rules */
   shift: ShiftInfo | null;
   /** null for timekeepers and foremen: the API doesn't send it to them */
@@ -74,23 +75,47 @@ export interface WorkerItem {
     passportNumber: string | null;
     phone: string | null;
   } | null;
-  /** The latest salary of the latest placement's firm (it may start in a later month). null when there is none yet, or for timekeepers and foremen. */
-  salary: Pick<SalaryItem, 'fromYear' | 'fromMonth' | 'monthlySalary'> | null;
+  /** The latest salary of the latest placement's firm (it may start on a later day). null when there is none yet, or for timekeepers and foremen. */
+  salary: Pick<SalaryItem, 'from' | 'monthlySalary'> | null;
 }
 
-/** A salary from a month on, newest first in a worker's history. */
+/** A salary from a day on, newest first in a worker's history. */
 export interface SalaryItem {
   id: string;
   /** The firm it is paid by; null: from before the company used firms */
   firm: { id: string; name: string } | null;
-  fromYear: number;
-  fromMonth: number;
+  /** First day it is paid from, "YYYY-MM-DD" */
+  from: string;
   /** Decimal string, e.g. "7500000" */
   monthlySalary: string;
   reason: string | null;
-  /** A newer salary from the same month (and firm) corrected this one, so it never applies. */
+  /** A newer salary from the same day (and firm) corrected this one, so it never applies. */
   corrected: boolean;
   setBy: { fullName: string };
+  setAt: string;
+}
+
+/** A position as workers and pay results name it (AGENTS.md: Positions). */
+export interface PositionRef {
+  id: string;
+  name: string;
+}
+
+/** A company position (Settings). */
+export interface PositionItem extends PositionRef {
+  isActive: boolean;
+  /** Rows of workers' histories that have it */
+  uses: number;
+}
+
+/** A row of a worker's position history, oldest first: the position from a day until the next row. */
+export interface WorkerPositionItem {
+  id: string;
+  from: string;
+  /** null: no position from this day */
+  position: PositionRef | null;
+  /** null: from before positions were a list */
+  setBy: { fullName: string } | null;
   setAt: string;
 }
 
@@ -167,6 +192,12 @@ export const salariesKey = (workerId: string) => [...WORKERS_KEY, workerId, 'sal
 
 export function useSalaries(workerId: string) {
   return useQuery({ queryKey: salariesKey(workerId), queryFn: () => api.get<SalaryItem[]>(`/workers/${workerId}/salaries`) });
+}
+
+export const POSITIONS_KEY = ['positions'] as const;
+
+export function usePositions() {
+  return useQuery({ queryKey: POSITIONS_KEY, queryFn: () => api.get<PositionItem[]>('/positions') });
 }
 
 export const SHIFTS_KEY = ['shifts'] as const;
@@ -276,6 +307,12 @@ export function useWorkerShifts(workerId: string) {
   return useQuery({ queryKey: workerShiftsKey(workerId), queryFn: () => api.get<WorkerShiftItem[]>(`/workers/${workerId}/shifts`) });
 }
 
+export const workerPositionsKey = (workerId: string) => [...WORKERS_KEY, workerId, 'positions'] as const;
+
+export function useWorkerPositions(workerId: string) {
+  return useQuery({ queryKey: workerPositionsKey(workerId), queryFn: () => api.get<WorkerPositionItem[]>(`/workers/${workerId}/positions`) });
+}
+
 /** After any change to sites, teams or workers: counts and lists on both pages change. */
 export function useRefreshOrganisation() {
   const queryClient = useQueryClient();
@@ -286,13 +323,14 @@ export function useRefreshOrganisation() {
       queryClient.invalidateQueries({ queryKey: DEPARTMENTS_KEY }),
       queryClient.invalidateQueries({ queryKey: FIRMS_KEY }),
       queryClient.invalidateQueries({ queryKey: WORKER_CATEGORIES_KEY }),
+      queryClient.invalidateQueries({ queryKey: POSITIONS_KEY }),
     ]);
 }
 
 export const workerName = (w: Pick<WorkerItem, 'lastName' | 'firstName' | 'patronymic'>) =>
   [w.lastName, w.firstName, w.patronymic].filter(Boolean).join(' ');
 
-/** What a search box matches a worker on: name, the company's number for them, and position. */
+/** What a search box matches a worker on: name, the company's number for them, and position (its name, as month views give it). */
 export const workerSearchText = (
-  w: Pick<WorkerItem, 'lastName' | 'firstName' | 'patronymic' | 'position'> & { employeeNumber?: string | null },
+  w: Pick<WorkerItem, 'lastName' | 'firstName' | 'patronymic'> & { employeeNumber?: string | null; position: string | null },
 ) => [workerName(w), w.employeeNumber, w.position].filter(Boolean).join(' ');

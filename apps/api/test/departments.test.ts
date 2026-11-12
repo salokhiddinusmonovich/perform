@@ -265,7 +265,7 @@ describe('payroll by department', () => {
       [hseSiteA, '5000000'],
     ]) {
       const worker = (await hire(agent, { siteId: site, departmentId }, pay.categories).expect(201)).body.id;
-      await agent.post(`/api/workers/${worker}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: salary }).expect(201);
+      await agent.post(`/api/workers/${worker}/salaries`).send({ from: '2026-09-01', monthlySalary: salary }).expect(201);
       const placement = (await agent.get(`/api/workers/${worker}`).expect(200)).body.placement.id;
       await agent.post(`/api/monthly-hours/2026/9/${placement}`).send(FULL_MONTH).expect(201);
     }

@@ -61,7 +61,7 @@ async function worker(c: Company, siteId: string, firmId?: string) {
       .send({ worker: { lastName: 'Testov', firstName: 'Test', categories: c.pay.categories }, placement: { from: '2026-09-01', siteId, firmId } })
       .expect(201)
   ).body.id as string;
-  await c.agent.post(`/api/workers/${id}/salaries`).send({ firmId: firmId ?? null, fromYear: 2026, fromMonth: 9, monthlySalary: '10000000' }).expect(201);
+  await c.agent.post(`/api/workers/${id}/salaries`).send({ firmId: firmId ?? null, from: '2026-09-01', monthlySalary: '10000000' }).expect(201);
   return (await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId: id } })).id;
 }
 

@@ -19,10 +19,13 @@ import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict } from '../common/api-error';
 import { dayToDate, inMonth, isoDay, monthSpan, previousDay } from '../common/dates';
-import { SALARY_ORDER, salaryForFirm, WorkersService } from '../organisation/workers.service';
+import { PositionsService } from '../organisation/positions.service';
+import { SALARY_ORDER, salaryForFirm } from '../organisation/salaries';
+import { WorkersService } from '../organisation/workers.service';
 import { listCategories, optionsAt, type WorkerCategoryView } from '../organisation/worker-categories.service';
+import { POSITION_ROWS, positionOn } from '../organisation/worker-positions';
 import { shiftPartsOf } from '../organisation/worker-shifts';
-import { assertMonthsOpen, lockWorkerMonth, monthIndex } from '../pay-rules/months';
+import { assertMonthsOpen, lockWorkerMonth } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
 import { openPeriod } from '../timesheet/timesheet.service';
 import {
@@ -67,7 +70,7 @@ export interface ImportWorkerChange {
   row: number;
   employeeNumber: string;
   name: string;
-  field: 'site' | 'department' | 'firm' | 'leftOn' | 'salary' | 'category';
+  field: 'site' | 'department' | 'firm' | 'leftOn' | 'salary' | 'position' | 'category';
   /** With field 'category': which one */
   categoryId?: string;
   file: string | null;
@@ -94,6 +97,12 @@ export interface ImportPreview {
     rows: number;
     new: number;
     existing: number;
+    /**
+     * Positions of the file's new workers that the app doesn't have, as the file writes them
+     * (AGENTS.md: Positions). The import adds them when the user confirms (addPositions);
+     * until then their rows are problems.
+     */
+    newPositions: string[];
     problems: ImportProblem[];
     /** What the import read differently from the file's own columns (e.g. an exit date from a code); never blocks it */
     notes: ImportProblem[];
@@ -148,6 +157,9 @@ interface PlannedPlacement {
 /** A worker the workers step adds, with one placement per row of the file, oldest first. */
 interface PlannedWorker {
   worker: CreateWorker['worker'];
+  /** Their position: one the app has, or the name of one the import adds (folded, the key of newPositions); both null: none */
+  positionId: string | null;
+  newPosition: string | null;
   placements: PlannedPlacement[];
 }
 
@@ -175,6 +187,7 @@ export class ImportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workers: WorkersService,
+    private readonly positions: PositionsService,
     private readonly audit: AuditService,
   ) {}
 
@@ -213,12 +226,12 @@ export class ImportsService {
         headers: [],
         days: [],
         values: { categories: {} },
-        workers: { rows: 0, new: 0, existing: 0, problems, notes: [], changes: [] },
+        workers: { rows: 0, new: 0, existing: 0, newPositions: [], problems, notes: [], changes: [] },
         hours: { workers: 0, replaces: 0, overwritesEdits: 0, problems, notes: [] },
       };
     }
     const { sheet } = read;
-    const workers = await this.checkWorkers(this.prisma, auth, ym, sheet, read.mapping);
+    const workers = await this.checkWorkers(this.prisma, auth, ym, sheet, read.mapping, request.addPositions);
     const hours = await this.checkHours(this.prisma, auth, ym, sheet, read.mapping);
     // Values not mapped yet are offered with their guess (the option of that name), for the user to confirm.
     const categories = Object.fromEntries(
@@ -243,6 +256,7 @@ export class ImportsService {
         rows: workers.rows,
         new: workers.create.length,
         existing: workers.existing,
+        newPositions: [...workers.newPositions.values()],
         problems: workers.problems,
         notes: workers.notes,
         changes: workers.changes,
@@ -265,11 +279,17 @@ export class ImportsService {
     if (!read.sheet) throw conflict('import.hasProblems', { problems: 1 });
     const sheet = read.sheet;
     return this.prisma.$transaction(async (tx) => {
-      const checked = await this.checkWorkers(tx, auth, ym, sheet, read.mapping);
+      const checked = await this.checkWorkers(tx, auth, ym, sheet, read.mapping, request.addPositions);
       if (checked.problems.length > 0) throw conflict('import.hasProblems', { problems: checked.problems.length });
+      // The positions the user confirmed adding (AGENTS.md: Positions), by their folded name.
+      const added = new Map<string, string>();
+      for (const [folded, name] of checked.newPositions) {
+        added.set(folded, (await this.positions.createIn(tx, auth, { name })).id);
+      }
       for (const plan of checked.create) {
         const first = plan.placements[0];
-        const { id } = await this.workers.createIn(tx, auth, { worker: plan.worker, placement: first.placement });
+        const positionId = plan.newPosition !== null ? added.get(plan.newPosition)! : plan.positionId;
+        const { id } = await this.workers.createIn(tx, auth, { worker: plan.worker, placement: first.placement, positionId });
         for (const [i, p] of plan.placements.entries()) {
           if (i > 0) await this.workers.placeIn(tx, auth, id, p.placement);
           // A later placement ends this one by itself; the file's own exit date counts when there is one.
@@ -277,8 +297,8 @@ export class ImportsService {
           if (p.salary) {
             await this.workers.addSalaryIn(tx, auth, id, {
               firmId: p.placement.firmId,
-              fromYear: ym.year,
-              fromMonth: ym.month,
+              // From the 1st of the import month (AGENTS.md: Excel import).
+              from: isoDay(monthSpan(ym.year, ym.month).first),
               monthlySalary: p.salary,
               reason: null,
             });
@@ -293,7 +313,13 @@ export class ImportsService {
           auth,
           entityType: 'Company',
           entityId: companyId,
-          data: { ...ym, fileName: read.fileName, fileSha256: read.sha256, created: checked.create.length },
+          data: {
+            ...ym,
+            fileName: read.fileName,
+            fileSha256: read.sha256,
+            created: checked.create.length,
+            positionsAdded: [...checked.newPositions.values()],
+          },
         },
         tx,
       );
@@ -507,7 +533,15 @@ export class ImportsService {
   }
 
   /** The workers step: which rows add a worker, and what keeps it from running. */
-  private async checkWorkers(db: Db, auth: CompanyAuthContext, ym: YearMonth, sheet: Sheet, mapping: ImportMapping) {
+  private async checkWorkers(
+    db: Db,
+    auth: CompanyAuthContext,
+    ym: YearMonth,
+    sheet: Sheet,
+    mapping: ImportMapping,
+    /** The user confirmed adding the positions the app doesn't have */
+    addPositions: boolean,
+  ) {
     const companyId = auth.company.id;
     const required: ImportField[] = [
       ...WORKER_IMPORT_REQUIRED,
@@ -539,23 +573,29 @@ export class ImportsService {
       return { raw, option: option ?? undefined };
     };
 
-    const [existing, sites, departments, firms, pinfls, codeRows] = await Promise.all([
+    const [existing, sites, departments, firms, positions, pinfls, codeRows] = await Promise.all([
       db.worker.findMany({
         where: { companyId, employeeNumber: { in: rows.map((r) => r.employeeNumber!) } },
         include: {
           assignments: { orderBy: { hiredOn: 'desc' }, include: { site: true, department: true, firm: true } },
           salaries: { orderBy: SALARY_ORDER },
+          positions: POSITION_ROWS,
           categoryOptions: { select: { categoryId: true, optionId: true, fromYear: true, fromMonth: true } },
         },
       }),
       db.site.findMany({ where: { companyId } }),
       db.department.findMany({ where: { companyId } }),
       db.firm.findMany({ where: { companyId } }),
+      db.position.findMany({ where: { companyId } }),
       db.worker.findMany({ where: { companyId, pinfl: { not: null } }, select: { pinfl: true, employeeNumber: true } }),
       db.timesheetCode.findMany({ where: { companyId } }),
     ]);
     const codes: CodeMap = new Map(codeRows.map((c) => [normalizeCode(c.code), c.status]));
     const filePinfls = new Map<string, string>();
+    /** Positions of new workers that the app doesn't have: folded name → the name as the file first writes it. */
+    const newPositions = new Map<string, string>();
+    const positionNamed = (name: string) => positions.find((p) => foldText(p.name) === foldText(name));
+    const monthLast = isoDay(monthSpan(ym.year, ym.month).last);
 
     for (const r of rows) {
       const days = employmentInDays(r, sheet, codes, ym);
@@ -566,6 +606,19 @@ export class ImportsService {
         // No exit date in the file: the day before a "not employed" code after the worker started.
         const leftOn = fileLeftOn ?? (latest ? days.exitBefore(isoDay(latest.hiredOn))?.leftOn ?? null : null);
         changes.push(...this.changesOf(r, worker, ym, mapping, auth.company, leftOn));
+        // Compared with the worker's position at the end of the import month (AGENTS.md: Positions).
+        const filePosition = cellText(r.field('position'));
+        const appPosition = positionOn(worker.positions, monthLast);
+        if (filePosition !== null && positionNamed(filePosition)?.id !== appPosition?.id) {
+          changes.push({
+            row: r.row,
+            employeeNumber: r.employeeNumber!,
+            name: r.name ?? r.employeeNumber!,
+            field: 'position',
+            file: filePosition,
+            app: appPosition?.name ?? null,
+          });
+        }
         // Compared with the worker's options of the import month (AGENTS.md: Worker categories).
         const inMonth = optionsAt(worker.categoryOptions, ym);
         for (const category of categories) {
@@ -610,7 +663,6 @@ export class ImportsService {
         lastName: text('lastName') ?? '',
         firstName: text('firstName') ?? '',
         patronymic: text('patronymic'),
-        position: text('position'),
         categories: chosen,
         pinfl: text('pinfl'),
         birthDate: date('birthDate'),
@@ -631,6 +683,17 @@ export class ImportsService {
         else if (filePinfls.has(pinfl) && filePinfls.get(pinfl) !== r.employeeNumber) add('import.duplicatePinfl', { field: 'pinfl' });
         filePinfls.set(pinfl, r.employeeNumber!);
       }
+
+      // The position by its name; one the app doesn't have is added only when the user confirmed it.
+      const positionName = text('position');
+      const position = positionName === null ? undefined : positionNamed(positionName);
+      let newPosition: string | null = null;
+      if (positionName !== null && !position) {
+        newPosition = foldText(positionName);
+        if (!newPositions.has(newPosition)) newPositions.set(newPosition, positionName.trim().replace(/\s+/g, ' '));
+        if (positionName.trim().length > 120) add('validation.tooLong', { field: 'position', value: positionName });
+        else if (!addPositions) add('import.positionNotFound', { field: 'position', value: positionName });
+      } else if (position && !position.isActive) add('position.inactive', { field: 'position', value: positionName! });
 
       const siteName = text('site');
       const site = siteName === null ? undefined : sites.find((s) => foldText(s.name) === foldText(siteName));
@@ -696,10 +759,10 @@ export class ImportsService {
         if (same) {
           same.placements.push(planned);
           same.placements.sort((a, b) => a.placement.from.localeCompare(b.placement.from));
-        } else create.push({ worker: details.data, placements: [planned] });
+        } else create.push({ worker: details.data, positionId: position?.id ?? null, newPosition, placements: [planned] });
       }
     }
-    return { rows: all.length, existing: existing.length, create, problems, notes, changes, categoryValues };
+    return { rows: all.length, existing: existing.length, create, newPositions, problems, notes, changes, categoryValues };
   }
 
   /** Where the file says something else than the app about a worker already in it. */
@@ -732,9 +795,10 @@ export class ImportsService {
     }
     const salaryText = text('salary');
     if (salaryText !== null && Number(salaryText) !== 0) {
-      const index = monthIndex(ym.year, ym.month);
+      // Compared with the salary in force at the end of the import month (AGENTS.md: Salaries).
+      const monthLast = monthSpan(ym.year, ym.month).last;
       const inForce = salaryForFirm(
-        worker.salaries.filter((s) => monthIndex(s.fromYear, s.fromMonth) <= index),
+        worker.salaries.filter((s) => s.fromDay <= monthLast),
         latest?.firmId ?? null,
         company.firms,
       );

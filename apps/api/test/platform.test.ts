@@ -54,7 +54,6 @@ const WORKER = {
   lastName: 'Testov',
   firstName: 'Test',
   patronymic: '',
-  position: 'Electrician',
   pinfl: '',
   birthDate: '',
   nationality: '',

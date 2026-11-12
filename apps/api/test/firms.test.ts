@@ -70,7 +70,7 @@ const hire = (c: { agent: Agent; pay: PaySetup }, placement: { siteId: string; f
     .send({ worker: { lastName: 'Testov', firstName: 'Test', categories: c.pay.categories }, placement: { from: '2026-09-01', ...placement } });
 
 const salary = (agent: Agent, workerId: string, firmId: string | null, monthlySalary: string) =>
-  agent.post(`/api/workers/${workerId}/salaries`).send({ firmId, fromYear: 2026, fromMonth: 9, monthlySalary });
+  agent.post(`/api/workers/${workerId}/salaries`).send({ firmId, from: '2026-09-01', monthlySalary });
 
 /** A worker in one firm up to the 15th and in another from the 16th, each with its own salary and hours. */
 async function movedWorker(c: Awaited<ReturnType<typeof company>>) {
@@ -223,9 +223,14 @@ describe('payroll per firm', () => {
     const view = month.workers[0];
     expect(view.problems).toEqual([]);
     expect(view.payOut).toBeNull();
-    expect(view.payslips.map((p: { firm: { name: string }; salary: { monthlySalary: string }; total: string }) => [p.firm.name, p.salary.monthlySalary, p.total])).toEqual([
-      ['Perform MEP', '7500000', '3600000.00'],
-      ['Subcontractor X', '10000000', '5200000.00'],
+    expect(view.payslips.map((p: { firm: { name: string }; total: string }) => [p.firm.name, p.total])).toEqual([
+      ['Perform MEP', '3600000.00'],
+      ['Subcontractor X', '5200000.00'],
+    ]);
+    // Each firm's days are paid at its own salary, which each part names.
+    expect(view.parts.map((p: { firm: { name: string }; salary: unknown }) => [p.firm.name, p.salary])).toEqual([
+      ['Perform MEP', { from: '2026-09-01', monthlySalary: '7500000' }],
+      ['Subcontractor X', { from: '2026-09-01', monthlySalary: '10000000' }],
     ]);
     expect(view.total).toBe('8800000.00');
     expect(month.total).toBe('8800000.00');

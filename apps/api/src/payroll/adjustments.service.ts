@@ -5,8 +5,9 @@ import type { Adjustment, AdjustmentType, YearMonth } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
-import { inMonth } from '../common/dates';
+import { inMonth, isoDay, monthSpan } from '../common/dates';
 import { seesPlacement } from '../organisation/access';
+import { POSITION_ROWS, withPositionName } from '../organisation/worker-positions';
 import { assertMonthsOpen } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -91,7 +92,7 @@ export class AdjustmentsService {
           departmentId: true,
           firm: { select: { id: true, name: true } },
           site: { select: { name: true } },
-          worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, position: true } },
+          worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, positions: POSITION_ROWS } },
         },
         orderBy: { hiredOn: 'asc' },
       }),
@@ -114,7 +115,7 @@ export class AdjustmentsService {
         .filter((a) => a.workerId === workerId)
         .map((a) => ({ ...a, signed: ADJUSTMENT_SIGN[a.type] < 0n ? a.amount.neg() : a.amount }));
       return {
-        worker: own[0].worker,
+        worker: withPositionName(own[0].worker, isoDay(monthSpan(year, month).last)),
         siteNames: [...new Set(own.map((p) => p.site.name))],
         departmentId: own.at(-1)!.departmentId,
         firms: auth.company.firms

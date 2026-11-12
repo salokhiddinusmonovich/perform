@@ -39,7 +39,8 @@
     "ruleSets": "Kural setleri",
     "travelRoutes": "Güzergâhlar",
     "travelAmounts": "Yol ücreti tutarları",
-    "activity": "Etkinlik"
+    "activity": "Etkinlik",
+    "positions": "Görevler"
   },
   "settings": {
     "language": "Dil",
@@ -440,7 +441,7 @@
     "monthlyHours": {
       "notInMonth": "İşçi bu ay bu şantiyede çalışmadı.",
       "unchanged": "Bu ay için tam olarak aynı saatler zaten girildi.",
-      "partChanged": "Bu sırada işçinin vardiyaları değişti. Ayı yeniden açın ve her parçanın saatlerini girin."
+      "partChanged": "Bu sırada işçinin vardiyası veya maaşı değişti. Ayı yeniden açın ve her parçanın saatlerini girin."
     },
     "adjustment": {
       "notInMonth": "İşçi bu ay çalışmadı.",
@@ -513,7 +514,8 @@
       "exitFromCode": "Çıkış tarihi yok: son çalışma günü “{{value}}” yazan günden önceki gündür.",
       "overwritesEdits": "Uygulamada elle değiştirilen günlerin üzerine dosyadaki değerler yazılacak.",
       "blankAsAbsent": "Boş hücreler mazeretsiz devamsızlık olarak okundu.",
-      "firmNotFound": "Uygulamada “{{value}}” firması yok. Önce ekleyin."
+      "firmNotFound": "Uygulamada “{{value}}” firması yok. Önce ekleyin.",
+      "positionNotFound": "Uygulamada “{{value}}” görevi yok. Ekleyin veya “Bu görevleri ekle”yi işaretleyin."
     },
     "firm": {
       "notFound": "Böyle bir firma yok.",
@@ -558,6 +560,17 @@
     },
     "payRounding": {
       "notFound": "Bu yuvarlama adımı artık yok."
+    },
+    "position": {
+      "notFound": "Bu görev yok.",
+      "nameTaken": "Bu adla bir görev zaten var.",
+      "inactive": "Bu görev arşivde, işçilere verilemez.",
+      "mergeIntoItself": "Birleştirmek için başka bir görev seçin."
+    },
+    "workerPosition": {
+      "notFound": "Bu görev kaydı yok.",
+      "dayTaken": "Bu günde zaten bir görev başlıyor. Sahip veya yönetici düzeltebilir.",
+      "unchanged": "İşçi o günden itibaren zaten bu görevde."
     }
   },
   "payRules": {
@@ -840,14 +853,13 @@
     "leaveHint": "Çalıştığı son gün. Sonraki günler artık ona ait değildir.",
     "lastDay": "Son iş günü",
     "salary": "Aylık maaş",
-    "salaryFrom": "{{month}} itibarıyla",
+    "salaryFrom": "{{date}} itibarıyla",
     "noSalary": "Maaş girilmedi",
     "salaryAction": "Maaş",
     "salaryTitle": "Aylık maaş",
-    "salaryHint": "Maaş seçilen aydan bir sonraki maaşa kadar geçerlidir. Maaşlar değiştirilmez: zam veya düzeltme yeni bir kayıt olarak eklenir.",
+    "salaryHint": "Maaş seçilen günden bir sonraki maaşa kadar geçerlidir. Ay ortasında başlayan maaş o ayı böler: önceki günler eski maaşla ödenir. Maaşlar değiştirilmez: zam veya düzeltme yeni bir kayıt olarak eklenir.",
     "salaryViewHint": "Maaş geçmişi. Maaşı sahip, yönetici veya muhasebeci ekler.",
-    "salaryFromMonth": "Hangi aydan itibaren",
-    "salaryCorrects": "{{month}} için zaten bir maaş var. Yenisi onu düzeltir.",
+    "salaryCorrects": "{{date}} tarihinden başlayan bir maaş zaten var. Yenisi onu düzeltir.",
     "monthlySalary": "Aylık maaş ({{currency}})",
     "monthlySalaryHint": "Tüm iş günlerinde normal saat çalışan işçi tam olarak bu tutarı alır.",
     "salaryReason": "Neden",
@@ -855,7 +867,7 @@
     "addSalary": "Maaş ekle",
     "salaryHistory": "Maaş geçmişi",
     "noSalaryYet": "Henüz maaş girilmedi.",
-    "salaryFromAmount": "{{amount}} · {{month}} itibarıyla",
+    "salaryFromAmount": "{{amount}} · {{date}} itibarıyla",
     "shiftAction": "Vardiya",
     "setShift": "Vardiya ata",
     "setShiftHint": "Birkaç işçiye bir günden itibaren aynı vardiya. Her biri yenisine kadar bu vardiyada kalır.",
@@ -900,7 +912,28 @@
     "noTravelRoute": "Yol ücreti yok",
     "travelRouteHint": "Çalışılan gün başına yol ücreti bu güzergâhın tutarıdır.",
     "travelRouteAction": "Güzergâh",
-    "travelRouteDialogHint": "Güzergâh bu görev yerinin her günü için geçerlidir. Aylarından biri kilitliyse işçiyi belirli bir günden yeni güzergâhla taşıyın."
+    "travelRouteDialogHint": "Güzergâh bu görev yerinin her günü için geçerlidir. Aylarından biri kilitliyse işçiyi belirli bir günden yeni güzergâhla taşıyın.",
+    "positionAction": "Görev",
+    "allPositions": "Tüm görevler",
+    "noPosition": "Görevsiz",
+    "positionFromFirstDay": "İşçinin ilk gününden itibaren.",
+    "positionFromDay": "{{date}} itibarıyla: {{position}}",
+    "positionTitle": "Görevler",
+    "positionHint": "Görev kendi gününden bir sonrakine kadar geçerlidir. Ücreti değiştirmez.",
+    "positionCorrecting": "Düzeltiliyor: {{row}}",
+    "positionFrom": "Başlangıç günü",
+    "addPosition": "Görev ekle",
+    "positionHistory": "Görev geçmişi",
+    "noPositionYet": "Henüz görev yok.",
+    "correctPosition": "Düzelt: {{row}}",
+    "removePosition": "Kaldır: {{row}}",
+    "confirmRemovePosition": {
+      "title": "Bu görev kaldırılsın mı?",
+      "description": "{{name}}: “{{row}}” kaldırılacak ve önceki görev devam edecek. Değişiklik denetim kaydına yazılır.",
+      "button": "Kaldır"
+    },
+    "salaryFromDay": "Hangi günden itibaren",
+    "salaryFromDayHint": "Ayın 1’i ise bütün ay bu maaşla ödenir."
   },
   "impersonation": {
     "banner": "{{name}} olarak giriş yaptınız.",
@@ -1052,9 +1085,9 @@
     "note": "Not",
     "noteHint": "İsteğe bağlı, örneğin: neden düzeltildi",
     "history": "Kayıtlar",
-    "shiftChanged": "Vardiya değişti: yeniden girin",
+    "shiftChanged": "Vardiya veya maaş değişti: yeniden girin",
     "dialogHintShift": "{{name}} vardiyası, günde {{hours}} normal saat. Girilen saatler değiştirilmez: düzeltme yeni kayıt olarak eklenir.",
-    "outdated": "Vardiya değişikliğinden önce girilenler",
+    "outdated": "Vardiya veya maaş değişikliğinden önce girilenler",
     "outdatedHint": "Bu saatler artık ayın tek bir parçası olmayan günler için, bu yüzden sayılmaz. Her parçanın saatlerini yeniden girin."
   },
   "adjustments": {
@@ -1117,7 +1150,7 @@
     "partTotal": "Bu bölüm için",
     "allPlacements": "Tüm görevlendirmeler birlikte",
     "problems": {
-      "noSalary": "Bu ay için maaş girilmedi.",
+      "noSalary": "Bu ay işçinin bazı günleri için maaş yok.",
       "noHours": "Bu ay için saat girilmedi.",
       "twoSources": "Bu ay için hem günlük puantaj hem aylık saatler var. Birini bırakın.",
       "placementWithoutHours": "{{site}} ({{date}} itibarıyla) için saat girilmedi.",
@@ -1125,7 +1158,7 @@
       "totalsInvalid": "Aylık saatler aya uymuyor (ödeme kuralları değişmiş olabilir):",
       "invalidHours": "Günlük puantaj kayıtları birbiriyle çelişiyor.",
       "daysWithoutHours": "{{site}} için saat yok ({{from}} – {{until}}).",
-      "noSalaryInFirm": "Bu ay için {{firm}} firmasında ücret yok.",
+      "noSalaryInFirm": "Bu ay {{firm}} firmasında işçinin bazı günleri için maaş yok.",
       "adjustmentWithoutFirm": "Bir düzeltme hiçbir firmanın bordrosuna girmiyor. İptal edip firmasıyla yeniden ekleyin.",
       "categoryNotSet": "“{{rules}}” ücret kuralları “{{categories}}” kategorisine göre değişiyor ve bu çalışan için seçilmemiş.",
       "noCategoryRules": "“{{rules}}” ücret kurallarında bu ay “{{options}}” için kural yok.",
@@ -1199,7 +1232,10 @@
     "byCategory": "Kategoriye göre",
     "byCategoryHint": "Bir kategoriye veya iki kategorinin çaprazına göre çalışanlar, çalışılan saat ve ücret. Saat ve ücret yalnızca ödenebilen çalışanları sayar.",
     "payslipsTotal": "Tüm firmalardan toplam",
-    "ruleSetRules": "“{{name}}” kurallarına göre"
+    "ruleSetRules": "“{{name}}” kurallarına göre",
+    "byPosition": "Görevlere göre",
+    "byPositionHint": "Her işçi ayı bitirdiği göreve göre sayılır.",
+    "positionDays": "{{position}} ({{days}})"
   },
   "timesheet": {
     "title": "Puantaj",
@@ -1450,7 +1486,9 @@
     "blankCellReadings": {
       "PROBLEM": "Sorun: dosyada doldurulsun",
       "ABSENT": "Mazeretsiz devamsızlık (ücretsiz)"
-    }
+    },
+    "newPositions": "Uygulamada olmayan görevler: {{count}}",
+    "addPositions": "Bu görevleri ({{count}}) işçilerle birlikte ekle"
   },
   "firms": {
     "title": "Firmalar",
@@ -1751,7 +1789,9 @@
       "workerCategory": "Çalışan kategorileri",
       "workerImport": "İşçi aktarmaları",
       "workerShift": "İşçi vardiyaları",
-      "workingDays": "İş günleri"
+      "workingDays": "İş günleri",
+      "position": "Görevler",
+      "workerPosition": "İşçi görevleri"
     },
     "actions": {
       "adjustment": {
@@ -1906,6 +1946,49 @@
       },
       "workingDays": {
         "override": "İş günleri elle değiştirildi"
+      },
+      "position": {
+        "create": "Görev oluşturuldu",
+        "update": "Görev düzenlendi",
+        "merge": "Görevler birleştirildi"
+      },
+      "workerPosition": {
+        "add": "Görev verildi",
+        "correct": "Görev düzeltildi",
+        "remove": "Görev kaldırıldı"
+      }
+    }
+  },
+  "positions": {
+    "title": "Görevler",
+    "description": "Şirketin görev listesi, örneğin elektrikçi veya ustabaşı. İşçinin görevi bir günden yenisine kadar geçerlidir. Görev ücreti değiştirmez.",
+    "create": "Görev ekle",
+    "edit": "Görevin adını değiştir",
+    "name": "Adı",
+    "uses": "İşçi geçmişlerinde",
+    "offered": "Kullanımda",
+    "archived": "Arşivde",
+    "archive": "Arşivle",
+    "restore": "Geri al",
+    "merge": "Başka bir görevle birleştir",
+    "mergeTitle": "“{{name}}” görevini birleştir",
+    "mergeDescription": "Aynı görevin iki farklı yazılışı için. İşçilerin geçmişi diğer göreve geçer ve bu görev silinir. Kilitli aylar kilitlendikleri adı korur.",
+    "mergeInto": "Hangi görevle",
+    "choose": "Görev seçin",
+    "mergeWarning": "“{{name}}” silinecek ve kayıtları ({{count}}) “{{into}}” olacak. Bu geri alınamaz.",
+    "empty": "Henüz görev yok",
+    "emptyDescription": "Görevler isteğe bağlıdır. Buradan ekleyin veya Excel içe aktarımı dosyadakileri eklesin.",
+    "dialogDescription": "Ad işçilerde, bordrolarda ve toplamlarda görünür.",
+    "confirm": {
+      "archive": {
+        "title": "Görev arşivlensin mi?",
+        "description": "“{{name}}” artık sunulmayacak. Bu görevdeki işçilerde kalır.",
+        "button": "Arşivle"
+      },
+      "restore": {
+        "title": "Görev geri alınsın mı?",
+        "description": "“{{name}}” tekrar işçilere verilebilir.",
+        "button": "Geri al"
       }
     }
   }

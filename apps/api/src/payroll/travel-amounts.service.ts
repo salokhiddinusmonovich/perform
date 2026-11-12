@@ -4,8 +4,9 @@ import type { TravelAmount, YearMonth } from '@puantaj/schemas';
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict, notFound } from '../common/api-error';
-import { inMonth, isoDay } from '../common/dates';
+import { inMonth, isoDay, monthSpan } from '../common/dates';
 import { categoriesInMonth } from '../organisation/worker-categories.service';
+import { POSITION_ROWS, withPositionName } from '../organisation/worker-positions';
 import { assertMonthsOpen } from '../pay-rules/months';
 import { PayRulesService } from '../pay-rules/pay-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -67,7 +68,7 @@ export class TravelAmountsService {
       this.prisma.assignment.findMany({
         where: { AND: [{ companyId }, inMonth(year, month)] },
         include: {
-          worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, position: true } },
+          worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, positions: POSITION_ROWS } },
           site: { select: { name: true } },
           team: { select: { name: true } },
           travelAmounts: {
@@ -100,7 +101,7 @@ export class TravelAmountsService {
     for (const p of placements) {
       rows.push({
         assignmentId: p.id,
-        worker: p.worker,
+        worker: withPositionName(p.worker, isoDay(monthSpan(year, month).last)),
         siteName: p.site.name,
         teamId: p.teamId,
         teamName: p.team?.name ?? null,

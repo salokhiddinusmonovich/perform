@@ -39,7 +39,8 @@
     "ruleSets": "Qoidalar toʻplamlari",
     "travelRoutes": "Yoʻnalishlar",
     "travelAmounts": "Yoʻl haqi summalari",
-    "activity": "Faoliyat"
+    "activity": "Faoliyat",
+    "positions": "Lavozimlar"
   },
   "settings": {
     "language": "Til",
@@ -440,7 +441,7 @@
     "monthlyHours": {
       "notInMonth": "Ishchi bu oyda ushbu obyektda ishlamagan.",
       "unchanged": "Bu oy uchun aynan shu soatlar allaqachon kiritilgan.",
-      "partChanged": "Shu orada ishchining smenalari oʻzgardi. Oyni qayta oching va har bir qism soatlarini kiriting."
+      "partChanged": "Shu orada ishchining smenasi yoki maoshi oʻzgardi. Oyni qayta oching va har bir qism soatlarini kiriting."
     },
     "adjustment": {
       "notInMonth": "Ishchi bu oyda ishlamagan.",
@@ -513,7 +514,8 @@
       "exitFromCode": "Ishdan boʻshash sanasi yoʻq: oxirgi ish kuni “{{value}}” yozilgan kundan oldingi kun.",
       "overwritesEdits": "Ilovada qoʻlda oʻzgartirilgan kunlar ustidan fayldagi qiymatlar yoziladi.",
       "blankAsAbsent": "Boʻsh kataklar sababsiz kelmaslik deb oʻqildi.",
-      "firmNotFound": "Dasturda “{{value}}” firmasi yoʻq. Avval uni qoʻshing."
+      "firmNotFound": "Dasturda “{{value}}” firmasi yoʻq. Avval uni qoʻshing.",
+      "positionNotFound": "Dasturda “{{value}}” lavozimi yoʻq. Uni qoʻshing yoki “Bu lavozimlarni qoʻshish”ni belgilang."
     },
     "firm": {
       "notFound": "Bunday firma yoʻq.",
@@ -558,6 +560,17 @@
     },
     "payRounding": {
       "notFound": "Bu yaxlitlash qadami endi mavjud emas."
+    },
+    "position": {
+      "notFound": "Bunday lavozim yoʻq.",
+      "nameTaken": "Bu nomli lavozim allaqachon bor.",
+      "inactive": "Bu lavozim arxivda, uni ishchilarga berib boʻlmaydi.",
+      "mergeIntoItself": "Birlashtirish uchun boshqa lavozimni tanlang."
+    },
+    "workerPosition": {
+      "notFound": "Bunday lavozim yozuvi yoʻq.",
+      "dayTaken": "Bu kundan lavozim allaqachon boshlangan. Egasi yoki administrator tuzatishi mumkin.",
+      "unchanged": "Ishchi shu kundan allaqachon shu lavozimda."
     }
   },
   "payRules": {
@@ -840,14 +853,13 @@
     "leaveHint": "Oxirgi ishlagan kuni. Undan keyingi kunlar endi unga tegishli emas.",
     "lastDay": "Oxirgi ish kuni",
     "salary": "Oylik maosh",
-    "salaryFrom": "boshlanishi: {{month}}",
+    "salaryFrom": "boshlanishi: {{date}}",
     "noSalary": "Maosh kiritilmagan",
     "salaryAction": "Maosh",
     "salaryTitle": "Oylik maosh",
-    "salaryHint": "Maosh tanlangan oydan boshlab, keyingi maoshgacha amal qiladi. Maosh oʻzgartirilmaydi: oshirish yoki tuzatish yangi yozuv sifatida qoʻshiladi.",
+    "salaryHint": "Maosh tanlangan kundan boshlab, keyingi maoshgacha amal qiladi. Oy oʻrtasida boshlangan maosh oʻsha oyni boʻladi: undan oldingi kunlar eski maosh bilan toʻlanadi. Maosh oʻzgartirilmaydi: oshirish yoki tuzatish yangi yozuv sifatida qoʻshiladi.",
     "salaryViewHint": "Maosh tarixi. Maoshni egasi, administrator yoki buxgalter qoʻshadi.",
-    "salaryFromMonth": "Qaysi oydan",
-    "salaryCorrects": "{{month}} uchun maosh allaqachon bor. Yangisi uni tuzatadi.",
+    "salaryCorrects": "{{date}} dan maosh allaqachon bor. Yangisi uni tuzatadi.",
     "monthlySalary": "Oylik maosh ({{currency}})",
     "monthlySalaryHint": "Barcha ish kunlarida normal soat ishlagan ishchi aynan shu summani oladi.",
     "salaryReason": "Sabab",
@@ -855,7 +867,7 @@
     "addSalary": "Maosh qoʻshish",
     "salaryHistory": "Maosh tarixi",
     "noSalaryYet": "Hali maosh kiritilmagan.",
-    "salaryFromAmount": "{{amount}} · boshlanishi: {{month}}",
+    "salaryFromAmount": "{{amount}} · boshlanishi: {{date}}",
     "shiftAction": "Smena",
     "setShift": "Smena belgilash",
     "setShiftHint": "Bir nechta ishchiga bir kundan boshlab bitta smena. Har biri yangisigacha shu smenada boʻladi.",
@@ -900,7 +912,28 @@
     "noTravelRoute": "Yoʻl haqisiz",
     "travelRouteHint": "Ishlangan kun uchun yoʻl haqi shu yoʻnalish summasiga teng.",
     "travelRouteAction": "Yoʻnalish",
-    "travelRouteDialogHint": "Yoʻnalish bu joylashuvning har bir kuniga tegishli. Agar uning biror oyi yopilgan boʻlsa, ishchini maʼlum kundan yangi yoʻnalish bilan koʻchiring."
+    "travelRouteDialogHint": "Yoʻnalish bu joylashuvning har bir kuniga tegishli. Agar uning biror oyi yopilgan boʻlsa, ishchini maʼlum kundan yangi yoʻnalish bilan koʻchiring.",
+    "positionAction": "Lavozim",
+    "allPositions": "Barcha lavozimlar",
+    "noPosition": "Lavozimsiz",
+    "positionFromFirstDay": "Ishchining birinchi kunidan.",
+    "positionFromDay": "{{date}} dan: {{position}}",
+    "positionTitle": "Lavozimlar",
+    "positionHint": "Lavozim oʻz kunidan keyingisigacha amal qiladi. U ish haqini oʻzgartirmaydi.",
+    "positionCorrecting": "Tuzatilmoqda: {{row}}",
+    "positionFrom": "Qaysi kundan",
+    "addPosition": "Lavozim qoʻshish",
+    "positionHistory": "Lavozimlar tarixi",
+    "noPositionYet": "Hali lavozim yoʻq.",
+    "correctPosition": "Tuzatish: {{row}}",
+    "removePosition": "Oʻchirish: {{row}}",
+    "confirmRemovePosition": {
+      "title": "Bu lavozimni oʻchirasizmi?",
+      "description": "{{name}}: “{{row}}” oʻchiriladi va undan oldingi lavozim davom etadi. Oʻzgarish audit jurnaliga yoziladi.",
+      "button": "Oʻchirish"
+    },
+    "salaryFromDay": "Qaysi kundan",
+    "salaryFromDayHint": "Oyning 1-kuni boʻlsa, butun oy shu maosh bilan toʻlanadi."
   },
   "impersonation": {
     "banner": "Siz {{name}} nomidan kirgansiz.",
@@ -1052,9 +1085,9 @@
     "note": "Izoh",
     "noteHint": "Ixtiyoriy, masalan: nima uchun tuzatildi",
     "history": "Kiritilganlar",
-    "shiftChanged": "Smena oʻzgardi: qayta kiriting",
+    "shiftChanged": "Smena yoki maosh oʻzgardi: qayta kiriting",
     "dialogHintShift": "{{name}} smenasi, kuniga {{hours}} normal soat. Kiritilgan soatlar oʻzgartirilmaydi: tuzatish yangi yozuv sifatida qoʻshiladi.",
-    "outdated": "Smena oʻzgarishidan oldin kiritilgan",
+    "outdated": "Smena yoki maosh oʻzgarishidan oldin kiritilgan",
     "outdatedHint": "Bu soatlar endi oyning bitta qismi boʻlmagan kunlar uchun, shuning uchun hisobga olinmaydi. Har bir qism soatlarini qayta kiriting."
   },
   "adjustments": {
@@ -1117,7 +1150,7 @@
     "partTotal": "Bu qism uchun",
     "allPlacements": "Barcha joylashuvlar birga",
     "problems": {
-      "noSalary": "Bu oy uchun maosh kiritilmagan.",
+      "noSalary": "Bu oyda ishchining ayrim kunlari uchun maosh yoʻq.",
       "noHours": "Bu oy uchun soatlar kiritilmagan.",
       "twoSources": "Bu oy uchun ham kunlik tabel, ham oylik soatlar bor. Bittasini qoldiring.",
       "placementWithoutHours": "{{site}} ({{date}} dan) uchun soatlar kiritilmagan.",
@@ -1125,7 +1158,7 @@
       "totalsInvalid": "Oylik soatlar oyga mos kelmaydi (balki toʻlov qoidalari oʻzgargandir):",
       "invalidHours": "Kunlik tabel yozuvlari bir-biriga zid.",
       "daysWithoutHours": "{{site}} uchun soatlar yoʻq ({{from}} – {{until}}).",
-      "noSalaryInFirm": "Bu oy uchun {{firm}} firmasida oylik yoʻq.",
+      "noSalaryInFirm": "Bu oyda {{firm}} firmasida ishchining ayrim kunlari uchun maosh yoʻq.",
       "adjustmentWithoutFirm": "Tuzatma hech qaysi firma hisob-varagʻiga tushmayapti. Uni bekor qilib, firmasi bilan qayta qoʻshing.",
       "categoryNotSet": "“{{rules}}” toʻlov qoidalari “{{categories}}” toifasiga qarab farq qiladi, bu ishchida esa u belgilanmagan.",
       "noCategoryRules": "“{{rules}}” toʻlov qoidalarida bu oy “{{options}}” uchun qoidalar yoʻq.",
@@ -1199,7 +1232,10 @@
     "byCategory": "Toifalar boʻyicha",
     "byCategoryHint": "Ishchilar, ishlangan soatlar va ish haqi bitta toifa yoki ikkita toifa kesishmasi boʻyicha. Soat va ish haqi faqat toʻlanishi mumkin boʻlgan ishchilarni hisoblaydi.",
     "payslipsTotal": "Barcha firmalardan jami",
-    "ruleSetRules": "“{{name}}” qoidalari boʻyicha"
+    "ruleSetRules": "“{{name}}” qoidalari boʻyicha",
+    "byPosition": "Lavozimlar boʻyicha",
+    "byPositionHint": "Har bir ishchi oy oxiridagi lavozimi boʻyicha hisoblanadi.",
+    "positionDays": "{{position}} ({{days}})"
   },
   "timesheet": {
     "title": "Tabel",
@@ -1450,7 +1486,9 @@
     "blankCellReadings": {
       "PROBLEM": "Muammo: faylda toʻldirilsin",
       "ABSENT": "Sababsiz kelmaslik (toʻlanmaydi)"
-    }
+    },
+    "newPositions": "Dasturda yoʻq lavozimlar: {{count}}",
+    "addPositions": "Bu lavozimlarni ({{count}}) ishchilar bilan birga qoʻshish"
   },
   "firms": {
     "title": "Firmalar",
@@ -1751,7 +1789,9 @@
       "workerCategory": "Ishchi toifalari",
       "workerImport": "Ishchilar importi",
       "workerShift": "Ishchilar smenalari",
-      "workingDays": "Ish kunlari"
+      "workingDays": "Ish kunlari",
+      "position": "Lavozimlar",
+      "workerPosition": "Ishchilar lavozimlari"
     },
     "actions": {
       "adjustment": {
@@ -1906,6 +1946,49 @@
       },
       "workingDays": {
         "override": "Ish kunlari qoʻlda oʻzgartirildi"
+      },
+      "position": {
+        "create": "Lavozim yaratildi",
+        "update": "Lavozim tahrirlandi",
+        "merge": "Lavozimlar birlashtirildi"
+      },
+      "workerPosition": {
+        "add": "Lavozim berildi",
+        "correct": "Lavozim tuzatildi",
+        "remove": "Lavozim olib tashlandi"
+      }
+    }
+  },
+  "positions": {
+    "title": "Lavozimlar",
+    "description": "Kompaniyaning lavozimlar roʻyxati, masalan elektrik yoki brigadir. Ishchi lavozimga bir kundan boshlab, yangisigacha ega boʻladi. Lavozim ish haqini oʻzgartirmaydi.",
+    "create": "Lavozim qoʻshish",
+    "edit": "Lavozim nomini oʻzgartirish",
+    "name": "Nomi",
+    "uses": "Ishchilar tarixida",
+    "offered": "Faol",
+    "archived": "Arxivda",
+    "archive": "Arxivlash",
+    "restore": "Qaytarish",
+    "merge": "Boshqasiga birlashtirish",
+    "mergeTitle": "“{{name}}” ni birlashtirish",
+    "mergeDescription": "Bitta lavozimning ikki xil yozilishi uchun. Ishchilar tarixi boshqa lavozimga oʻtadi, bu lavozim esa oʻchiriladi. Qulflangan oylar qulflangandagi nomni saqlaydi.",
+    "mergeInto": "Qaysi lavozimga",
+    "choose": "Lavozimni tanlang",
+    "mergeWarning": "“{{name}}” oʻchiriladi va uning yozuvlari ({{count}}) “{{into}}” boʻladi. Buni ortga qaytarib boʻlmaydi.",
+    "empty": "Hali lavozimlar yoʻq",
+    "emptyDescription": "Lavozimlar majburiy emas. Ularni shu yerda qoʻshing yoki Excel importi fayldagilarini qoʻshsin.",
+    "dialogDescription": "Nom ishchilarda, hisob varaqalarida va jamlanmalarda koʻrinadi.",
+    "confirm": {
+      "archive": {
+        "title": "Lavozimni arxivlaysizmi?",
+        "description": "“{{name}}” endi taklif qilinmaydi. Unga ega ishchilarda u qoladi.",
+        "button": "Arxivlash"
+      },
+      "restore": {
+        "title": "Lavozimni qaytarasizmi?",
+        "description": "“{{name}}” yana ishchilarga berilishi mumkin.",
+        "button": "Qaytarish"
       }
     }
   }

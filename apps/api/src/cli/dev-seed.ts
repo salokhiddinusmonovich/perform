@@ -158,7 +158,12 @@ async function main() {
       ['Testova', 'Malika', 'Cable installer', null, true],
       ['Namunov', 'Sardor', 'HSE inspector', '5000000', false],
     ] as const) {
-      const worker = await prisma.worker.create({ data: { companyId: demo.id, lastName, firstName, position } });
+      const worker = await prisma.worker.create({ data: { companyId: demo.id, lastName, firstName } });
+      // Their position, from their first day (AGENTS.md: Positions).
+      const { id: positionId } = await prisma.position.create({ data: { companyId: demo.id, name: position } });
+      await prisma.workerPosition.create({
+        data: { companyId: demo.id, workerId: worker.id, positionId, fromDay: new Date('2026-09-01'), setById: ids.owner },
+      });
       await prisma.workerCategoryValue.create({
         data: {
           companyId: demo.id,
@@ -182,7 +187,7 @@ async function main() {
       });
       if (monthlySalary) {
         await prisma.salary.create({
-          data: { companyId: demo.id, workerId: worker.id, fromYear: 2026, fromMonth: 9, monthlySalary, setById: ids.accountant },
+          data: { companyId: demo.id, workerId: worker.id, fromDay: new Date('2026-09-01'), monthlySalary, setById: ids.accountant },
         });
         // September 2026: 25 working days; one sick day, 6 hours of overtime and a Sunday worked.
         await prisma.monthlyHours.create({
@@ -261,6 +266,8 @@ async function removeDemoData(prisma: PrismaClient) {
     prisma.assignment.deleteMany({ where: inCompany }),
     prisma.workerShift.deleteMany({ where: inCompany }),
     prisma.shift.deleteMany({ where: inCompany }),
+    prisma.workerPosition.deleteMany({ where: inCompany }),
+    prisma.position.deleteMany({ where: inCompany }),
     prisma.travelRoute.deleteMany({ where: inCompany }),
     prisma.memberSite.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),
     prisma.memberTeam.deleteMany({ where: { OR: [inCompany, { userId: { in: userIds } }] } }),

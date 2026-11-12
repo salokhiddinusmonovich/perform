@@ -22,7 +22,7 @@ export interface ImportWorkerChange {
   row: number;
   employeeNumber: string;
   name: string;
-  field: 'site' | 'department' | 'firm' | 'leftOn' | 'salary' | 'category';
+  field: 'site' | 'department' | 'firm' | 'leftOn' | 'salary' | 'position' | 'category';
   /** With field 'category': which one */
   categoryId?: string;
   file: string | null;
@@ -47,6 +47,8 @@ export interface ImportPreview {
     rows: number;
     new: number;
     existing: number;
+    /** Positions of the file's new workers that the app doesn't have; the import adds them when the user confirms (AGENTS.md: Positions) */
+    newPositions: string[];
     problems: ImportProblem[];
     /** What the import read differently from the file's columns; never blocks it */
     notes: ImportProblem[];
@@ -70,14 +72,17 @@ export interface ImportRequest {
   sheet?: string;
   /** Absent: the company's saved mapping, or guessed columns */
   mapping?: ImportMapping;
+  /** The user confirmed adding the positions the app doesn't have */
+  addPositions?: boolean;
 }
 
-function form({ file, month, sheet, mapping }: ImportRequest): FormData {
+function form({ file, month, sheet, mapping, addPositions }: ImportRequest): FormData {
   const data = new FormData();
   data.append('year', String(month.year));
   data.append('month', String(month.month));
   if (sheet) data.append('sheet', sheet);
   if (mapping) data.append('mapping', JSON.stringify(mapping));
+  if (addPositions) data.append('addPositions', 'true');
   data.append('file', file);
   return data;
 }

@@ -12,6 +12,8 @@ import {
   placementSchema,
   placementTravelRouteSchema,
   salarySchema,
+  mergePositionSchema,
+  positionSchema,
   shiftSchema,
   siteSchema,
   staffSchema,
@@ -21,12 +23,14 @@ import {
   updateDepartmentSchema,
   updateFirmSchema,
   updateSiteSchema,
+  updatePositionSchema,
   updateShiftSchema,
   updateTeamSchema,
   updateTravelRouteSchema,
   updateWorkerCategorySchema,
   workerCategorySchema,
   workerSchema,
+  workerPositionSchema,
   workerShiftSchema,
   workerShiftsSchema,
   type CategoryOption,
@@ -41,6 +45,8 @@ import {
   type PlacementFirm,
   type PlacementTravelRoute,
   type Salary,
+  type MergePosition,
+  type Position,
   type Shift,
   type Site,
   type Team,
@@ -49,12 +55,14 @@ import {
   type UpdateDepartment,
   type UpdateFirm,
   type UpdateSite,
+  type UpdatePosition,
   type UpdateShift,
   type UpdateTeam,
   type UpdateTravelRoute,
   type UpdateWorkerCategory,
   type Worker,
   type WorkerCategory,
+  type WorkerPosition,
   type WorkerShift,
   type WorkerShifts,
 } from '@puantaj/schemas';
@@ -62,6 +70,7 @@ import { CompanyAuth, ForModule, Roles, type CompanyAuthContext } from '../auth/
 import { ZodPipe } from '../common/zod.pipe';
 import { DepartmentsService, type DepartmentView } from './departments.service';
 import { FirmsService, type FirmView } from './firms.service';
+import { PositionsService, type PositionView, type WorkerPositionView } from './positions.service';
 import { ShiftsService, type ShiftView, type WorkerShiftView } from './shifts.service';
 import { SitesService, type SiteView, type StaffView } from './sites.service';
 import { TravelRoutesService, type TravelRouteView } from './travel-routes.service';
@@ -182,6 +191,7 @@ export class WorkersController {
   constructor(
     private readonly workers: WorkersService,
     private readonly shifts: ShiftsService,
+    private readonly positions: PositionsService,
   ) {}
 
   @Get()
@@ -325,6 +335,47 @@ export class WorkersController {
     return this.shifts.remove(auth, id, rowId);
   }
 
+  /** The worker's positions, oldest first (AGENTS.md: Positions). Everyone who sees the worker sees them. */
+  @Get(':id/positions')
+  workerPositions(@CompanyAuth() auth: CompanyAuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<WorkerPositionView[]> {
+    return this.positions.forWorker(auth, id);
+  }
+
+  /** A new position from a day, by whoever may edit the worker. */
+  @Post(':id/positions')
+  @Roles('OWNER', 'ADMIN', 'PROJECT_MANAGER')
+  addPosition(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(workerPositionSchema)) body: WorkerPosition,
+  ): Promise<{ id: string }> {
+    return this.positions.assign(auth, id, body);
+  }
+
+  /** Corrects a position row: owners and admins only (others add a newer one). */
+  @Put(':id/positions/:rowId')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  correctPosition(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('rowId', ParseUUIDPipe) rowId: string,
+    @Body(new ZodPipe(workerPositionSchema)) body: WorkerPosition,
+  ): Promise<void> {
+    return this.positions.correct(auth, id, rowId, body);
+  }
+
+  @Delete(':id/positions/:rowId')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  removePosition(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('rowId', ParseUUIDPipe) rowId: string,
+  ): Promise<void> {
+    return this.positions.remove(auth, id, rowId);
+  }
+
   @Post(':id/leave')
   @Roles('OWNER', 'ADMIN', 'PROJECT_MANAGER')
   @HttpCode(204)
@@ -334,6 +385,50 @@ export class WorkersController {
     @Body(new ZodPipe(leaveSchema)) body: Leave,
   ): Promise<void> {
     return this.workers.leave(auth, id, body.date);
+  }
+}
+
+/**
+ * The company's positions (AGENTS.md: Positions). Everyone sees them; owners and admins
+ * keep the list.
+ */
+@ForModule('PAYROLL')
+@Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'PROJECT_MANAGER', 'TIMEKEEPER', 'FOREMAN')
+@Controller('positions')
+export class PositionsController {
+  constructor(private readonly positions: PositionsService) {}
+
+  @Get()
+  list(@CompanyAuth() auth: CompanyAuthContext): Promise<PositionView[]> {
+    return this.positions.list(auth);
+  }
+
+  @Post()
+  @Roles('OWNER', 'ADMIN')
+  create(@CompanyAuth() auth: CompanyAuthContext, @Body(new ZodPipe(positionSchema)) body: Position): Promise<{ id: string }> {
+    return this.positions.create(auth, body);
+  }
+
+  @Patch(':id')
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(204)
+  update(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(updatePositionSchema)) body: UpdatePosition,
+  ): Promise<void> {
+    return this.positions.update(auth, id, body);
+  }
+
+  /** Merges the position into another one and removes it. */
+  @Post(':id/merge')
+  @Roles('OWNER', 'ADMIN')
+  merge(
+    @CompanyAuth() auth: CompanyAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(mergePositionSchema)) body: MergePosition,
+  ): Promise<{ moved: number }> {
+    return this.positions.merge(auth, id, body);
   }
 }
 

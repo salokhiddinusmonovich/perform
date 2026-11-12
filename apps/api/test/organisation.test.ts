@@ -13,7 +13,6 @@ const WORKER = {
   lastName: 'Testov',
   firstName: 'Test',
   patronymic: '',
-  position: 'Electrician',
   pinfl: '12345678901234',
   birthDate: '1990-05-01',
   nationality: '',
@@ -197,7 +196,7 @@ describe('workers', () => {
       lastName: 'Testov',
       firstName: 'Test',
       patronymic: null,
-      position: 'Electrician',
+      position: null,
       categories: {},
       placement: {
         id: expect.any(String),
@@ -361,65 +360,63 @@ describe('workers', () => {
   it('edits worker details, recording which personal fields changed but not their values', async () => {
     const { agent, siteA } = await company();
     const id = await hire(agent, siteA, null);
-    await agent.patch(`/api/workers/${id}`).send({ ...WORKER, pinfl: '', position: 'Foreman', passportNumber: '7654321' }).expect(204);
+    await agent.patch(`/api/workers/${id}`).send({ ...WORKER, pinfl: '', nationality: 'Uzbek', passportNumber: '7654321' }).expect(204);
     const worker = (await agent.get(`/api/workers/${id}`).expect(200)).body;
-    expect(worker).toMatchObject({ position: 'Foreman', personal: { passportNumber: '7654321' } });
+    expect(worker).toMatchObject({ personal: { nationality: 'Uzbek', passportNumber: '7654321' } });
     const log = await ctx.prisma.auditLog.findFirstOrThrow({ where: { action: 'worker.update' } });
     expect(log.data).toEqual({
-      changes: { position: { from: 'Electrician', to: 'Foreman' }, passportNumber: 'changed' },
+      changes: { nationality: 'changed', passportNumber: 'changed' },
     });
   });
 });
 
 describe('salaries', () => {
-  const salary = (fromYear: number, fromMonth: number, monthlySalary: string, reason = '') => ({
-    fromYear,
-    fromMonth,
+  const salary = (from: string, monthlySalary: string, reason = '') => ({
+    from,
     monthlySalary,
     reason,
   });
 
-  it('lets an accountant add salaries from a month, newest first, with corrections and audit records', async () => {
+  it('lets an accountant add salaries from a day, newest first, with corrections and audit records', async () => {
     const { company: c, agent, siteA } = await company();
     const id = await hire(agent, siteA, null);
     const accountant = await member(c.id, 'ACCOUNTANT');
     expect((await accountant.agent.get(`/api/workers/${id}`).expect(200)).body.salary).toBeNull();
 
-    await accountant.agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 9, '5 000 000')).expect(201);
-    await accountant.agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 11, '6000000', 'Raise')).expect(201);
+    await accountant.agent.post(`/api/workers/${id}/salaries`).send(salary('2026-09-01', '5 000 000')).expect(201);
+    await accountant.agent.post(`/api/workers/${id}/salaries`).send(salary('2026-11-01', '6000000', 'Raise')).expect(201);
     // The same amount as the salary already in force changes nothing.
-    const same = await accountant.agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 10, '5000000')).expect(409);
+    const same = await accountant.agent.post(`/api/workers/${id}/salaries`).send(salary('2026-10-01', '5000000')).expect(409);
     expect(same.body.code).toBe('salary.unchanged');
-    // A newer salary from the same month corrects the older one.
-    await agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 11, '6500000', 'Typo')).expect(201);
+    // A newer salary from the same day corrects the older one.
+    await agent.post(`/api/workers/${id}/salaries`).send(salary('2026-11-01', '6500000', 'Typo')).expect(201);
 
     const history = (await accountant.agent.get(`/api/workers/${id}/salaries`).expect(200)).body;
-    expect(history.map((h: { fromMonth: number; monthlySalary: string; corrected: boolean }) => [h.fromMonth, h.monthlySalary, h.corrected])).toEqual([
-      [11, '6500000', false],
-      [11, '6000000', true],
-      [9, '5000000', false],
+    expect(history.map((h: { from: string; monthlySalary: string; corrected: boolean }) => [h.from, h.monthlySalary, h.corrected])).toEqual([
+      ['2026-11-01', '6500000', false],
+      ['2026-11-01', '6000000', true],
+      ['2026-09-01', '5000000', false],
     ]);
     expect(history[0]).toMatchObject({ reason: 'Typo', setBy: { fullName: expect.any(String) } });
     expect((await agent.get(`/api/workers/${id}`).expect(200)).body.salary).toEqual({
-      fromYear: 2026,
-      fromMonth: 11,
+      from: '2026-11-01',
       monthlySalary: '6500000',
     });
 
     const log = await ctx.prisma.auditLog.findMany({ where: { action: 'salary.add' }, orderBy: { createdAt: 'asc' } });
     expect(log.map((l) => l.data)).toEqual([
-      expect.objectContaining({ fromMonth: 9, from: null, to: '5000000' }),
-      expect.objectContaining({ fromMonth: 11, from: '5000000', to: '6000000', reason: 'Raise' }),
-      expect.objectContaining({ fromMonth: 11, from: '6000000', to: '6500000', reason: 'Typo' }),
+      expect.objectContaining({ fromDay: '2026-09-01', from: null, to: '5000000' }),
+      expect.objectContaining({ fromDay: '2026-11-01', from: '5000000', to: '6000000', reason: 'Raise' }),
+      expect.objectContaining({ fromDay: '2026-11-01', from: '6000000', to: '6500000', reason: 'Typo' }),
     ]);
   });
 
-  it('refuses a salary of 0 or a month that is not one', async () => {
+  it('refuses a salary of 0 or a day that is not one', async () => {
     const { agent, siteA } = await company();
     const id = await hire(agent, siteA, null);
-    const res = await agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 13, '0')).expect(400);
+    const res = await agent.post(`/api/workers/${id}/salaries`).send(salary('2026-13-01', '0')).expect(400);
     expect(res.body.issues).toEqual([
-      { path: 'fromMonth', message: 'validation.invalid' },
+      { path: 'from', message: 'validation.dateInvalid' },
       { path: 'monthlySalary', message: 'validation.salaryRange' },
     ]);
   });
@@ -427,23 +424,23 @@ describe('salaries', () => {
   it('refuses a salary that would change a locked month, up to the next salary', async () => {
     const { company: c, agent, siteA } = await company();
     const id = await hire(agent, siteA, null);
-    await agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 11, '6000000')).expect(201);
+    await agent.post(`/api/workers/${id}/salaries`).send(salary('2026-11-01', '6000000')).expect(201);
     await lock(c.id, 2026, 12);
     // September and October only: November on has its own salary.
-    await agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 9, '5000000')).expect(201);
+    await agent.post(`/api/workers/${id}/salaries`).send(salary('2026-09-01', '5000000')).expect(201);
     await lock(c.id, 2026, 10);
-    const res = await agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 9, '5500000')).expect(409);
+    const res = await agent.post(`/api/workers/${id}/salaries`).send(salary('2026-09-01', '5500000')).expect(409);
     expect(res.body.code).toBe('period.locked');
-    expect((await agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 11, '6100000')).expect(409)).body.code).toBe('period.locked');
-    await agent.post(`/api/workers/${id}/salaries`).send(salary(2027, 1, '7000000')).expect(201);
+    expect((await agent.post(`/api/workers/${id}/salaries`).send(salary('2026-11-01', '6100000')).expect(409)).body.code).toBe('period.locked');
+    await agent.post(`/api/workers/${id}/salaries`).send(salary('2027-01-01', '7000000')).expect(201);
   });
 
   it('never shows salaries to timekeepers or foremen, and lets project managers only view them on their sites', async () => {
     const { company: c, agent, siteA, siteB, teamA } = await company();
     const id = await hire(agent, siteA, teamA);
     const elsewhere = await hire(agent, siteB, null);
-    await agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 9, '5123000')).expect(201);
-    await agent.post(`/api/workers/${elsewhere}/salaries`).send(salary(2026, 9, '5000000')).expect(201);
+    await agent.post(`/api/workers/${id}/salaries`).send(salary('2026-09-01', '5123000')).expect(201);
+    await agent.post(`/api/workers/${elsewhere}/salaries`).send(salary('2026-09-01', '5000000')).expect(201);
 
     const tk = await member(c.id, 'TIMEKEEPER');
     await agent.post(`/api/sites/${siteA}/staff`).send({ userId: tk.user.id }).expect(204);
@@ -454,14 +451,14 @@ describe('salaries', () => {
       expect(workers.map((w: { salary: unknown }) => w.salary)).toEqual([null]);
       expect(JSON.stringify(workers)).not.toContain('5123000');
       await field.agent.get(`/api/workers/${id}/salaries`).expect(403);
-      await field.agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 10, '1000000')).expect(403);
+      await field.agent.post(`/api/workers/${id}/salaries`).send(salary('2026-10-01', '1000000')).expect(403);
     }
 
     const pm = await member(c.id, 'PROJECT_MANAGER');
     await agent.post(`/api/sites/${siteA}/staff`).send({ userId: pm.user.id }).expect(204);
     expect((await pm.agent.get(`/api/workers/${id}/salaries`).expect(200)).body).toHaveLength(1);
     await pm.agent.get(`/api/workers/${elsewhere}/salaries`).expect(404);
-    await pm.agent.post(`/api/workers/${id}/salaries`).send(salary(2026, 10, '6000000')).expect(403);
+    await pm.agent.post(`/api/workers/${id}/salaries`).send(salary('2026-10-01', '6000000')).expect(403);
     expect(await ctx.prisma.salary.count()).toBe(2);
   });
 });
@@ -485,7 +482,7 @@ describe('tenant isolation', () => {
     await a.agent.get(`/api/workers/${bWorker}/salaries`).expect(404);
     await a.agent
       .post(`/api/workers/${bWorker}/salaries`)
-      .send({ fromYear: 2026, fromMonth: 9, monthlySalary: '5000000' })
+      .send({ from: '2026-09-01', monthlySalary: '5000000' })
       .expect(404);
     expect(await ctx.prisma.salary.count()).toBe(0);
     await a.agent.post(`/api/sites/${b.siteA}/staff`).send({ userId: bTk.user.id }).expect(404);

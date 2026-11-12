@@ -62,6 +62,7 @@ import {
   type CategoryTotal,
   type DepartmentTotal,
   type FirmTotal,
+  type PositionTotal,
   type LockItem,
   type PayrollMonth,
   type PayrollPart,
@@ -98,6 +99,7 @@ function PayrollView({ me }: { me: Me }) {
   const showFirms = usesFirms(me);
   const firms = useFirms({ enabled: showFirms });
   const [firmFilter, setFirmFilter] = useState<FirmFilterValue>('all');
+  const [chosenPosition, setPositionFilter] = useState(ALL_POSITIONS);
   const categories = useWorkerCategories();
   // A closed category stays while a worker of the month on screen has one of its options.
   const shownCategories = useMemo(
@@ -114,6 +116,9 @@ function PayrollView({ me }: { me: Me }) {
   const sites = useMemo(() => siteChoices(data.data?.workers.flatMap(payrollSiteNames) ?? []), [data.data]);
   // A site without workers in the month on screen falls back to every site.
   const siteFilter = sites.some((s) => s.value === chosenSite) ? chosenSite : ALL_SITES;
+  // A position without workers in the month on screen falls back to every position.
+  const positionTotals = data.data?.positions ?? [];
+  const positionFilter = positionTotals.some((p) => (p.position?.id ?? NO_POSITION) === chosenPosition) ? chosenPosition : ALL_POSITIONS;
   const rows = useMemo(
     () =>
       data.data?.workers.filter(
@@ -123,6 +128,7 @@ function PayrollView({ me }: { me: Me }) {
           (siteFilter === ALL_SITES || payrollSiteNames(w).includes(siteFilter)) &&
           (problemFilter === 'all' || (w.problems.length > 0) === (problemFilter === 'problems')) &&
           inCategoryFilter(categoryFilter, w.categories) &&
+          (positionFilter === ALL_POSITIONS || (w.position !== undefined && (w.position?.id ?? NO_POSITION) === positionFilter)) &&
           (sourceFilter === 'all' || w.source === sourceFilter),
       ),
     [
@@ -133,6 +139,7 @@ function PayrollView({ me }: { me: Me }) {
       showFirms,
       firmFilter,
       categoryFilter,
+      positionFilter,
       siteFilter,
       problemFilter,
       sourceFilter,
@@ -292,6 +299,21 @@ function PayrollView({ me }: { me: Me }) {
             {shownCategories.length > 0 && (
               <CategoryFilter categories={shownCategories} value={categoryFilter} onChange={setCategoryFilter} />
             )}
+            {positionTotals.some((p) => p.position) && (
+              <Select value={positionFilter} onValueChange={setPositionFilter}>
+                <SelectTrigger className="w-full sm:w-48" aria-label={t('workers.position')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_POSITIONS}>{t('workers.allPositions')}</SelectItem>
+                  {positionTotals.map((p) => (
+                    <SelectItem key={p.position?.id ?? NO_POSITION} value={p.position?.id ?? NO_POSITION}>
+                      {p.position?.name ?? t('workers.noPosition')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={problemFilter} onValueChange={(v) => setProblemFilter(v as typeof problemFilter)}>
               <SelectTrigger className="w-full sm:w-44" aria-label={t('payroll.problemsFilter')}>
                 <SelectValue />
@@ -327,6 +349,7 @@ function PayrollView({ me }: { me: Me }) {
       {data.data && data.data.categories.length > 0 && shownCategories.length > 0 && (
         <CategoryTotals totals={data.data.categories} categories={shownCategories} currency={currency} />
       )}
+      {positionTotals.some((p) => p.position) && <PositionTotals totals={positionTotals} currency={currency} />}
       {data.data && data.data.locks.length > 0 && <LockHistory locks={data.data.locks} currency={currency} />}
       {open && <PayslipDialog worker={open} month={month} currency={currency} onClose={() => setOpen(null)} />}
       {data.data && (
@@ -496,6 +519,55 @@ function DepartmentTotals({
 }
 
 /** The month's pay per firm, and together per type. A worker who moved between firms counts in both. */
+/** The position filter's values besides a position's id. */
+const ALL_POSITIONS = 'all';
+const NO_POSITION = 'none';
+
+/** The month's workers and pay by position (AGENTS.md: Positions): each worker under the one they end the month with. */
+function PositionTotals({ totals, currency }: { totals: PositionTotal[]; currency: string }) {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const columns = useMemo<ColumnDef<PositionTotal, unknown>[]>(
+    () => [
+      {
+        id: 'position',
+        header: t('workers.position'),
+        enableSorting: false,
+        cell: ({ row }) => row.original.position?.name ?? t('workers.noPosition'),
+      },
+      {
+        id: 'workers',
+        header: t('firms.workers'),
+        enableSorting: false,
+        cell: ({ row }) => <span className="tabular-nums">{row.original.workers}</span>,
+      },
+      {
+        id: 'total',
+        header: t('payroll.pay'),
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold tabular-nums">{format.money(row.original.total, currency)}</span>
+            {row.original.withProblems > 0 && (
+              <StatusBadge tone="warning">{t('payroll.workersWithProblems', { count: row.original.withProblems })}</StatusBadge>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [t, format, currency],
+  );
+  return (
+    <section className="mt-4 space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold">{t('payroll.byPosition')}</h2>
+        <p className="text-sm text-muted-foreground">{t('payroll.byPositionHint')}</p>
+      </div>
+      <DataTable columns={columns} data={totals} />
+    </section>
+  );
+}
+
 function FirmTotals({ totals, currency }: { totals: FirmTotal[]; currency: string }) {
   const { t } = useTranslation();
   const format = useFormat();
@@ -746,6 +818,21 @@ function PayslipDialog({
             {worker.editedDays && ` · ${t('payroll.editedDays', { count: worker.editedDays })}`}
           </DialogDescription>
         </DialogHeader>
+        {worker.positions?.some((p) => p.name) && (
+          <p className="text-sm">
+            <span className="text-muted-foreground">{t('workers.position')}: </span>
+            {worker.positions.length === 1
+              ? worker.positions[0].name
+              : worker.positions
+                  .map((p) =>
+                    t('payroll.positionDays', {
+                      position: p.name ?? t('workers.noPosition'),
+                      days: t('monthlyHours.fromUntil', { from: format.date(p.from), until: format.date(p.until) }),
+                    }),
+                  )
+                  .join(', ')}
+          </p>
+        )}
         {worker.problems.length > 0 ? (
           <section className="space-y-2">
             <h3 className="text-sm font-medium">{t('payroll.cannotPay')}</h3>

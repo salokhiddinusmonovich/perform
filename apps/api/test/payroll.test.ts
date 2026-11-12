@@ -43,7 +43,7 @@ async function company(rules = RULES) {
   const siteA = (await owner.agent.post('/api/sites').send({ name: 'Site A' }).expect(201)).body.id as string;
   const siteB = (await owner.agent.post('/api/sites').send({ name: 'Site B' }).expect(201)).body.id as string;
   const workerId = await hire(owner.agent, siteA, 'Testov');
-  await owner.agent.post(`/api/workers/${workerId}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '7500000' }).expect(201);
+  await owner.agent.post(`/api/workers/${workerId}/salaries`).send({ from: '2026-09-01', monthlySalary: '7500000' }).expect(201);
   const placementA = (await owner.agent.get(`/api/workers/${workerId}`).expect(200)).body.placement.id as string;
   return { ...owner, pay, siteA, siteB, workerId, placementA };
 }
@@ -189,7 +189,7 @@ describe('payroll', () => {
     const [w] = payroll.workers;
     expect(w).toMatchObject({
       worker: { id: workerId, lastName: 'Testov' },
-      salary: { fromYear: 2026, fromMonth: 9, monthlySalary: '7500000' },
+      salary: { from: '2026-09-01', monthlySalary: '7500000' },
       source: 'TOTALS',
       total: '8000000.00',
       problems: [],
@@ -440,7 +440,7 @@ describe('adjustments', () => {
     const { agent, siteB } = c;
     await siteRules(c, siteB, 'Site B');
     const onB = await hire(agent, siteB, 'Bsite');
-    await agent.post(`/api/workers/${onB}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '6000000' }).expect(201);
+    await agent.post(`/api/workers/${onB}/salaries`).send({ from: '2026-09-01', monthlySalary: '6000000' }).expect(201);
     const placement = (await agent.get(`/api/workers/${onB}`).expect(200)).body.placement.id;
     await agent.post(hoursUrl(placement)).send({ ...FULL_MONTH, normalHours: '200' }).expect(201);
     expect((await agent.get('/api/payroll/2026/9').expect(200)).body.workers.find((x: { worker: { id: string } }) => x.worker.id === onB)).toMatchObject({
@@ -518,7 +518,7 @@ describe('locking a month', () => {
 
     // A locked month shows what was locked, even if data changes behind the API's back.
     await ctx.prisma.salary.create({
-      data: { companyId: c.id, workerId: locked.workers[0].worker.id, fromYear: 2026, fromMonth: 9, monthlySalary: '9000000', setById: accountant.user.id },
+      data: { companyId: c.id, workerId: locked.workers[0].worker.id, fromDay: new Date('2026-09-01'), monthlySalary: '9000000', setById: accountant.user.id },
     });
     expect((await agent.get('/api/payroll/2026/9').expect(200)).body.workers[0].total).toBe('7500000.00');
 
@@ -531,7 +531,7 @@ describe('locking a month', () => {
     const accountant = await member(c.id, 'ACCOUNTANT');
     const admin = await member(c.id, 'ADMIN');
     const second = await hire(agent, siteA, 'Second');
-    await agent.post(`/api/workers/${second}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '4500000' }).expect(201);
+    await agent.post(`/api/workers/${second}/salaries`).send({ from: '2026-09-01', monthlySalary: '4500000' }).expect(201);
     const secondPlacement = (await agent.get(`/api/workers/${second}`).expect(200)).body.placement.id;
     await agent.post(`/api/monthly-hours/2026/9/${placementA}`).send(FULL_MONTH).expect(201);
     await agent.post(`/api/monthly-hours/2026/9/${secondPlacement}`).send(FULL_MONTH).expect(201);

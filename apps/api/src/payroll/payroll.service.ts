@@ -21,8 +21,9 @@ import { inMonth, isoDay, monthSpan, todayIn } from '../common/dates';
 import { seesPlacement } from '../organisation/access';
 import { subtreeIds } from '../organisation/departments.service';
 import { categoriesInMonth, listCategories, type WorkerCategoryView } from '../organisation/worker-categories.service';
-import { placementDaysIn, shiftPartsOf, type ShiftPart } from '../organisation/worker-shifts';
-import { SALARY_ORDER, salaryForFirm } from '../organisation/workers.service';
+import { monthPartsOf, type MonthPart } from '../organisation/month-parts';
+import { POSITION_ROWS, positionOn, positionsBetween, type PositionRef } from '../organisation/worker-positions';
+import { placementDaysIn } from '../organisation/worker-shifts';
 import { lockCompanyMonths } from '../pay-rules/months';
 import { PayRulesService, type MonthRules, type WorkerRules } from '../pay-rules/pay-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -81,8 +82,19 @@ const placeKey = (assignmentId: string, siteId: string, teamId: string | null) =
   [assignmentId, siteId, teamId].filter(Boolean).join('/');
 
 /**
- * The days of the worker's placements under one rule set and on one shift, paid under the
- * rule set's rules with the shift's normal hours.
+ * A salary as a pay result names it: from a day (AGENTS.md: Salaries). Months locked before
+ * salaries started from a day (2026-11-11) have the month it started from instead.
+ */
+export interface SalaryRef {
+  monthlySalary: string;
+  from?: string;
+  fromYear?: number;
+  fromMonth?: number;
+}
+
+/**
+ * The days of the worker's placements under one rule set, on one shift and at one salary,
+ * paid under the rule set's rules with the shift's normal hours.
  */
 export interface PayrollPartView {
   /** Site whose own rules apply, or null: the company's or a firm's */
@@ -97,6 +109,8 @@ export interface PayrollPartView {
   firm?: FirmRef | null;
   /** The part's shift, or null: the rule set's normal hours. Absent in months locked before shifts. */
   shift?: { name: string; normalHoursPerDay: string } | null;
+  /** The salary the part's days are paid at. Absent in months locked before salaries started from a day: the payslip's. */
+  salary?: SalaryRef;
   /** First and last day of the part. Absent in months locked before shifts. */
   days?: { from: string; until: string };
   /** Month the rule version in force starts from */
@@ -125,13 +139,26 @@ export interface FirmRef {
  */
 export interface PayslipView {
   firm: FirmRef | null;
-  salary: { fromYear: number; fromMonth: number; monthlySalary: string };
+  /** Only in months locked before salaries started from a day; since then each part has its own (PayrollPartView.salary). */
+  salary?: SalaryRef;
   payOut: PayOutView;
   total: string;
 }
 
 export interface PayrollWorkerView {
+  /** position: the name of the worker's position of the month (below); their free-text position in months locked before positions were a list */
   worker: { id: string; employeeNumber: string | null; lastName: string; firstName: string; patronymic: string | null; position: string | null };
+  /**
+   * The worker's position of the month (AGENTS.md: Positions): the one in force on its last
+   * day, which totals and filters count the worker under. null: not set; absent in months
+   * locked before positions were a list.
+   */
+  position?: PositionRef | null;
+  /**
+   * The worker's positions on their days in the month, oldest first, saved by name so a locked
+   * month keeps them. Absent in months locked before positions were a list.
+   */
+  positions?: { from: string; until: string; name: string | null }[];
   /**
    * The worker's department for the month (AGENTS.md: Departments): the one of their last
    * placement in it, so each worker counts in one department's totals. null: none set;
@@ -147,8 +174,8 @@ export interface PayrollWorkerView {
    * when worked out, so a locked month keeps them. Absent in months locked before categories.
    */
   categories?: Record<string, string>;
-  /** The salary of the firm of the last placement in the month */
-  salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
+  /** The salary of the firm of the last placement in the month, on the last of the worker's days in it */
+  salary: SalaryRef | null;
   /** Where the hours came from (IMPORT: an Excel import, AGENTS.md: Excel import), or null when there are none */
   source: 'DAILY' | 'IMPORT' | 'TOTALS' | null;
   /** Days of an imported month changed by hand since the import; absent when none */
@@ -215,6 +242,20 @@ export interface FirmTotalView {
 }
 
 /**
+ * A position's workers and pay in the month (AGENTS.md: Positions). Each worker counts in
+ * their position of the month (PayrollWorkerView.position), by the name saved with the result.
+ */
+export interface PositionTotalView {
+  /** null: workers without a position */
+  position: PositionRef | null;
+  workers: number;
+  /** Workers that can't be paid yet, so not in the total */
+  withProblems: number;
+  /** Sum of the workers that could be paid */
+  total: string;
+}
+
+/**
  * Workers, hours and pay of one worker category's option, or of two categories' options
  * crossed (AGENTS.md: Worker categories). Each worker counts once per grouping.
  */
@@ -248,6 +289,8 @@ export interface PayrollMonthView {
   firms: FirmTotalView[];
   /** Totals per category option, and per two categories' options crossed, with workers this month */
   categories: CategoryTotalView[];
+  /** Totals per position with workers this month; empty in months locked before positions were a list */
+  positions: PositionTotalView[];
   /** Every lock of the month, oldest first */
   locks: LockView[];
 }
@@ -256,7 +299,7 @@ type Db = Prisma.TransactionClient | PrismaService;
 type Sees = (placement: { siteId: string; teamId: string | null }) => boolean;
 
 const PLACEMENT_INCLUDE = {
-  worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, position: true } },
+  worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, positions: POSITION_ROWS } },
   site: { select: { name: true } },
   department: { select: { id: true, name: true } },
   firm: { select: { id: true, name: true, type: true } },
@@ -276,9 +319,9 @@ type PartEntry = Prisma.TimesheetEntryGetPayload<{
  * Works out every worker's pay for a month with @puantaj/payroll, from salaries, hours
  * (daily entries or monthly totals), pay rules and travel pay. Split by placement
  * (AGENTS.md: Pay model): the worker's placements are grouped by their firm and rule set
- * (AGENTS.md: Firms), and each group is paid under its own rules at its firm's salary. Split by shift (AGENTS.md: Shifts):
- * each group is split again where the worker's shift changes, each part with its shift's
- * normal hours. Per firm, the parts and the adjustments make the amount that firm pays out,
+ * (AGENTS.md: Firms), and each group is paid under its own rules at its firm's salary. Split by shift and salary
+ * (AGENTS.md: Shifts, Salaries): each group is split again where the worker's shift or the firm's salary
+ * changes, each part with its shift's normal hours at its own salary. Per firm, the parts and the adjustments make the amount that firm pays out,
  * rounded once with the company's step.
  */
 @Injectable()
@@ -330,6 +373,7 @@ export class PayrollService {
       departments: await this.departmentTotals(companyId, workers),
       firms: firmTotals(workers),
       categories: categoryTotals(await listCategories(this.prisma, companyId), workers),
+      positions: positionTotals(workers),
       locks: snapshots.map((snap, i) => {
         const unlock = unlocks.find((u) => (u.data as { lockNumber?: number }).lockNumber === snap.lockNumber);
         return {
@@ -489,15 +533,7 @@ export class PayrollService {
     const assignmentIds = placements.map((p) => p.id);
     const workerIds = [...visible];
 
-    const [salaries, entries, editedDays, travelAmounts, adjustments, roundingStep, shiftParts, categoryValues, categories] = await Promise.all([
-      db.salary.findMany({
-        where: {
-          companyId,
-          workerId: { in: workerIds },
-          OR: [{ fromYear: { lt: year } }, { fromYear: year, fromMonth: { lte: month } }],
-        },
-        orderBy: SALARY_ORDER,
-      }),
+    const [entries, editedDays, travelAmounts, adjustments, roundingStep, monthParts, categoryValues, categories] = await Promise.all([
       db.timesheetEntry.findMany({
         where: { companyId, assignmentId: { in: assignmentIds }, date: { gte: first, lte: last } },
         include: { site: { select: { name: true } }, team: { select: { name: true } } },
@@ -517,7 +553,7 @@ export class PayrollService {
         orderBy: { seq: 'asc' },
       }),
       this.rules.roundingIn(companyId, year, month, db),
-      shiftPartsOf(db, companyId, workerIds, year, month),
+      monthPartsOf(db, companyId, workerIds, year, month, firmsOn),
       categoriesInMonth(db, companyId, workerIds, year, month),
       listCategories(db, companyId),
     ]);
@@ -545,23 +581,34 @@ export class PayrollService {
     const workers: PayrollWorkerView[] = [];
     for (const workerId of workerIds) {
       const own = placements.filter((p) => p.workerId === workerId);
-      const ownSalaries = salaries.filter((s) => s.workerId === workerId);
-      const salaryOf = (firm: FirmRef | null) => salaryForFirm(ownSalaries, firm?.id ?? null, firmsOn);
+      /** The parts of the worker's days with a firm: split where their shift or that firm's salary changes. */
+      const partsOf = (firm: FirmRef | null) => monthParts.get(workerId)!.of(firm?.id ?? null);
+      /** A firm's parts with days of its placements: the ones that are paid. */
+      const paidParts = (firm: FirmRef | null) =>
+        partsOf(firm).filter((part) => own.some((p) => (firmOf(p)?.id ?? null) === (firm?.id ?? null) && placementDaysIn(part, p)));
       const ownFirms = [...new Map(own.map((p) => [firmOf(p)?.id ?? null, firmOf(p)])).values()];
-      const salary = salaryOf(firmOf(own.at(-1)!));
+      // Placements are in the order of their first day.
+      const salary = paidParts(firmOf(own.at(-1)!)).at(-1)!.salary;
       const ownEntries = entries.filter((e) => own.some((p) => p.id === e.assignmentId));
+      const { positions: positionRows, ...worker } = own[0].worker;
+      const monthFirst = isoDay(first);
+      const monthLast = isoDay(last);
+      const firstDay = isoDay(own[0].hiredOn) > monthFirst ? isoDay(own[0].hiredOn) : monthFirst;
+      const lastDays = own.map((p) => (p.leftOn && isoDay(p.leftOn) < monthLast ? isoDay(p.leftOn) : monthLast)).sort();
+      const position = positionOn(positionRows, monthLast);
       const view: PayrollWorkerView = {
-        worker: own[0].worker,
-        // Placements are in the order of their first day.
+        worker: { ...worker, position: position?.name ?? null },
+        position,
+        positions: positionsBetween(positionRows, firstDay, lastDays.at(-1)!).map((s) => ({
+          from: s.from,
+          until: s.until,
+          name: s.position?.name ?? null,
+        })),
         department: own.at(-1)!.department,
         siteNames: [...new Set(own.map((p) => p.site.name))],
         ...(firmsOn ? { firms: ownFirms.filter((f) => f !== null) } : {}),
         categories: categoryValues.get(workerId)!,
-        salary: salary && {
-          fromYear: salary.fromYear,
-          fromMonth: salary.fromMonth,
-          monthlySalary: salary.monthlySalary.toString(),
-        },
+        salary,
         source: null,
         parts: [],
         payOut: null,
@@ -570,7 +617,6 @@ export class PayrollService {
       };
       workers.push(view);
 
-      const parts = shiftParts.get(workerId)!;
       const sources = [
         own.some((p) => p.monthlyHours.length > 0) && ('TOTALS' as const),
         ownEntries.some((e) => e.importId === null) && ('DAILY' as const),
@@ -581,12 +627,15 @@ export class PayrollService {
       else view.problems.push({ code: 'noHours' });
       const edited = editedDays.filter((d) => d.workerId === workerId).length;
       if (edited > 0) view.editedDays = edited;
+      // Every day of a placement needs a salary: days before the firm's first one can't be paid.
       for (const firm of ownFirms) {
-        if (!salaryOf(firm)) view.problems.push(firm ? { code: 'noSalary', firmName: firm.name } : { code: 'noSalary' });
+        if (paidParts(firm).some((part) => !part.salary)) {
+          view.problems.push(firm ? { code: 'noSalary', firmName: firm.name } : { code: 'noSalary' });
+        }
       }
       if (view.source === 'TOTALS') {
         for (const p of own) {
-          for (const part of parts) {
+          for (const part of partsOf(firmOf(p))) {
             const days = placementDaysIn(part, p);
             if (days && !totalsFor(p, part)) {
               view.problems.push({ code: 'placementWithoutHours', assignmentId: p.id, siteName: p.site.name, ...days });
@@ -622,11 +671,11 @@ export class PayrollService {
       if (view.problems.length > 0) continue;
 
       for (const { firm, rules, placements: inGroup } of groups.values()) {
-        for (const shiftPart of parts) {
-          const inPart = inGroup.filter((p) => placementDaysIn(shiftPart, p));
+        for (const monthPart of partsOf(firm)) {
+          const inPart = inGroup.filter((p) => placementDaysIn(monthPart, p));
           if (inPart.length === 0) continue;
           const ruleSet = { name: rules.ruleSet!.name, combination: rules.combination && combinationOf(rules.combination.optionIds) };
-          const part = payPart(view, salaryOf(firm)!, ruleSet, firm, firmsOn, rules.month!, shiftPart, inPart, ownEntries, travelAmounts);
+          const part = payPart(view, ruleSet, firm, firmsOn, rules.month!, monthPart, inPart, ownEntries, travelAmounts);
           if (part) view.parts.push(part);
         }
       }
@@ -653,10 +702,8 @@ export class PayrollService {
               ofFirm.map((a) => ({ id: a.id, type: a.type, amount: a.amount.toString() })),
               roundingStep!,
             );
-            const paid = salaryOf(firm)!;
             return {
               firm,
-              salary: { fromYear: paid.fromYear, fromMonth: paid.fromMonth, monthlySalary: paid.monthlySalary.toString() },
               payOut: {
                 ...out,
                 adjustments: out.adjustments.map((a) => ({ ...a, note: ofFirm.find((o) => o.id === a.id)!.note })),
@@ -680,19 +727,18 @@ export class PayrollService {
 }
 
 /**
- * One part of a worker's month: the placements of one rule set on the days of one shift,
- * paid with the shift's normal hours (the rule set's without a shift) on the part's own
- * calendar. Working days stay the rule set's for the month. Returns null after adding a
+ * One part of a worker's month: the placements of one rule set on the days of one shift and
+ * one salary, paid at that salary with the shift's normal hours (the rule set's without a
+ * shift) on the part's own calendar. Working days stay the rule set's for the month. Returns null after adding a
  * problem when the hours can't be paid.
  */
 function payPart(
   view: PayrollWorkerView,
-  salary: { monthlySalary: Prisma.Decimal },
   ruleSet: { name: string | null; combination: { categoryName: string; optionName: string }[] | null },
   firm: FirmRef | null,
   firmsOn: boolean,
   m: MonthRules,
-  shiftPart: ShiftPart,
+  shiftPart: MonthPart,
   inPart: readonly Placement[],
   ownEntries: readonly PartEntry[],
   travelAmounts: readonly { assignmentId: string; amount: Prisma.Decimal }[],
@@ -705,7 +751,7 @@ function payPart(
   const days = { from: covered.map((d) => d.from).sort()[0], until: covered.map((d) => d.until).sort().at(-1)! };
   const places: Record<string, PlaceLabel> = {};
   const base = {
-    monthlySalary: salary.monthlySalary.toString(),
+    monthlySalary: shiftPart.salary!.monthlySalary,
     workingDays: m.workingDays!,
     calendar,
     settings: { ...paySettings(settings), normalHoursPerDay },
@@ -763,6 +809,7 @@ function payPart(
     ...(ruleSet.combination ? { combination: ruleSet.combination } : {}),
     ...(firmsOn ? { firm } : {}),
     shift: shiftPart.shiftInfo && { name: shiftPart.shiftInfo.name, normalHoursPerDay: shiftPart.shiftInfo.normalHoursPerDay },
+    salary: shiftPart.salary!,
     days,
     rulesFrom: { year: m.rules!.fromYear, month: m.rules!.fromMonth },
     placementIds: inPart.map((p) => p.id),
@@ -775,7 +822,7 @@ function payPart(
  * The placements whose first day in the month is in the part. A placement's monthly travel
  * amount is paid once, with the part it starts the month in, however the month is split.
  */
-function startingIn(m: MonthRules, part: Pick<ShiftPart, 'from' | 'until'>, inPart: readonly Placement[]): Placement[] {
+function startingIn(m: MonthRules, part: Pick<MonthPart, 'from' | 'until'>, inPart: readonly Placement[]): Placement[] {
   const monthStart = m.calendar![0].date;
   return inPart.filter((p) => {
     const first = isoDay(p.hiredOn) > monthStart ? isoDay(p.hiredOn) : monthStart;
@@ -784,7 +831,7 @@ function startingIn(m: MonthRules, part: Pick<ShiftPart, 'from' | 'until'>, inPa
 }
 
 /** A placement's newest totals for a part's days, if any. */
-function totalsFor(p: Placement, part: Pick<ShiftPart, 'from' | 'until'>): MonthlyHoursRow | undefined {
+function totalsFor(p: Placement, part: Pick<MonthPart, 'from' | 'until'>): MonthlyHoursRow | undefined {
   return p.monthlyHours.find((h) => isoDay(h.fromDay) === part.from && isoDay(h.untilDay) === part.until);
 }
 
@@ -848,6 +895,25 @@ function firmTotals(workers: readonly PayrollWorkerView[]): FirmTotalView[] {
   return [...totals.values()].sort((a, b) => {
     if (!a.firm || !b.firm) return a.firm ? -1 : 1;
     return collator.compare(a.firm.name, b.firm.name);
+  });
+}
+
+/** Totals per position of the month, by name; workers without one last. Workers from months locked before positions were a list are left out. */
+function positionTotals(workers: readonly PayrollWorkerView[]): PositionTotalView[] {
+  const totals = new Map<string, PositionTotalView>();
+  for (const w of workers) {
+    if (w.position === undefined) continue;
+    const key = w.position?.id ?? '';
+    const row = totals.get(key) ?? { position: w.position, workers: 0, withProblems: 0, total: '0.00' };
+    row.workers++;
+    if (w.total === null) row.withProblems++;
+    else row.total = new Prisma.Decimal(row.total).plus(w.total).toFixed(2);
+    totals.set(key, row);
+  }
+  const collator = new Intl.Collator('en');
+  return [...totals.values()].sort((a, b) => {
+    if (!a.position || !b.position) return a.position ? -1 : 1;
+    return collator.compare(a.position.name, b.position.name);
   });
 }
 

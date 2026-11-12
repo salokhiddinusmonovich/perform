@@ -24,8 +24,10 @@ import { RequireAccess } from '@/components/require-access';
 import { StatusBadge } from '@/components/status-badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFormat } from '@/hooks/use-format';
 import { canEnterMonthlyHours, canManageCompany, type Me } from '@/lib/auth';
@@ -64,6 +66,8 @@ function ImportView({ me }: { me: Me }) {
   /** The mapping shown; changed by the user until they check the file again with it */
   const [mapping, setMapping] = useState<ImportMapping | undefined>(undefined);
   const [changed, setChanged] = useState(false);
+  /** The user confirmed adding the positions of the file that the app doesn't have (AGENTS.md: Positions) */
+  const [addPositions, setAddPositions] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [confirm, setConfirm] = useState<'workers' | 'hours' | null>(null);
 
@@ -82,7 +86,7 @@ function ImportView({ me }: { me: Me }) {
 
   const request = (overrides: Partial<ImportRequest> = {}): ImportRequest | null => {
     const f = overrides.file ?? file;
-    return f ? { file: f, month, sheet, mapping, ...overrides } : null;
+    return f ? { file: f, month, sheet, mapping, addPositions, ...overrides } : null;
   };
   const run = (overrides: Partial<ImportRequest> = {}) => {
     const r = request(overrides);
@@ -93,7 +97,8 @@ function ImportView({ me }: { me: Me }) {
     setFile(f);
     setSheet(undefined);
     setPreview(null);
-    if (f) run({ file: f, sheet: undefined, mapping: undefined });
+    setAddPositions(false);
+    if (f) run({ file: f, sheet: undefined, mapping: undefined, addPositions: false });
   };
 
   const refresh = async () => {
@@ -206,6 +211,28 @@ function ImportView({ me }: { me: Me }) {
                 </StatusBadge>
                 <StatusBadge tone="success">{t('import.existingWorkers', { count: preview.workers.existing })}</StatusBadge>
               </div>
+              {preview.workers.newPositions.length > 0 && (
+                <div className="space-y-2 rounded-lg border p-3">
+                  <p className="text-sm font-medium">{t('import.newPositions', { count: preview.workers.newPositions.length })}</p>
+                  <p className="text-sm text-muted-foreground">{preview.workers.newPositions.join(', ')}</p>
+                  {canManageCompany(me) && (
+                    <div className="flex min-h-10 items-center gap-3">
+                      <Checkbox
+                        id="import-add-positions"
+                        checked={addPositions}
+                        disabled={check.isPending}
+                        onCheckedChange={(v) => {
+                          setAddPositions(v === true);
+                          run({ addPositions: v === true });
+                        }}
+                      />
+                      <Label htmlFor="import-add-positions">
+                        {t('import.addPositions', { count: preview.workers.newPositions.length })}
+                      </Label>
+                    </div>
+                  )}
+                </div>
+              )}
               <Problems problems={preview.workers.problems} />
               {preview.workers.notes.length > 0 && <Problems problems={preview.workers.notes} notes />}
               {preview.workers.changes.length > 0 && (

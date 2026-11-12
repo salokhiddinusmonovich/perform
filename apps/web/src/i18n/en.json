@@ -39,7 +39,8 @@
     "ruleSets": "Rule sets",
     "travelRoutes": "Travel routes",
     "travelAmounts": "Travel amounts",
-    "activity": "Activity"
+    "activity": "Activity",
+    "positions": "Positions"
   },
   "settings": {
     "language": "Language",
@@ -440,7 +441,7 @@
     "monthlyHours": {
       "notInMonth": "The worker wasn’t at this site in this month.",
       "unchanged": "These hours are already entered for this month.",
-      "partChanged": "The worker’s shifts changed meanwhile. Open the month again and enter the hours of each part."
+      "partChanged": "The worker’s shift or salary changed meanwhile. Open the month again and enter the hours of each part."
     },
     "adjustment": {
       "notInMonth": "The worker wasn’t employed in this month.",
@@ -513,7 +514,8 @@
       "exitFromCode": "No exit date: the last working day is the day before “{{value}}”.",
       "overwritesEdits": "Days changed by hand in the app will be overwritten by the file.",
       "blankAsAbsent": "Empty cells read as unexcused absence.",
-      "firmNotFound": "There is no firm “{{value}}” in the app. Add it first."
+      "firmNotFound": "There is no firm “{{value}}” in the app. Add it first.",
+      "positionNotFound": "There is no position “{{value}}” in the app. Add it, or tick “Add these positions”."
     },
     "firm": {
       "notFound": "This firm doesn’t exist.",
@@ -558,6 +560,17 @@
     },
     "payRounding": {
       "notFound": "This rounding step no longer exists."
+    },
+    "position": {
+      "notFound": "This position doesn’t exist.",
+      "nameTaken": "A position with this name already exists.",
+      "inactive": "This position is archived and can’t be given to workers.",
+      "mergeIntoItself": "Choose another position to merge into."
+    },
+    "workerPosition": {
+      "notFound": "This position entry doesn’t exist.",
+      "dayTaken": "A position already starts on this day. An owner or admin can correct it.",
+      "unchanged": "The worker already has this position from that day."
     }
   },
   "payRules": {
@@ -840,14 +853,13 @@
     "leaveHint": "The last day they work. Days after it are not theirs any more.",
     "lastDay": "Last working day",
     "salary": "Monthly salary",
-    "salaryFrom": "from {{month}}",
+    "salaryFrom": "from {{date}}",
     "noSalary": "No salary yet",
     "salaryAction": "Salary",
     "salaryTitle": "Monthly salary",
-    "salaryHint": "A salary applies from the chosen month until the next salary. Salaries are never changed: a raise or a correction is added as a new one.",
+    "salaryHint": "A salary applies from the chosen day until the next salary. A salary that starts mid-month splits that month: the days before are paid at the old salary. Salaries are never changed: a raise or a correction is added as a new one.",
     "salaryViewHint": "Salary history. The owner, an admin or the accountant adds salaries.",
-    "salaryFromMonth": "From month",
-    "salaryCorrects": "{{month}} already has a salary. The new one corrects it.",
+    "salaryCorrects": "A salary already starts on {{date}}. The new one corrects it.",
     "monthlySalary": "Monthly salary ({{currency}})",
     "monthlySalaryHint": "A worker who works every working day at normal hours earns exactly this amount.",
     "salaryReason": "Reason",
@@ -855,7 +867,7 @@
     "addSalary": "Add salary",
     "salaryHistory": "Salary history",
     "noSalaryYet": "No salary has been added yet.",
-    "salaryFromAmount": "{{amount}} · from {{month}}",
+    "salaryFromAmount": "{{amount}} · from {{date}}",
     "shiftAction": "Shift",
     "setShift": "Set shift",
     "setShiftHint": "The same shift from a day for several workers. Each keeps it until a newer one.",
@@ -900,7 +912,28 @@
     "noTravelRoute": "No travel pay",
     "travelRouteHint": "Travel pay per day worked is the amount of this route.",
     "travelRouteAction": "Travel route",
-    "travelRouteDialogHint": "The route counts for every day of this placement. If one of its months is locked, move the worker from a day with the new route instead."
+    "travelRouteDialogHint": "The route counts for every day of this placement. If one of its months is locked, move the worker from a day with the new route instead.",
+    "positionAction": "Position",
+    "allPositions": "All positions",
+    "noPosition": "No position",
+    "positionFromFirstDay": "From the worker’s first day.",
+    "positionFromDay": "From {{date}}: {{position}}",
+    "positionTitle": "Positions",
+    "positionHint": "A position applies from its day until the next one. It never changes pay.",
+    "positionCorrecting": "Correcting: {{row}}",
+    "positionFrom": "From",
+    "addPosition": "Add position",
+    "positionHistory": "Position history",
+    "noPositionYet": "No position yet.",
+    "correctPosition": "Correct {{row}}",
+    "removePosition": "Remove {{row}}",
+    "confirmRemovePosition": {
+      "title": "Remove this position?",
+      "description": "{{name}}: “{{row}}” will be removed and the position before it continues. The change is recorded in the audit log.",
+      "button": "Remove"
+    },
+    "salaryFromDay": "From day",
+    "salaryFromDayHint": "The 1st pays the whole month at this salary."
   },
   "impersonation": {
     "banner": "You are logged in as {{name}}.",
@@ -1052,9 +1085,9 @@
     "note": "Note",
     "noteHint": "Optional, e.g. why it was corrected",
     "history": "Entries",
-    "shiftChanged": "Shift changed: enter again",
+    "shiftChanged": "Shift or salary changed: enter again",
     "dialogHintShift": "Shift {{name}}, {{hours}} normal hours per day. Entered hours are never changed: a correction is added as a new entry.",
-    "outdated": "Entered before a shift change",
+    "outdated": "Entered before a shift or salary change",
     "outdatedHint": "These hours are for days that are no longer one part of the month, so they count for nothing. Enter the hours of each part again."
   },
   "adjustments": {
@@ -1117,7 +1150,7 @@
     "partTotal": "For this part",
     "allPlacements": "All placements together",
     "problems": {
-      "noSalary": "No salary for this month.",
+      "noSalary": "No salary for some of the worker’s days this month.",
       "noHours": "No hours for this month.",
       "twoSources": "This month has both daily timesheet entries and monthly hours. Keep only one.",
       "placementWithoutHours": "No hours for {{site}} (from {{date}}).",
@@ -1125,7 +1158,7 @@
       "totalsInvalid": "The monthly hours don’t fit the month (the pay rules may have changed):",
       "invalidHours": "The daily timesheet entries contradict each other.",
       "daysWithoutHours": "No hours for {{site}} ({{from}} – {{until}}).",
-      "noSalaryInFirm": "No salary in {{firm}} for this month.",
+      "noSalaryInFirm": "No salary in {{firm}} for some of the worker’s days this month.",
       "adjustmentWithoutFirm": "An adjustment isn’t on any firm’s payslip. Cancel it and add it again with its firm.",
       "categoryNotSet": "The pay rules “{{rules}}” differ by {{categories}}, and it isn’t set for this worker.",
       "noCategoryRules": "The pay rules “{{rules}}” have no rules for {{options}} this month.",
@@ -1199,7 +1232,10 @@
     "byCategory": "By category",
     "byCategoryHint": "Workers, hours worked and pay by one category, or by two crossed. Hours and pay count only workers who can be paid.",
     "payslipsTotal": "Total from all firms",
-    "ruleSetRules": "Under the rules of “{{name}}”"
+    "ruleSetRules": "Under the rules of “{{name}}”",
+    "byPosition": "By position",
+    "byPositionHint": "Each worker counts under the position they end the month with.",
+    "positionDays": "{{position}} ({{days}})"
   },
   "timesheet": {
     "title": "Timesheet",
@@ -1450,7 +1486,9 @@
     "blankCellReadings": {
       "PROBLEM": "Problem: fill them in the file",
       "ABSENT": "Unexcused absence (unpaid)"
-    }
+    },
+    "newPositions": "Positions the app doesn’t have: {{count}}",
+    "addPositions": "Add these positions ({{count}}) with the workers"
   },
   "firms": {
     "title": "Firms",
@@ -1751,7 +1789,9 @@
       "workerCategory": "Worker categories",
       "workerImport": "Worker imports",
       "workerShift": "Workers’ shifts",
-      "workingDays": "Working days"
+      "workingDays": "Working days",
+      "position": "Positions",
+      "workerPosition": "Workers’ positions"
     },
     "actions": {
       "adjustment": {
@@ -1906,6 +1946,49 @@
       },
       "workingDays": {
         "override": "Working days overridden"
+      },
+      "position": {
+        "create": "Position created",
+        "update": "Position edited",
+        "merge": "Positions merged"
+      },
+      "workerPosition": {
+        "add": "Position given",
+        "correct": "Position corrected",
+        "remove": "Position removed"
+      }
+    }
+  },
+  "positions": {
+    "title": "Positions",
+    "description": "The company’s list of positions, e.g. electrician or foreman. A worker has a position from a day until a newer one. Positions never change pay.",
+    "create": "Add position",
+    "edit": "Rename position",
+    "name": "Name",
+    "uses": "Used in workers’ histories",
+    "offered": "In use",
+    "archived": "Archived",
+    "archive": "Archive",
+    "restore": "Bring back",
+    "merge": "Merge into another",
+    "mergeTitle": "Merge “{{name}}”",
+    "mergeDescription": "For two spellings of one position. Workers’ histories move to the other position, and this one is removed. Locked months keep the name they were locked with.",
+    "mergeInto": "Merge into",
+    "choose": "Choose a position",
+    "mergeWarning": "“{{name}}” will be removed and its entries ({{count}}) will become “{{into}}”. This can’t be undone.",
+    "empty": "No positions yet",
+    "emptyDescription": "Positions are optional. Add them here, or let an Excel import add the ones in the file.",
+    "dialogDescription": "The name appears on workers, payslips and totals.",
+    "confirm": {
+      "archive": {
+        "title": "Archive the position?",
+        "description": "“{{name}}” will no longer be offered. Workers who have it keep it.",
+        "button": "Archive"
+      },
+      "restore": {
+        "title": "Bring the position back?",
+        "description": "“{{name}}” can be given to workers again.",
+        "button": "Bring back"
       }
     }
   }

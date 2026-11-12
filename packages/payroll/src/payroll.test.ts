@@ -6,6 +6,7 @@ import { missingMovingHolidays, uzbekistanFixedHolidays } from './holidays.js';
 import { calculatePay, type PaySettings, type TravelInput } from './pay.js';
 import { payOut } from './pay-out.js';
 import { checkTotals, summarizeMonth, type MonthlyTotals } from './summary.js';
+import { overlapSpans, salarySpans } from './salaries.js';
 import { shiftSpans, spanCalendar } from './shifts.js';
 
 // September 2026: Sept 1 (Tue) is Independence Day, Sundays are 6/13/20/27.
@@ -785,5 +786,80 @@ describe('shifts', () => {
     };
     expect(checkTotals([{ place: 'p', totals }], second, '10')).toEqual([{ place: 'p', problem: 'DAYS_ABOVE_WORKING_DAYS' }]);
     expect(checkTotals([{ place: 'p', totals: { ...totals, normalHours: '140', workdaysWorked: 14 } }], second, '10')).toEqual([]);
+  });
+});
+
+describe('salary changes', () => {
+  it('splits the month where a salary starts, starting with the salary in force on the 1st', () => {
+    expect(salarySpans(september, [])).toEqual([{ from: '2026-09-01', until: '2026-09-30', monthlySalary: null, since: null }]);
+    expect(salarySpans(september, [{ from: '2026-03-01', monthlySalary: '6000000' }])).toEqual([
+      { from: '2026-09-01', until: '2026-09-30', monthlySalary: '6000000', since: '2026-03-01' },
+    ]);
+    // A first salary mid-month leaves the days before it without one; a later month's changes nothing.
+    expect(
+      salarySpans(september, [
+        { from: '2026-10-01', monthlySalary: '8000000' },
+        { from: '2026-09-16', monthlySalary: '7000000' },
+      ]),
+    ).toEqual([
+      { from: '2026-09-01', until: '2026-09-15', monthlySalary: null, since: null },
+      { from: '2026-09-16', until: '2026-09-30', monthlySalary: '7000000', since: '2026-09-16' },
+    ]);
+    // The same amount again changes nothing.
+    expect(
+      salarySpans(september, [
+        { from: '2026-08-01', monthlySalary: '6000000' },
+        { from: '2026-09-10', monthlySalary: '6000000' },
+        { from: '2026-09-16', monthlySalary: '7000000' },
+      ]),
+    ).toEqual([
+      { from: '2026-09-01', until: '2026-09-15', monthlySalary: '6000000', since: '2026-08-01' },
+      { from: '2026-09-16', until: '2026-09-30', monthlySalary: '7000000', since: '2026-09-16' },
+    ]);
+    expect(() =>
+      salarySpans(september, [
+        { from: '2026-09-16', monthlySalary: '1' },
+        { from: '2026-09-16', monthlySalary: '2' },
+      ]),
+    ).toThrow(RangeError);
+  });
+
+  it('gives the days a shift split and a salary split have in common', () => {
+    const shifts = shiftSpans(september, [{ from: '2026-09-10', shift: 'night' }]);
+    const salaries = salarySpans(september, [
+      { from: '2026-08-01', monthlySalary: '6000000' },
+      { from: '2026-09-16', monthlySalary: '7000000' },
+    ]);
+    expect(overlapSpans(shifts, salaries).map((p) => [p.from, p.until, p.a.shift, p.b.monthlySalary])).toEqual([
+      ['2026-09-01', '2026-09-09', null, '6000000'],
+      ['2026-09-10', '2026-09-15', 'night', '6000000'],
+      ['2026-09-16', '2026-09-30', 'night', '7000000'],
+    ]);
+  });
+
+  it('pays a full month split only by a salary change each salary for its share of the working days', () => {
+    const [first, second] = salarySpans(september, [
+      { from: '2026-08-01', monthlySalary: '5000000' },
+      { from: '2026-09-15', monthlySalary: '7500000' },
+    ]);
+    const entries = september.flatMap((d) => (d.kind === 'WORKDAY' ? [worked(d.date, '8')] : []));
+    const part = (span: { from: string; until: string; monthlySalary: string | null }) =>
+      calculatePay({
+        monthlySalary: span.monthlySalary!,
+        workingDays: workingDays(september),
+        calendar: spanCalendar(september, span),
+        settings: { ...settings, normalHoursPerDay: '8' },
+        travel: null,
+        entries: entries.filter((e) => e.date >= span.from && e.date <= span.until),
+      });
+    const a = part(first);
+    const b = part(second);
+    // 11 working days on 1–14 (the 1st is a holiday) and 14 on 15–30, of the month's 25.
+    expect(a.hourlyRate).toMatchObject({ workingDays: { effective: 25 }, rounded: '25000.00' });
+    expect(b.hourlyRate).toMatchObject({ workingDays: { effective: 25 }, rounded: '37500.00' });
+    expect(a.lines).toEqual([expect.objectContaining({ kind: 'NORMAL', hours: '88.00', amount: '2200000.00' })]);
+    expect(b.lines).toEqual([expect.objectContaining({ kind: 'NORMAL', hours: '112.00', amount: '4200000.00' })]);
+    // 11/25 of 5 000 000 and 14/25 of 7 500 000.
+    expect(payOut([a, b], [], '1000').total).toBe('6400000.00');
   });
 });

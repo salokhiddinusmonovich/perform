@@ -2,7 +2,7 @@ import type { MonthlyTotals, PayOut, PayOutAdjustment, PayResult, TotalsProblem 
 import type { AdjustmentType, FirmType, TravelPayMode, YearMonth } from '@puantaj/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
-import type { ShiftInfo } from './organisation';
+import type { PositionRef, ShiftInfo } from './organisation';
 
 // Monthly hours, adjustments and the payroll run as the API returns them (apps/api/src/payroll).
 
@@ -129,6 +129,17 @@ export interface FirmRef {
   type: FirmType;
 }
 
+/**
+ * A salary as a pay result names it: from a day (AGENTS.md: Salaries). Months locked before
+ * salaries started from a day have the month it started from instead.
+ */
+export interface SalaryRef {
+  monthlySalary: string;
+  from?: string;
+  fromYear?: number;
+  fromMonth?: number;
+}
+
 export interface PayrollPart {
   /** Name of the rule set that applies; null in months locked with the company default rules (before 2026-11-03) */
   ruleSetName: string | null;
@@ -138,6 +149,8 @@ export interface PayrollPart {
   firm?: FirmRef | null;
   /** The part's shift, or null: the rules' normal hours. Absent in months locked before shifts. */
   shift?: Pick<ShiftInfo, 'name' | 'normalHoursPerDay'> | null;
+  /** The salary the part's days are paid at; absent in months locked before salaries started from a day */
+  salary?: SalaryRef;
   /** The part's days. Absent in months locked before shifts. */
   days?: DaySpan;
   rulesFrom: YearMonth;
@@ -154,13 +167,18 @@ export interface PayrollPayOut extends Omit<PayOut, 'adjustments'> {
 /** What one firm pays the worker for the month; without firms, the worker's one payslip. */
 export interface PayrollPayslip {
   firm: FirmRef | null;
-  salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
+  /** Only in months locked before salaries started from a day; since then each part has its own */
+  salary?: SalaryRef | null;
   payOut: PayrollPayOut;
   total: string;
 }
 
 export interface PayrollWorker {
   worker: WorkerName;
+  /** The worker's position of the month: the one on its last day (AGENTS.md: Positions). null: not set; absent in months locked before positions were a list */
+  position?: PositionRef | null;
+  /** The worker's positions on their days in the month, oldest first; absent in months locked before positions were a list */
+  positions?: { from: string; until: string; name: string | null }[];
   /** The worker's department of the month (of their last placement in it); absent in months locked before departments */
   department?: { id: string; name: string } | null;
   /** Sites of the worker's placements in the month; absent in months locked before this was saved */
@@ -169,8 +187,8 @@ export interface PayrollWorker {
   firms?: FirmRef[];
   /** The worker's option in each category, by category id, as worked out (a locked month keeps its own); absent in months locked before categories */
   categories?: Record<string, string>;
-  /** The salary of the firm of the last placement in the month */
-  salary: { fromYear: number; fromMonth: number; monthlySalary: string } | null;
+  /** The salary of the firm of the last placement in the month, on the last of the worker's days in it */
+  salary: SalaryRef | null;
   source: 'DAILY' | 'IMPORT' | 'TOTALS' | null;
   /** Days of an imported month changed by hand since the import; absent when none */
   editedDays?: number;
@@ -210,6 +228,8 @@ export interface PayrollMonth {
   firms: FirmTotal[];
   /** Totals per category option, and per two categories' options crossed */
   categories: CategoryTotal[];
+  /** Totals per position with workers this month; empty in months locked before positions were a list */
+  positions: PositionTotal[];
   /** Oldest first */
   locks: LockItem[];
 }
@@ -233,6 +253,15 @@ export interface CategoryTotal {
 /** A department's workers and pay in the month; departmentId null: workers without a department. */
 export interface DepartmentTotal {
   departmentId: string | null;
+  workers: number;
+  /** Not in the total: they can't be paid yet */
+  withProblems: number;
+  total: string;
+}
+
+/** A position's workers and pay in the month; position null: workers without one. */
+export interface PositionTotal {
+  position: PositionRef | null;
   workers: number;
   /** Not in the total: they can't be paid yet */
   withProblems: number;

@@ -277,7 +277,6 @@ describe('worker and placement schemas', () => {
     lastName: ' Testov ',
     firstName: 'Test',
     patronymic: '',
-    position: '',
     categories: { '7c9e6679-7425-40de-944b-e07fc1f90ae7': '' },
     pinfl: '1234 5678 9012 34',
     birthDate: '1985-02-28',

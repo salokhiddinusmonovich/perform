@@ -47,6 +47,8 @@ interface Line {
   hired?: Date | string;
   left?: Date | string | null;
   salary?: number;
+  /** Written to a "GÖREVI" column, which the sheet has only when asked for */
+  position?: string;
   /** One value per day of September; default: a full month (9 on working days, T otherwise) */
   days?: (string | number | null)[];
 }
@@ -55,12 +57,12 @@ const isOff = (day: number) => day === 1 || new Date(Date.UTC(2026, 8, day)).get
 const FULL: (string | number)[] = [...Array(DAYS).keys()].map((i) => (isOff(i + 1) ? 'T' : 9));
 
 /** A sheet laid out like a customer's: a title row, then the header row with the days 1…30. */
-async function workbook(lines: Line[]): Promise<Buffer> {
+async function workbook(lines: Line[], { positions = false }: { positions?: boolean } = {}): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.addWorksheet('Notes').addRow(['nothing to import here']);
   const ws = wb.addWorksheet('Timesheet');
   ws.addRow(['Табель работников, сентябрь 2026']);
-  ws.addRow([...HEADERS, ...[...Array(DAYS).keys()].map((i) => i + 1), 'TOPLAM']);
+  ws.addRow([...HEADERS, ...(positions ? ['GÖREVI'] : []), ...[...Array(DAYS).keys()].map((i) => i + 1), 'TOPLAM']);
   lines.forEach((l, i) =>
     ws.addRow([
       i + 1,
@@ -72,12 +74,13 @@ async function workbook(lines: Line[]): Promise<Buffer> {
       l.hired ?? new Date(Date.UTC(2026, 6, 6)),
       l.left ?? null,
       l.salary ?? 7_500_000,
+      ...(positions ? [l.position ?? null] : []),
       ...(l.days ?? FULL),
       999,
     ]),
   );
   // A totals row at the bottom: no employee number and no name, so it is skipped.
-  ws.addRow([null, null, null, null, null, null, null, null, null, ...Array(DAYS).fill(9)]);
+  ws.addRow([null, null, null, null, null, null, null, null, null, ...(positions ? [null] : []), ...Array(DAYS).fill(9)]);
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
@@ -175,7 +178,7 @@ describe('Excel import', () => {
     ]);
     expect(workers[0].assignments[0].hiredOn.toISOString().slice(0, 10)).toBe('2026-07-06');
     expect(workers[1].assignments[0].leftOn?.toISOString().slice(0, 10)).toBe('2026-09-20');
-    expect(workers[0].salaries.map((s) => [s.fromYear, s.fromMonth, s.monthlySalary.toString()])).toEqual([[2026, 9, '7500000']]);
+    expect(workers[0].salaries.map((s) => [s.fromDay.toISOString().slice(0, 10), s.monthlySalary.toString()])).toEqual([['2026-09-01', '7500000']]);
     expect(workers[1].salaries).toEqual([]);
 
     // The mapping is saved; the workers are now known, so the hours step has one problem left:
@@ -552,6 +555,60 @@ describe('Excel import', () => {
     }
     const missing = await owner.agent.post('/api/imports/preview').field('year', '2026').field('month', '9').expect(400);
     expect(missing.body.code).toBe('import.noFile');
+  });
+
+  it('matches positions by name, and adds the ones the app does not have only when the user confirms', async () => {
+    const owner = await company();
+    const electrician = (await owner.agent.post('/api/positions').send({ name: 'Elektrikçi' }).expect(201)).body.id as string;
+    const file = await workbook(
+      [
+        { number: '10001', lastName: 'Aliyev', position: 'ELEKTRIKCI' },
+        { number: '10002', lastName: 'Karimov', position: ' Kaynakçı ' },
+        { number: '10003', lastName: 'Salimov', position: 'kaynakci' },
+        { number: '10004', lastName: 'Nazarov' },
+      ],
+      { positions: true },
+    );
+
+    const preview = (await send(owner.agent, 'preview', file).expect(200)).body;
+    expect(preview.mapping.columns.position).toBe('GÖREVI');
+    expect(preview.workers.newPositions).toEqual(['Kaynakçı']);
+    expect(preview.workers.problems.map((p: { row: number; code: string; field: string; value: string }) => [p.row, p.code, p.field, p.value])).toEqual([
+      [4, 'import.positionNotFound', 'position', 'Kaynakçı'],
+      [5, 'import.positionNotFound', 'position', 'kaynakci'],
+    ]);
+    expect((await send(owner.agent, 'workers', file).expect(409)).body.code).toBe('import.hasProblems');
+    expect(await ctx.prisma.worker.count()).toBe(0);
+
+    // Confirmed: no problems left, and the position is added once, under the name the file writes first.
+    const confirmed = (await send(owner.agent, 'preview', file, { addPositions: 'true' }).expect(200)).body;
+    expect(confirmed.workers).toMatchObject({ new: 4, newPositions: ['Kaynakçı'], problems: [] });
+    await send(owner.agent, 'workers', file, { addPositions: 'true' }).expect(201);
+    const positions = await ctx.prisma.position.findMany({ where: { companyId: owner.company.id }, orderBy: { name: 'asc' } });
+    expect(positions.map((p) => p.name)).toEqual(['Elektrikçi', 'Kaynakçı']);
+    const workers = await ctx.prisma.worker.findMany({ orderBy: { employeeNumber: 'asc' }, include: { positions: true } });
+    // From their first placement's day (hired 6 July).
+    expect(workers.map((w) => w.positions.map((r) => [r.positionId, r.fromDay.toISOString().slice(0, 10)]))).toEqual([
+      [[electrician, '2026-07-06']],
+      [[positions[1].id, '2026-07-06']],
+      [[positions[1].id, '2026-07-06']],
+      [],
+    ]);
+    expect(await ctx.prisma.auditLog.count({ where: { action: 'position.create' } })).toBe(2);
+
+    // Workers already in the app are not changed: a different position shows as a difference.
+    const changed = await workbook(
+      [
+        { number: '10001', lastName: 'Aliyev', position: 'Kaynakçı' },
+        { number: '10002', lastName: 'Karimov', position: 'Kaynakçı' },
+      ],
+      { positions: true },
+    );
+    const again = (await send(owner.agent, 'preview', changed).expect(200)).body;
+    expect(again.workers.newPositions).toEqual([]);
+    expect(again.workers.changes.filter((c: { field: string }) => c.field === 'position')).toEqual([
+      { row: 3, employeeNumber: '10001', name: 'Aliyev Test', field: 'position', file: 'Kaynakçı', app: 'Elektrikçi' },
+    ]);
   });
 
   it("never matches or changes another company's workers", async () => {

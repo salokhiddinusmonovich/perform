@@ -6,7 +6,9 @@ import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
 import { dayToDate, inMonth, isoDay, monthSpan } from '../common/dates';
-import { placementDaysIn, shiftPartsOf, type ShiftInfo, type ShiftPart } from '../organisation/worker-shifts';
+import { monthPartsOf, type MonthPart } from '../organisation/month-parts';
+import { POSITION_ROWS, withPositionName } from '../organisation/worker-positions';
+import { placementDaysIn, type ShiftInfo } from '../organisation/worker-shifts';
 import { assertMonthsOpen, lockWorkerMonth } from '../pay-rules/months';
 import { PayRulesService } from '../pay-rules/pay-rules.service';
 import { categoriesInMonth } from '../organisation/worker-categories.service';
@@ -31,7 +33,7 @@ export interface MonthlyHoursEntryView extends MonthlyTotals {
 
 /**
  * One placement in one part of the month, with the hours entered for it. Without a shift
- * change in the month a placement has one part, the whole month.
+ * or salary change in the month a placement has one part, the whole month.
  */
 export interface MonthlyHoursRowView {
   assignmentId: string;
@@ -43,7 +45,7 @@ export interface MonthlyHoursRowView {
   /** First and last day of the placement (last null while it continues) */
   from: string;
   until: string | null;
-  /** The days of one shift in the month, which totals are entered for (AGENTS.md: Shifts) */
+  /** The days of one shift and one salary in the month, which totals are entered for (AGENTS.md: Shifts, Salaries) */
   part: Days;
   /** The placement's days in the part: what the totals cover */
   days: Days;
@@ -52,8 +54,8 @@ export interface MonthlyHoursRowView {
   /** Every entry for the part, newest first; the first one counts. */
   history: MonthlyHoursEntryView[];
   /**
-   * Entries for days that aren't a part any more (the worker's shift changed since), which
-   * count for nothing. Listed on the placement's first part only.
+   * Entries for days that aren't a part any more (the worker's shift or salary changed since),
+   * which count for nothing. Listed on the placement's first part only.
    */
   outdated: MonthlyHoursEntryView[];
   /** The worker has daily timesheet entries this month, so totals can't be added (one source per worker-month). */
@@ -107,7 +109,7 @@ const sameDays = (row: MonthlyHoursRow, part: Days) => isoDay(row.fromDay) === p
 
 /**
  * Hours entered as monthly totals, one set per placement and part of the month (the days
- * of one shift, AGENTS.md: Shifts), by an owner, admin or accountant (AGENTS.md: Modules,
+ * of one shift at one salary, AGENTS.md: Shifts, Salaries), by an owner, admin or accountant (AGENTS.md: Modules,
  * Roles). Entries are only ever added; the newest counts. The app never divides one total
  * between parts. A worker-month has one source of hours: totals are refused while the
  * worker has daily timesheet entries that month.
@@ -127,7 +129,7 @@ export class MonthlyHoursService {
       this.prisma.assignment.findMany({
         where: { AND: [{ companyId }, inMonth(year, month)] },
         include: {
-          worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, position: true } },
+          worker: { select: { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, positions: POSITION_ROWS } },
           site: { select: { name: true } },
           team: { select: { name: true } },
           monthlyHours: {
@@ -145,10 +147,11 @@ export class MonthlyHoursService {
       }),
     ]);
     const workersWithDaily = new Set(daily.map((d) => d.assignment.workerId));
-    const shiftParts = await shiftPartsOf(this.prisma, companyId, [...new Set(placements.map((p) => p.workerId))], year, month);
+    const firmsOn = auth.company.firms;
+    const monthParts = await monthPartsOf(this.prisma, companyId, [...new Set(placements.map((p) => p.workerId))], year, month, firmsOn);
 
     const rows = placements.flatMap((p) => {
-      const parts = shiftParts.get(p.workerId)!.flatMap((part) => {
+      const parts = monthParts.get(p.workerId)!.of(firmsOn ? p.firmId : null).flatMap((part) => {
         const days = placementDaysIn(part, p);
         return days ? [{ part, days }] : [];
       });
@@ -164,7 +167,7 @@ export class MonthlyHoursService {
       const outdated = p.monthlyHours.filter((h) => !parts.some(({ part }) => sameDays(h, part)));
       return parts.map(({ part, days }, i) => ({
         assignmentId: p.id,
-        worker: p.worker,
+        worker: withPositionName(p.worker, isoDay(last)),
         siteName: p.site.name,
         teamId: p.teamId,
         teamName: p.team?.name ?? null,
@@ -200,13 +203,13 @@ export class MonthlyHoursService {
       await lockWorkerMonth(tx, placement.workerId, year, month);
       await this.assertNoDailyEntries(tx, companyId, placement.workerId, year, month);
 
-      // The days must be one of the placement's parts now: the shifts may have changed since the form was opened.
-      const parts = (await shiftPartsOf(tx, companyId, [placement.workerId], year, month)).get(placement.workerId)!;
+      // The days must be one of the placement's parts now: the shifts or the salary may have changed since the form was opened.
+      const firmId = auth.company.firms ? placement.firmId : null;
+      const parts = (await monthPartsOf(tx, companyId, [placement.workerId], year, month, auth.company.firms)).get(placement.workerId)!.of(firmId);
       const part = parts.find((s) => s.from === input.from && s.until === input.until && placementDaysIn(s, placement));
       if (!part) throw conflict('monthlyHours.partChanged');
 
       const totals: MonthlyTotals = Object.fromEntries(TOTAL_FIELDS.map((f) => [f, input[f]])) as unknown as MonthlyTotals;
-      const firmId = auth.company.firms ? placement.firmId : null;
       await this.assertFitsPart(tx, companyId, placement.workerId, { siteId: placement.siteId, firmId }, year, month, part, totals);
 
       const previous = await tx.monthlyHours.findFirst({
@@ -272,7 +275,7 @@ export class MonthlyHoursService {
     placement: { siteId: string; firmId: string | null },
     year: number,
     month: number,
-    part: ShiftPart,
+    part: MonthPart,
     totals: MonthlyTotals,
   ) {
     const options = (await categoriesInMonth(tx, companyId, [workerId], year, month)).get(workerId)!;

@@ -89,7 +89,7 @@ const hire = (agent: Agent, siteId: string, lastName: string, categories: Record
 /** A worker paid exactly their salary for September, from monthly totals. */
 async function paidWorker(c: Awaited<ReturnType<typeof company>>, lastName: string, categories: Record<string, string | null>) {
   const id = (await hire(c.agent, c.site, lastName, categories).expect(201)).body.id as string;
-  await c.agent.post(`/api/workers/${id}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '7500000' }).expect(201);
+  await c.agent.post(`/api/workers/${id}/salaries`).send({ from: '2026-09-01', monthlySalary: '7500000' }).expect(201);
   const placement = await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId: id } });
   await c.agent.post(`/api/monthly-hours/2026/9/${placement.id}`).send(FULL_MONTH).expect(201);
   return id;
@@ -244,7 +244,7 @@ describe('worker categories', () => {
 
     // Locked with Toshev paid; a change after the lock doesn't move the locked month's totals.
     const toshev = (await c.agent.get('/api/workers').expect(200)).body.find((w: { lastName: string }) => w.lastName === 'Toshev').id;
-    await c.agent.post(`/api/workers/${toshev}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '7500000' }).expect(201);
+    await c.agent.post(`/api/workers/${toshev}/salaries`).send({ from: '2026-09-01', monthlySalary: '7500000' }).expect(201);
     const placement = await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId: toshev } });
     await c.agent.post(`/api/monthly-hours/2026/9/${placement.id}`).send(FULL_MONTH).expect(201);
     await c.agent.post('/api/payroll/2026/9/lock').expect(201);
@@ -291,7 +291,7 @@ describe('pay by categories', () => {
   /** Hires a worker with a salary for September; totals() enters September's hours. */
   async function hired(c: Awaited<ReturnType<typeof company>>, lastName: string, categories: Record<string, string | null>) {
     const id = (await hire(c.agent, c.site, lastName, categories).expect(201)).body.id as string;
-    await c.agent.post(`/api/workers/${id}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '7500000' }).expect(201);
+    await c.agent.post(`/api/workers/${id}/salaries`).send({ from: '2026-09-01', monthlySalary: '7500000' }).expect(201);
     const placement = await ctx.prisma.assignment.findFirstOrThrow({ where: { workerId: id } });
     return { id, totals: () => c.agent.post(`/api/monthly-hours/2026/9/${placement.id}`).send(WITH_OVERTIME) };
   }

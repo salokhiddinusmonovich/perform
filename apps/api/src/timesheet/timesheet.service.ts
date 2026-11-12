@@ -8,6 +8,7 @@ import { conflict, forbidden, notFound } from '../common/api-error';
 import { currentOn, dayToDate, inMonth, isoDay, monthOfDay, monthSpan } from '../common/dates';
 import { entersHoursAt, isCompanyManager, seesPlacement, visibleSites } from '../organisation/access';
 import { categoriesInMonth } from '../organisation/worker-categories.service';
+import { POSITION_ROWS, withPositionName } from '../organisation/worker-positions';
 import { assertMonthsOpen, lockWorkerMonth } from '../pay-rules/months';
 import { PayRulesService } from '../pay-rules/pay-rules.service';
 import { timesheetIn } from '../platform/company-plan';
@@ -78,7 +79,7 @@ const ENTRY_INCLUDE = {
 
 type EntryRow = Prisma.TimesheetEntryGetPayload<{ include: typeof ENTRY_INCLUDE }>;
 
-const WORKER_SELECT = { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, position: true } as const;
+const WORKER_SELECT = { id: true, employeeNumber: true, lastName: true, firstName: true, patronymic: true, positions: POSITION_ROWS } as const;
 
 function entryView(e: EntryRow): TimesheetEntryView {
   return {
@@ -173,11 +174,11 @@ export class TimesheetService {
       return row;
     };
     for (const p of placements) {
-      if (seesPlacement(auth, p.siteId, p.teamId)) rowFor(p.worker, p.teamId, p.team?.name ?? null, p.departmentId);
+      if (seesPlacement(auth, p.siteId, p.teamId)) rowFor(withPositionName(p.worker, isoDay(last)), p.teamId, p.team?.name ?? null, p.departmentId);
     }
     for (const e of entries) {
       if (!seesPlacement(auth, e.siteId, e.teamId)) continue;
-      rowFor(e.assignment.worker, e.teamId, e.team?.name ?? null, e.assignment.departmentId).entries.push(entryView(e));
+      rowFor(withPositionName(e.assignment.worker, isoDay(last)), e.teamId, e.team?.name ?? null, e.assignment.departmentId).entries.push(entryView(e));
     }
 
     const workerIds = [...new Set([...rows.values()].map((r) => r.worker.id))];

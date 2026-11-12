@@ -79,7 +79,6 @@ export const workerSchema = z.object({
   lastName: requiredName(80),
   firstName: requiredName(80),
   patronymic: optionalText(80),
-  position: optionalText(120),
   /**
    * The worker's option in each category (AGENTS.md: Worker categories), by category id; null
    * clears it. Categories left out keep what they have.
@@ -271,7 +270,8 @@ export const placementTravelRouteSchema = z.object({ travelRouteId: optionalUuid
 export type PlacementTravelRouteInput = z.input<typeof placementTravelRouteSchema>;
 export type PlacementTravelRoute = z.output<typeof placementTravelRouteSchema>;
 
-export const createWorkerSchema = z.object({ worker: workerSchema, placement: placementSchema });
+/** A new worker, their first placement and their position from its first day (AGENTS.md: Positions; none: not set). */
+export const createWorkerSchema = z.object({ worker: workerSchema, placement: placementSchema, positionId: optionalUuid });
 export type CreateWorkerInput = z.input<typeof createWorkerSchema>;
 export type CreateWorker = z.output<typeof createWorkerSchema>;
 
@@ -281,15 +281,14 @@ export type LeaveInput = z.input<typeof leaveSchema>;
 export type Leave = z.output<typeof leaveSchema>;
 
 /**
- * A worker's monthly salary from a month on, covering that month and later ones until a
- * newer salary (AGENTS.md: Roles → Salaries). Salaries are only ever added; a correction
- * is a new salary from the same month.
+ * A worker's monthly salary from a day on, until a newer salary (AGENTS.md: Roles →
+ * Salaries). The day may be in the future. Salaries are only ever added; a correction is a
+ * new salary from the same day.
  */
 export const salarySchema = z.object({
   /** The firm it is paid by (AGENTS.md: Firms); required by the API while the company uses firms. */
   firmId: optionalUuid,
-  fromYear: yearSchema,
-  fromMonth: monthSchema,
+  from: isoDateSchema,
   /** More than 0: the hourly rate is worked out from it. Fits Decimal(14,2). */
   monthlySalary: decimalSchema({ min: 0, minExclusive: true, max: 999_999_999_999, rangeError: 'validation.salaryRange' }),
   reason: optionalText(500),
@@ -332,6 +331,31 @@ export const updateTravelRouteSchema = travelRouteSchema
   .extend({ isActive: z.boolean().optional() })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
 export type UpdateTravelRoute = z.output<typeof updateTravelRouteSchema>;
+
+/** A company's position (job title, AGENTS.md: Positions). */
+export const positionSchema = z.object({ name: requiredName(120) });
+export type PositionInput = z.input<typeof positionSchema>;
+export type Position = z.output<typeof positionSchema>;
+
+/** Renaming a position or (de)activating it. */
+export const updatePositionSchema = positionSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'validation.nothingToUpdate' });
+export type UpdatePosition = z.output<typeof updatePositionSchema>;
+
+/** Merging a position into another: its workers' history moves there and it is removed. */
+export const mergePositionSchema = z.object({ intoId: uuid });
+export type MergePositionInput = z.input<typeof mergePositionSchema>;
+export type MergePosition = z.output<typeof mergePositionSchema>;
+
+/** A worker's position from a day on, until a newer one. No position (null): not set. */
+export const workerPositionSchema = z.object({
+  positionId: optionalUuid,
+  from: isoDateSchema,
+});
+export type WorkerPositionInput = z.input<typeof workerPositionSchema>;
+export type WorkerPosition = z.output<typeof workerPositionSchema>;
 
 /** A worker's shift from a day on, until a newer one. No shift (null): the rule set's normal hours. */
 export const workerShiftSchema = z.object({

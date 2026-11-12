@@ -53,6 +53,7 @@ model Company {
   timesheetCodes    TimesheetCode[]
   timesheetSettings TimesheetSettings?
   shifts            Shift[]
+  positions         Position[]
   departments       Department[]
   firms             Firm[]
   workerCategories  WorkerCategory[]
@@ -164,6 +165,7 @@ model User {
   updatedEntries       TimesheetEntry[]      @relation("EntryUpdatedBy")
   timesheetSettings    TimesheetSettings[]
   workerShifts         WorkerShift[]
+  workerPositions      WorkerPosition[]
   timesheetImports     TimesheetImport[]
   importMappings       ImportMapping[]
 }
@@ -423,11 +425,11 @@ model Worker {
   passportSeries String?
   passportNumber String?
   phone          String?
-  position       String?
   isActive       Boolean   @default(true)
   createdAt      DateTime  @default(now())
 
   company          Company                 @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  positions        WorkerPosition[]
   assignments      Assignment[]
   salaries         Salary[]
   payrollSnapshots PayrollSnapshotWorker[]
@@ -558,6 +560,47 @@ model WorkerShift {
   @@index([shiftId])
 }
 
+/// A company's position (job title, AGENTS.md: Positions), e.g. electrician. Owners and
+/// admins keep the list. A position never affects pay. An inactive one isn't offered any
+/// more but stays where it is used; merging one into another moves its rows and deletes it.
+model Position {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  company Company          @relation(fields: [companyId], references: [id], onDelete: NoAction)
+  workers WorkerPosition[]
+
+  @@unique([companyId, name])
+  @@unique([id, companyId])
+}
+
+/// A worker's position from a day on, until the worker's next row (AGENTS.md: Positions).
+/// Before the first row, and from a row without a position, the worker has none. Whoever
+/// may edit the worker adds rows; only owners and admins correct or remove one, audited
+/// with old and new values.
+model WorkerPosition {
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @db.Uuid
+  workerId   String   @db.Uuid
+  /// null = no position from this day on
+  positionId String?  @db.Uuid
+  fromDay    DateTime @db.Date
+  /// null: from before positions were a list (the worker's free-text position)
+  setById    String?  @db.Uuid
+  setAt      DateTime @default(now())
+
+  worker   Worker    @relation(fields: [workerId, companyId], references: [id, companyId], onDelete: NoAction)
+  position Position? @relation(fields: [positionId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
+  setBy    User?     @relation(fields: [setById], references: [id], onDelete: NoAction)
+
+  @@unique([workerId, fromDay])
+  @@index([companyId])
+  @@index([positionId])
+}
+
 /// A worker's placement on a site (and team) for a span of time. Moving to another
 /// site ends one placement and starts the next. The salary is not here: it is in
 /// Salary, so people who see placements (timekeepers, foremen) never get it.
@@ -615,9 +658,8 @@ model Salary {
   workerId      String   @db.Uuid
   /// null: from before the company used firms
   firmId        String?  @db.Uuid
-  fromYear      Int
-  /// 1-based
-  fromMonth     Int
+  /// First day it is paid from; it lasts until the day before the next one (of the firm)
+  fromDay       DateTime @db.Date
   monthlySalary Decimal  @db.Decimal(14, 2)
   reason        String?
   seq           BigInt   @unique @default(autoincrement())
@@ -628,7 +670,7 @@ model Salary {
   firm   Firm?  @relation(fields: [firmId, companyId], references: [id, companyId], onDelete: NoAction, onUpdate: NoAction)
   setBy  User   @relation(fields: [setById], references: [id], onDelete: NoAction)
 
-  @@index([workerId, fromYear, fromMonth])
+  @@index([workerId, fromDay])
   @@index([firmId])
   @@index([companyId])
 }

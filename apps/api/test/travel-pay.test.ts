@@ -33,7 +33,7 @@ async function company(rules = RULES) {
   const near = (await owner.agent.post('/api/travel-routes').send({ name: 'Near', amountPerDay: '20000' }).expect(201)).body.id as string;
   const far = (await owner.agent.post('/api/travel-routes').send({ name: 'Far', amountPerDay: '30000' }).expect(201)).body.id as string;
   const workerId = await hire(owner.agent, siteA, null);
-  await owner.agent.post(`/api/workers/${workerId}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '7500000' }).expect(201);
+  await owner.agent.post(`/api/workers/${workerId}/salaries`).send({ from: '2026-09-01', monthlySalary: '7500000' }).expect(201);
   const placementA = (await owner.agent.get(`/api/workers/${workerId}`).expect(200)).body.placement.id as string;
   return { ...owner, siteA, near, far, workerId, placementA };
 }

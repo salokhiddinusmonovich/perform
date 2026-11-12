@@ -4,7 +4,7 @@ import type { AuditAction, Shift, UpdateShift, WorkerShift, WorkerShifts } from 
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { conflict, forbidden, notFound } from '../common/api-error';
-import { dayToDate, isoDay, monthOfDay, previousDay } from '../common/dates';
+import { dayToDate, isoDay, monthAfterDayBefore, monthOfDay } from '../common/dates';
 import { assertMonthsOpen } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
 import { assignsShift } from './access';
@@ -232,10 +232,4 @@ export class ShiftsService {
   ) {
     return this.audit.record({ action, companyId: auth.company.id, auth, entityType, entityId, data }, tx);
   }
-}
-
-/** The first month a row starting on `day` no longer changes for the rows before it: the month after its day before. */
-function monthAfterDayBefore(day: Date) {
-  const { year, month } = monthOfDay(previousDay(isoDay(day)));
-  return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
 }

@@ -28,7 +28,7 @@ async function workerWithHistory() {
   });
   const user = await createUser(prisma);
   await prisma.salary.create({
-    data: { companyId: company.id, workerId: worker.id, fromYear: 2026, fromMonth: 9, monthlySalary: '5000000', setById: user.id },
+    data: { companyId: company.id, workerId: worker.id, fromDay: new Date('2026-09-01'), monthlySalary: '5000000', setById: user.id },
   });
   const period = await prisma.payrollPeriod.create({ data: { companyId: company.id, year: 2026, month: 9 } });
   await prisma.timesheetEntry.create({

@@ -4,15 +4,17 @@ import type { AuditAction, CreateWorker, Placement, Salary, Worker } from '@puan
 import { AuditService } from '../audit/audit.service';
 import type { CompanyAuthContext } from '../auth/auth.context';
 import { badRequest, conflict, notFound } from '../common/api-error';
-import { dayToDate, isoDay, monthOfDay, previousDay, todayIn } from '../common/dates';
-import { assertMonthsOpen, monthIndex } from '../pay-rules/months';
+import { dayToDate, isoDay, monthAfterDayBefore, monthOfDay, previousDay, todayIn } from '../common/dates';
+import { assertMonthsOpen } from '../pay-rules/months';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertManagesSite, seesPay, seesPersonalData, seesPlacement } from './access';
 import { findDepartment } from './departments.service';
 import { findFirm } from './firms.service';
+import { SALARY_ORDER, salaryForFirm } from './salaries';
 import { findTravelRoute } from './travel-routes.service';
 import { CATEGORY_VALUE_ORDER, checkCategoryChoices, listCategories, optionsAt, setCategoryChoices } from './worker-categories.service';
 import { withinWorkerLimit } from './worker-limit';
+import { offeredPosition, POSITION_ROWS, positionOn, type PositionRef } from './worker-positions';
 import { shiftInfo, type ShiftInfo } from './worker-shifts';
 
 export interface PlacementView {
@@ -47,16 +49,16 @@ export interface PersonalDataView {
   phone: string | null;
 }
 
-/** A salary from a month on. Never sent to timekeepers or foremen (AGENTS.md: Roles). */
+/** A salary from a day on. Never sent to timekeepers or foremen (AGENTS.md: Roles). */
 export interface SalaryView {
   id: string;
   /** The firm it is paid by (AGENTS.md: Firms); null: from before the company used firms */
   firm: { id: string; name: string } | null;
-  fromYear: number;
-  fromMonth: number;
+  /** First day it is paid from */
+  from: string;
   monthlySalary: string;
   reason: string | null;
-  /** A newer salary from the same month (and firm) corrected this one, so it never applies. */
+  /** A newer salary from the same day (and firm) corrected this one, so it never applies. */
   corrected: boolean;
   setBy: { fullName: string };
   setAt: Date;
@@ -69,7 +71,8 @@ export interface WorkerView {
   lastName: string;
   firstName: string;
   patronymic: string | null;
-  position: string | null;
+  /** The worker's position today (AGENTS.md: Positions); null: not set */
+  position: PositionRef | null;
   /** The worker's option in each category this month (AGENTS.md: Worker categories), by category id; a category not set is left out */
   categories: Record<string, string>;
   /** The latest placement (the current one, or the last before leaving). */
@@ -79,10 +82,10 @@ export interface WorkerView {
   /** null when the caller doesn't see personal data */
   personal: PersonalDataView | null;
   /**
-   * The latest salary of the latest placement's firm (by from-month; it may start in a later month). null when there
+   * The latest salary of the latest placement's firm (by first day; it may start on a later day). null when there
    * is none yet or the caller doesn't see pay.
    */
-  salary: Pick<SalaryView, 'fromYear' | 'fromMonth' | 'monthlySalary'> | null;
+  salary: Pick<SalaryView, 'from' | 'monthlySalary'> | null;
 }
 
 /** A worker's option in a category from a month on, until their next one in it. */
@@ -107,37 +110,16 @@ const PLACEMENT_INCLUDE = {
   travelRoute: { select: { name: true } },
 } as const satisfies Prisma.AssignmentInclude;
 
-/** Newest first: by from-month, then the one added last. The first row of a month is the one that counts. */
-export const SALARY_ORDER = [
-  { fromYear: 'desc' },
-  { fromMonth: 'desc' },
-  { seq: 'desc' },
-] as const satisfies Prisma.SalaryOrderByWithRelationInput[];
-
 /** Placements newest first: the first is the latest, which moves and leaving act on. */
 const WORKER_INCLUDE = {
   assignments: { orderBy: { hiredOn: 'desc' }, include: PLACEMENT_INCLUDE },
   salaries: { orderBy: SALARY_ORDER },
   shifts: { orderBy: { fromDay: 'desc' }, include: { shift: true } },
+  positions: POSITION_ROWS,
   categoryOptions: { select: { categoryId: true, optionId: true, fromYear: true, fromMonth: true }, orderBy: CATEGORY_VALUE_ORDER },
 } as const satisfies Prisma.WorkerInclude;
 
 type WorkerRow = Prisma.WorkerGetPayload<{ include: typeof WORKER_INCLUDE }>;
-
-/**
- * The salary that counts for a firm among a worker's salaries (newest first, SALARY_ORDER, up
- * to the month in question): the firm's own, else the newest without a firm (AGENTS.md:
- * Firms). A placement without a firm reads only those. While the company doesn't use firms
- * they don't matter, so the newest counts.
- */
-export function salaryForFirm<S extends { firmId: string | null }>(
-  rows: readonly S[],
-  firmId: string | null,
-  firmsOn: boolean,
-): S | null {
-  if (!firmsOn) return rows[0] ?? null;
-  return rows.find((r) => r.firmId === firmId) ?? rows.find((r) => r.firmId === null) ?? null;
-}
 
 const PERSONAL_FIELDS = ['pinfl', 'birthDate', 'nationality', 'passportSeries', 'passportNumber', 'phone'] as const;
 
@@ -199,13 +181,14 @@ export class WorkersService {
   /** create() inside the caller's transaction (an Excel import adds many workers in one). */
   async createIn(tx: Tx, auth: CompanyAuthContext, input: CreateWorker): Promise<{ id: string }> {
     const companyId = auth.company.id;
-    const { worker: details, placement } = input;
+    const { worker: details, placement, positionId } = input;
     assertManagesSite(auth, placement.siteId);
     const departmentId = await this.checkPlace(tx, auth, placement, 'placement.');
     const firmId = await this.checkFirm(tx, auth, placement, 'placement.');
     await findTravelRoute(tx, companyId, placement.travelRouteId);
     await this.assertUniqueFree(tx, companyId, details, null);
     const categories = checkCategoryChoices(await listCategories(tx, companyId), details.categories, new Map(), 'worker.');
+    const position = await offeredPosition(tx, companyId, positionId);
     await assertMonthsOpen(tx, companyId, monthOfDay(placement.from), null);
     const { worker, assignment } = await withinWorkerLimit(tx, companyId, null, placement.from, async () => {
       const worker = await tx.worker.create({ data: { companyId, ...toColumns(details) } });
@@ -214,7 +197,14 @@ export class WorkersService {
     });
     // A new worker's options start from the month of their first placement.
     await setCategoryChoices(tx, companyId, worker.id, monthOfDay(placement.from), categories, auth.user.id);
+    // So does their position, from the placement's first day (AGENTS.md: Positions).
+    if (position) {
+      await tx.workerPosition.create({
+        data: { companyId, workerId: worker.id, positionId: position.id, fromDay: dayToDate(placement.from), setById: auth.user.id },
+      });
+    }
     await this.record(tx, auth, 'worker.create', worker.id, {
+      position: position && { id: position.id, name: position.name },
       name: fullName(details),
       employeeNumber: details.employeeNumber,
       categories: Object.fromEntries(categories.map((c) => [c.categoryId, c.optionId])),
@@ -427,23 +417,20 @@ export class WorkersService {
     return rows.map((r, i) => ({
       id: r.id,
       firm: r.firm,
-      fromYear: r.fromYear,
-      fromMonth: r.fromMonth,
+      from: isoDay(r.fromDay),
       monthlySalary: r.monthlySalary.toString(),
       reason: r.reason,
-      corrected: rows
-        .slice(0, i)
-        .some((o) => o.firmId === r.firmId && o.fromYear === r.fromYear && o.fromMonth === r.fromMonth),
+      corrected: rows.slice(0, i).some((o) => o.firmId === r.firmId && o.fromDay.getTime() === r.fromDay.getTime()),
       setBy: { fullName: r.setBy.fullName },
       setAt: r.setAt,
     }));
   }
 
   /**
-   * Adds a salary from a month on. It covers the months until the next later salary, so
-   * none of those may be locked. A salary from a month that already has one corrects it.
-   * While the company uses firms all this is per firm, so a worker can have another salary
-   * in a new firm for the same month (AGENTS.md: Firms).
+   * Adds a salary from a day on (AGENTS.md: Salaries). It covers the days until the next
+   * later salary, so none of their months may be locked. A salary from a day that already
+   * has one corrects it. While the company uses firms all this is per firm, so a worker can
+   * have another salary in a new firm from the day they move (AGENTS.md: Firms).
    */
   async addSalary(auth: CompanyAuthContext, id: string, input: Salary): Promise<{ id: string }> {
     return this.prisma.$transaction((tx) => this.addSalaryIn(tx, auth, id, input));
@@ -458,29 +445,30 @@ export class WorkersService {
       if (!firmId) throw badRequest('validation', { issues: [{ path: 'firmId', message: 'validation.required' }] });
       await findFirm(tx, companyId, firmId);
     }
-    const start = monthIndex(input.fromYear, input.fromMonth);
     const rows = await tx.salary.findMany({
       where: { workerId: id, companyId, ...(auth.company.firms ? { firmId } : {}) },
       orderBy: SALARY_ORDER,
     });
-    const inForce = rows.find((r) => monthIndex(r.fromYear, r.fromMonth) <= start) ?? null;
-    const next = rows.filter((r) => monthIndex(r.fromYear, r.fromMonth) > start).at(-1) ?? null;
-    await assertMonthsOpen(
-      tx,
-      companyId,
-      { year: input.fromYear, month: input.fromMonth },
-      next && { year: next.fromYear, month: next.fromMonth },
-    );
+    const inForce = rows.find((r) => isoDay(r.fromDay) <= input.from) ?? null;
+    const next = rows.filter((r) => isoDay(r.fromDay) > input.from).at(-1) ?? null;
+    await assertMonthsOpen(tx, companyId, monthOfDay(input.from), next && monthAfterDayBefore(next.fromDay));
     if (inForce && inForce.monthlySalary.toString() === input.monthlySalary) throw conflict('salary.unchanged');
 
     const row = await tx.salary.create({
-      data: { companyId, workerId: id, ...input, firmId, setById: auth.user.id },
+      data: {
+        companyId,
+        workerId: id,
+        firmId,
+        fromDay: dayToDate(input.from),
+        monthlySalary: input.monthlySalary,
+        reason: input.reason,
+        setById: auth.user.id,
+      },
     });
     await this.record(tx, auth, 'salary.add', id, {
       salaryId: row.id,
       firmId,
-      fromYear: input.fromYear,
-      fromMonth: input.fromMonth,
+      fromDay: input.from,
       from: inForce ? inForce.monthlySalary.toString() : null,
       to: input.monthlySalary,
       reason: input.reason,
@@ -584,7 +572,7 @@ export class WorkersService {
       lastName: w.lastName,
       firstName: w.firstName,
       patronymic: w.patronymic,
-      position: w.position,
+      position: positionOn(w.positions, todayIn(auth.company.timezone)),
       categories: optionsAt(w.categoryOptions, monthOfDay(todayIn(auth.company.timezone))),
       placement: p
         ? {
@@ -618,8 +606,7 @@ export class WorkersService {
       salary:
         seesPay(auth) && salary
           ? {
-              fromYear: salary.fromYear,
-              fromMonth: salary.fromMonth,
+              from: isoDay(salary.fromDay),
               monthlySalary: salary.monthlySalary.toString(),
             }
           : null,
@@ -647,7 +634,6 @@ function toInput(auth: CompanyAuthContext, w: WorkerRow): Worker {
     lastName: w.lastName,
     firstName: w.firstName,
     patronymic: w.patronymic,
-    position: w.position,
     categories: optionsAt(w.categoryOptions, monthOfDay(todayIn(auth.company.timezone))),
     categoriesFrom: null,
     pinfl: w.pinfl,

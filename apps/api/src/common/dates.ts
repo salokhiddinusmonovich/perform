@@ -13,6 +13,16 @@ export function previousDay(day: string): string {
 
 export const monthOfDay = (day: string) => ({ year: Number(day.slice(0, 4)), month: Number(day.slice(5, 7)) });
 
+/**
+ * The first month a row starting on `day` no longer changes for the rows before it: the
+ * month after its day before. For rows that last from a day until the next one (shifts,
+ * positions, salaries).
+ */
+export function monthAfterDayBefore(day: Date) {
+  const { year, month } = monthOfDay(previousDay(isoDay(day)));
+  return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+}
+
 /** Today in the company's time zone (timesheet days follow the company's clock). */
 export function todayIn(timeZone: string): string {
   // en-CA formats as YYYY-MM-DD.

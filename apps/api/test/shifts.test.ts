@@ -34,7 +34,7 @@ async function company() {
   const night = (await owner.agent.post('/api/shifts').send({ name: 'Night', normalHoursPerDay: '10' }).expect(201)).body.id as string;
   const workerA = await hire(owner.agent, siteA, 'Alpha');
   const workerB = await hire(owner.agent, siteB, 'Beta');
-  await owner.agent.post(`/api/workers/${workerA}/salaries`).send({ fromYear: 2026, fromMonth: 9, monthlySalary: '7500000' }).expect(201);
+  await owner.agent.post(`/api/workers/${workerA}/salaries`).send({ from: '2026-09-01', monthlySalary: '7500000' }).expect(201);
   const placementA = (await owner.agent.get(`/api/workers/${workerA}`).expect(200)).body.placement.id as string;
   return { ...owner, siteA, siteB, night, workerA, workerB, placementA };
 }

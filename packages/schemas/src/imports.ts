@@ -100,6 +100,14 @@ export const importRequestSchema = z.object({
       }
     })
     .pipe(importMappingSchema.optional()),
+  /**
+   * The user confirmed adding the positions of the file that the app doesn't have (AGENTS.md:
+   * Positions). Without it their rows are problem rows.
+   */
+  addPositions: z
+    .enum(['true', 'false'], { error: 'validation.invalid' })
+    .optional()
+    .transform((v) => v === 'true'),
 });
 export type ImportRequestInput = z.input<typeof importRequestSchema>;
 export type ImportRequest = z.output<typeof importRequestSchema>;
