@@ -1235,7 +1235,25 @@
     "ruleSetRules": "“{{name}}” qoidalari boʻyicha",
     "byPosition": "Lavozimlar boʻyicha",
     "byPositionHint": "Har bir ishchi oy oxiridagi lavozimi boʻyicha hisoblanadi.",
-    "positionDays": "{{position}} ({{days}})"
+    "positionDays": "{{position}} ({{days}})",
+    "export": {
+      "download": "Excelga yuklab olish",
+      "downloadFailed": "Excel fayl tayyorlanmadi. Qayta urinib koʻring.",
+      "summarySheet": "Jami",
+      "detailsSheet": "Hisob qatorlari",
+      "total": "Jami",
+      "hoursPay": "Soatlar uchun",
+      "absencePay": "Kelmagan kunlar uchun",
+      "travelPay": "Yoʻl haqi",
+      "rounding": "Yaxlitlash",
+      "problems": "Hali toʻlab boʻlmaydi",
+      "part": "Qoidalar va kunlar",
+      "line": "Nima uchun",
+      "hours": "Soat",
+      "hourlyRate": "Soatlik stavka",
+      "multiplier": "Koeffitsiyent",
+      "amount": "Summa"
+    }
   },
   "timesheet": {
     "title": "Tabel",

@@ -1235,7 +1235,25 @@
     "ruleSetRules": "“{{name}}” kurallarına göre",
     "byPosition": "Görevlere göre",
     "byPositionHint": "Her işçi ayı bitirdiği göreve göre sayılır.",
-    "positionDays": "{{position}} ({{days}})"
+    "positionDays": "{{position}} ({{days}})",
+    "export": {
+      "download": "Excel olarak indir",
+      "downloadFailed": "Excel dosyası hazırlanamadı. Tekrar deneyin.",
+      "summarySheet": "Özet",
+      "detailsSheet": "Hesap satırları",
+      "total": "Toplam",
+      "hoursPay": "Saatler için ödeme",
+      "absencePay": "Devamsızlık ödemesi",
+      "travelPay": "Yol ücreti",
+      "rounding": "Yuvarlama",
+      "problems": "Henüz ödenemez",
+      "part": "Kurallar ve günler",
+      "line": "Ne için",
+      "hours": "Saat",
+      "hourlyRate": "Saat ücreti",
+      "multiplier": "Katsayı",
+      "amount": "Tutar"
+    }
   },
   "timesheet": {
     "title": "Puantaj",

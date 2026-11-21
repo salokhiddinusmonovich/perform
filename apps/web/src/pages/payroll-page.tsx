@@ -1,9 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { PayLine } from '@puantaj/payroll';
 import { unlockSchema, type Unlock, type UnlockInput, type YearMonth } from '@puantaj/schemas';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { FileText, Lock, LockOpen } from 'lucide-react';
+import { Download, FileText, Lock, LockOpen } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -39,6 +38,7 @@ import {
   type Me,
 } from '@/lib/auth';
 import { applyFieldErrors, errorMessage } from '@/lib/errors';
+import { downloadExcel } from '@/lib/excel';
 import {
   departmentTree,
   useDepartments,
@@ -70,6 +70,8 @@ import {
   type PayrollProblem,
   type PayrollWorker,
 } from '@/lib/payroll';
+import { payrollFileName, payrollSheets } from '@/lib/payroll-export';
+import { hourlyRateText, partHeading, payLineText, payOutLines, placeText, positionsText, problemText } from '@/lib/payslip-text';
 
 export function PayrollPage() {
   const { t } = useTranslation();
@@ -146,6 +148,28 @@ function PayrollView({ me }: { me: Me }) {
     ],
   );
   const departmentPaths = useMemo(() => new Map(tree.map((d) => [d.id, d.path])), [tree]);
+  const [downloading, setDownloading] = useState(false);
+  /** The workers on screen, as the table filters them, with every payslip line. */
+  const download = async () => {
+    setDownloading(true);
+    try {
+      const sheets = payrollSheets({
+        month,
+        workers: rows ?? [],
+        currency,
+        t,
+        format,
+        departmentPaths: showDepartments ? departmentPaths : null,
+        showFirms,
+        categories: shownCategories,
+      });
+      await downloadExcel(sheets, payrollFileName(month, t));
+    } catch {
+      toast.error(t('payroll.export.downloadFailed'));
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const columns = useMemo<ColumnDef<PayrollWorker, unknown>[]>(
     () => [
@@ -260,6 +284,10 @@ function PayrollView({ me }: { me: Me }) {
                 <StatusBadge tone="warning">{t('payroll.workersWithProblems', { count: withProblems })}</StatusBadge>
               )}
             </div>
+            <Button variant="outline" onClick={download} disabled={downloading || !rows || rows.length === 0}>
+              <Download aria-hidden />
+              {t('payroll.export.download')}
+            </Button>
             <LockActions
               me={me}
               month={data.data}
@@ -807,6 +835,7 @@ function PayslipDialog({
   const format = useFormat();
   const me = useMe().data;
   const payslips = payslipsOf(worker);
+  const positions = positionsText(worker, t, format);
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-2xl">
@@ -818,19 +847,10 @@ function PayslipDialog({
             {worker.editedDays && ` · ${t('payroll.editedDays', { count: worker.editedDays })}`}
           </DialogDescription>
         </DialogHeader>
-        {worker.positions?.some((p) => p.name) && (
+        {positions && (
           <p className="text-sm">
             <span className="text-muted-foreground">{t('workers.position')}: </span>
-            {worker.positions.length === 1
-              ? worker.positions[0].name
-              : worker.positions
-                  .map((p) =>
-                    t('payroll.positionDays', {
-                      position: p.name ?? t('workers.noPosition'),
-                      days: t('monthlyHours.fromUntil', { from: format.date(p.from), until: format.date(p.until) }),
-                    }),
-                  )
-                  .join(', ')}
+            {positions}
           </p>
         )}
         {worker.problems.length > 0 ? (
@@ -894,60 +914,18 @@ function ProblemText({ problem }: { problem: PayrollProblem }) {
   const { t } = useTranslation();
   const format = useFormat();
   const categories = useWorkerCategories();
-  switch (problem.code) {
-    case 'noSalary':
-      return problem.firmName ? t('payroll.problems.noSalaryInFirm', { firm: problem.firmName }) : t('payroll.problems.noSalary');
-    case 'placementWithoutHours':
-      return problem.until
-        ? t('payroll.problems.daysWithoutHours', {
-            site: problem.siteName,
-            from: format.date(problem.from),
-            until: format.date(problem.until),
-          })
-        : t('payroll.problems.placementWithoutHours', { site: problem.siteName, date: format.date(problem.from) });
-    case 'noRules':
-      return t('payroll.problems.noRules', { sites: problem.siteNames.join(', ') });
-    case 'noPayCategories':
-      return t('payroll.problems.noPayCategories', { rules: problem.ruleSetName });
-    case 'categoryNotSet':
-      return t('payroll.problems.categoryNotSet', {
-        rules: problem.ruleSetName,
-        categories: problem.categoryIds.map((id) => categories.data?.find((c) => c.id === id)?.name ?? '').join(', '),
-      });
-    case 'noCategoryRules':
-      return t('payroll.problems.noCategoryRules', {
-        rules: problem.ruleSetName,
-        // In the order of their categories by name, as every page shows a combination.
-        options: (categories.data ?? [])
-          .flatMap((c) => c.options)
-          .filter((o) => problem.optionIds.includes(o.id))
-          .map((o) => o.name)
-          .join(' + '),
-      });
-    case 'totalsInvalid':
-      return (
-        <>
-          {t('payroll.problems.totalsInvalid')}
-          <ul className="mt-1 list-disc ps-5 text-muted-foreground">
-            {problem.issues.map((issue, i) => (
-              <li key={i}>
-                {issue.siteName ? `${issue.siteName}: ` : `${t('payroll.allPlacements')}: `}
-                {t(`payroll.totalsProblems.${issue.problem}`)}
-              </li>
-            ))}
-          </ul>
-        </>
-      );
-    case 'invalidHours':
-      return (
-        <>
-          {t('payroll.problems.invalidHours')}
-          <span className="block text-muted-foreground">{problem.detail}</span>
-        </>
-      );
-    default:
-      return t(`payroll.problems.${problem.code}`);
-  }
+  const { text, details } = problemText(problem, t, format, categories.data ?? []);
+  if (details.length === 0) return text;
+  return (
+    <>
+      {text}
+      <ul className="mt-1 list-disc ps-5 text-muted-foreground">
+        {details.map((detail, i) => (
+          <li key={i}>{detail}</li>
+        ))}
+      </ul>
+    </>
+  );
 }
 
 /**
@@ -958,71 +936,19 @@ function PartView({ part, currency, showHeading }: { part: PayrollPart; currency
   const { t } = useTranslation();
   const format = useFormat();
   const { result } = part;
-  const rate = result.hourlyRate;
   const places = Object.keys(part.places);
-  const placeName = (key: string) => {
-    const p = part.places[key];
-    if (!p) return key;
-    return p.from ? `${p.siteName} (${t('monthlyHours.fromDay', { date: format.date(p.from) })})` : p.siteName;
-  };
-
-  const describe = (line: PayLine): string => {
-    switch (line.type) {
-      case 'HOURS':
-        return t('payroll.lines.hours', {
-          kind: t(`payroll.hourKinds.${line.kind}`),
-          hours: format.number(line.hours),
-          multiplier: format.number(line.multiplier),
-        });
-      case 'ABSENCE':
-        return line.paid
-          ? t('payroll.lines.absencePaid', {
-              absence: t(`payroll.absences.${line.absence}`),
-              count: line.days,
-              hours: format.number(line.hoursPerDay),
-            })
-          : t('payroll.lines.absenceUnpaid', { absence: t(`payroll.absences.${line.absence}`), count: line.days });
-      case 'TRAVEL_PER_DAY':
-        return line.route
-          ? t('payroll.lines.travelPerDay', { route: line.route, count: line.days, amount: format.money(line.amountPerDay, currency) })
-          : t('payroll.lines.travelNoRoute', { count: line.days });
-      case 'TRAVEL_MONTHLY':
-        return t('payroll.lines.travelMonthly');
-    }
-  };
-
   return (
     <section className="space-y-3">
-      {showHeading && (
-        <h3 className="text-sm font-medium">
-          {[
-            part.ruleSetName ? t('payroll.ruleSetRules', { name: part.ruleSetName }) : t('payroll.defaultRules'),
-            part.combination?.map((c) => c.optionName).join(' + '),
-            part.days && t('monthlyHours.fromUntil', { from: format.date(part.days.from), until: format.date(part.days.until) }),
-            part.shift && t('workers.shiftWithHours', { name: part.shift.name, hours: format.number(part.shift.normalHoursPerDay) }),
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </h3>
-      )}
-      <p className="text-sm text-muted-foreground">
-        {t('payroll.hourlyRate', {
-          salary: format.money(rate.monthlySalary, currency),
-          days: rate.workingDays.effective,
-          hours: format.number(rate.normalHoursPerDay),
-          rate: format.money(rate.rounded, currency),
-        })}
-        {rate.workingDays.override !== null &&
-          ` ${t('payroll.workingDaysOverridden', { calculated: rate.workingDays.calculated })}`}
-      </p>
+      {showHeading && <h3 className="text-sm font-medium">{partHeading(part, t, format)}</h3>}
+      <p className="text-sm text-muted-foreground">{hourlyRateText(part, t, format, currency)}</p>
       <ul className="divide-y rounded-md border text-sm">
         {result.lines.map((line, i) => (
           <li key={i} className="flex items-start justify-between gap-4 px-3 py-2">
             <span>
               {'place' in line && places.length > 1 && (
-                <span className="block text-muted-foreground">{placeName(line.place)}</span>
+                <span className="block text-muted-foreground">{placeText(part, line.place, t, format)}</span>
               )}
-              {describe(line)}
+              {payLineText(line, t, format, currency)}
             </span>
             <span className="shrink-0 tabular-nums">{format.money(line.amount, currency)}</span>
           </li>
@@ -1049,24 +975,7 @@ function PayOutView({ payOut, currency, showEarned }: { payOut: PayrollPayOut; c
   const owes = isNegative(payOut.total);
   const lines = [
     ...(showEarned ? [{ key: 'earned', label: t('payroll.earned'), note: null, amount: payOut.earned, signed: false }] : []),
-    ...payOut.adjustments.map((a) => ({
-      key: a.id,
-      label: t(`adjustments.types.${a.type}`),
-      note: a.note,
-      amount: a.amount,
-      signed: true,
-    })),
-    ...(payOut.rounding
-      ? [
-          {
-            key: 'rounding',
-            label: t('payroll.lines.rounding', { step: format.money(payOut.rounding.step, currency) }),
-            note: null,
-            amount: payOut.rounding.amount,
-            signed: true,
-          },
-        ]
-      : []),
+    ...payOutLines(payOut, t, format, currency).map((line) => ({ ...line, signed: true })),
   ];
   return (
     <section className="space-y-3 border-t pt-4">

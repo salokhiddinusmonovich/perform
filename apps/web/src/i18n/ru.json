@@ -1235,7 +1235,25 @@
     "ruleSetRules": "По правилам «{{name}}»",
     "byPosition": "По должностям",
     "byPositionHint": "Каждый работник учитывается по должности на конец месяца.",
-    "positionDays": "{{position}} ({{days}})"
+    "positionDays": "{{position}} ({{days}})",
+    "export": {
+      "download": "Скачать в Excel",
+      "downloadFailed": "Не удалось подготовить файл Excel. Попробуйте ещё раз.",
+      "summarySheet": "Итоги",
+      "detailsSheet": "Строки расчёта",
+      "total": "Итого",
+      "hoursPay": "Оплата часов",
+      "absencePay": "Оплата отсутствий",
+      "travelPay": "Проезд",
+      "rounding": "Округление",
+      "problems": "Пока нельзя выплатить",
+      "part": "Правила и дни",
+      "line": "За что",
+      "hours": "Часы",
+      "hourlyRate": "Часовая ставка",
+      "multiplier": "Коэффициент",
+      "amount": "Сумма"
+    }
   },
   "timesheet": {
     "title": "Табель",

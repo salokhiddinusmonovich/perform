@@ -1235,7 +1235,25 @@
     "ruleSetRules": "Under the rules of “{{name}}”",
     "byPosition": "By position",
     "byPositionHint": "Each worker counts under the position they end the month with.",
-    "positionDays": "{{position}} ({{days}})"
+    "positionDays": "{{position}} ({{days}})",
+    "export": {
+      "download": "Download Excel",
+      "downloadFailed": "The Excel file couldn’t be made. Try again.",
+      "summarySheet": "Summary",
+      "detailsSheet": "Payslip lines",
+      "total": "Total",
+      "hoursPay": "Pay for hours",
+      "absencePay": "Pay for absences",
+      "travelPay": "Travel pay",
+      "rounding": "Rounding",
+      "problems": "Can’t be paid yet",
+      "part": "Rules and days",
+      "line": "What for",
+      "hours": "Hours",
+      "hourlyRate": "Hourly rate",
+      "multiplier": "Rate multiplier",
+      "amount": "Amount"
+    }
   },
   "timesheet": {
     "title": "Timesheet",
