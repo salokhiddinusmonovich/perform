@@ -64,12 +64,16 @@ function cellValue(value: ExcelJS.CellValue, date1904: boolean): Cell {
   return null;
 }
 
-/** The day a header cell names (1…31), or null. A date header names its day of the month. */
+/**
+ * The day a header cell names (1…31), or null. A date header names its day of the month. The
+ * number may be followed by its weekday's name, as many sheets write it ("1 Per", "2\nCum", "3 пн").
+ */
 function headerDay(cell: Cell): number | null {
   if (cell instanceof Date) return cell.getUTCDate();
   const text = typeof cell === 'number' ? String(cell) : typeof cell === 'string' ? cell.trim() : '';
-  if (!/^\d{1,2}$/.test(text)) return null;
-  const day = Number(text);
+  const m = /^(\d{1,2})(?:\s+\p{L}{1,12}\.?)?$/u.exec(text);
+  if (!m) return null;
+  const day = Number(m[1]);
   return day >= 1 && day <= 31 ? day : null;
 }
 

@@ -57,12 +57,15 @@ const isOff = (day: number) => day === 1 || new Date(Date.UTC(2026, 8, day)).get
 const FULL: (string | number)[] = [...Array(DAYS).keys()].map((i) => (isOff(i + 1) ? 'T' : 9));
 
 /** A sheet laid out like a customer's: a title row, then the header row with the days 1…30. */
-async function workbook(lines: Line[], { positions = false }: { positions?: boolean } = {}): Promise<Buffer> {
+async function workbook(
+  lines: Line[],
+  { positions = false, dayHeader = (day: number): string | number => day }: { positions?: boolean; dayHeader?: (day: number) => string | number } = {},
+): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.addWorksheet('Notes').addRow(['nothing to import here']);
   const ws = wb.addWorksheet('Timesheet');
   ws.addRow(['Табель работников, сентябрь 2026']);
-  ws.addRow([...HEADERS, ...(positions ? ['GÖREVI'] : []), ...[...Array(DAYS).keys()].map((i) => i + 1), 'TOPLAM']);
+  ws.addRow([...HEADERS, ...(positions ? ['GÖREVI'] : []), ...[...Array(DAYS).keys()].map((i) => dayHeader(i + 1)), 'TOPLAM']);
   lines.forEach((l, i) =>
     ws.addRow([
       i + 1,
@@ -217,6 +220,19 @@ describe('Excel import', () => {
 
     const audit = await ctx.prisma.auditLog.findMany({ where: { action: { startsWith: 'timesheetImport.' } } });
     expect(audit.map((a) => a.action).sort()).toEqual(['timesheetImport.create', 'timesheetImport.worker', 'timesheetImport.worker']);
+  });
+
+  it('finds the day columns when each day header also names its weekday', async () => {
+    const owner = await company();
+    const weekdays = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+    const file = await workbook([{ number: '10001', lastName: 'Aliyev' }], {
+      dayHeader: (day) => `${day}\n${weekdays[new Date(Date.UTC(2026, 8, day)).getUTCDay()]}`,
+    });
+    const preview = (await send(owner.agent, 'preview', file).expect(200)).body;
+    expect(preview).toMatchObject({ sheet: 'Timesheet', headerRow: 2, workers: { rows: 1, new: 1, problems: [] } });
+    expect(preview.days).toEqual([...Array(DAYS).keys()].map((i) => i + 1));
+    // The weekday headers are day columns, not columns of their own.
+    expect(preview.headers).toEqual([...HEADERS, 'TOPLAM']);
   });
 
   it("maps a category's column and values, and shows where workers already in the app differ", async () => {
